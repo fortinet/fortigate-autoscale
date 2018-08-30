@@ -1,0 +1,16 @@
+language: node_js
+node_js: 4
+script:
+  - npm install
+  - npm run build
+  - git describe
+deploy:
+  provider: releases
+  api_key:
+    secure:
+  file: dist/multi_cloud_autoscale.zip
+  skip_cleanup: true
+  on:
+    repo: fortinet/multi-cloud-autoscale
+    tags: true
+    all_branches: true

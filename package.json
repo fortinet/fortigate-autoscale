@@ -1,0 +1,28 @@
+{
+  "name": "multi_cloud_autoscale",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "devDependencies": {
+    "dpl": "^3.8.0",
+    "eslint": "^5.2.0",
+    "mocha": "^5.2.0",
+    "request": "^2.87.0",
+    "rimraf": "^2.6.2"
+  },
+  "scripts": {
+    "pretest": "./node_modules/.bin/eslint --fix *.js core/*.js aws/*.js azure/*.js;",
+    "deploy": "dpl",
+    "build": "scripts/make_dist.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/aws-lambda-guardduty"
+  },
+  "author": "fortinet",
+  "license": "MIT"
+}
