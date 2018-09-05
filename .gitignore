@@ -1,4 +1,15 @@
-/dist
-/node_modules
-npm-debug.log
-/local
+# project-specific
+**/dist
+**/local
+
+# npm
+**/node_modules
+**/npm-debug.log
+**/package-lock.json
+
+# istanbul javascript test coverage
+**/.nyc_output
+
+# visual studio code
+**/.vscode
+**/*.code-workspace

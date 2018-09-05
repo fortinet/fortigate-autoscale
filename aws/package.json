@@ -1,0 +1,26 @@
+{
+  "name": "ftnt-autoscale-aws",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "devDependencies": {
+    "dpl": "^3.8.0",
+    "eslint": "^5.4.0",
+    "ftnt-autoscale-core": "file:core",
+    "mocha": "^5.2.0",
+    "nyc": "^13.0.1",
+    "request": "^2.87.0",
+    "rimraf": "^2.6.2"
+  },
+  "scripts": {
+    "pretest": "eslint --fix .",
+    "deploy": "dpl",
+    "build": "scripts/make_dist.js",
+    "test": "nyc mocha --recursive './test/mocha/*.js'"
+  },
+  "author": "fortinet",
+  "license": "MIT"
+}

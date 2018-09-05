@@ -1,0 +1,22 @@
+{
+  "name": "az_funcapp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "pretest": "eslint --fix .",
+    "test": "nyc mocha --recursive './test/mocha/*.js'"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ftnt-autoscale-azure": "file:../azure"
+  },
+  "files_to_deploy": [
+    "*.js",
+    "host.json",
+    "AutoscaleHandler/**",
+    "package.json",
+    "!package-lock.json"
+  ]
+}
