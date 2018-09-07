@@ -8,9 +8,10 @@ deploy:
   provider: releases
   api_key:
     secure:
-  file: dist/multi_cloud_autoscale.zip
+  file_glob: true
+  file: dist/*
   skip_cleanup: true
   on:
-    repo: fortinet/multi-cloud-autoscale
+    repo: fortinet/autoscale
     tags: true
     all_branches: true

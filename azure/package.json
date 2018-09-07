@@ -1,28 +1,30 @@
 {
-  "name": "ftnt-autoscale-azure",
+  "name": "fortigate-autoscale-azure",
   "version": "1.0.0",
-  "description": "",
+  "description": "FortiGate Autoscale Module - Azure",
   "main": "index.js",
   "directories": {
-    "test": "test"
+    "test": "tests"
   },
   "files_to_deploy": [
     "*.js",
     "package.json"
   ],
   "dependencies": {
-    "ftnt-autoscale-core": "file:../core",
+    "fortigate-autoscale-core": "file:../core",
     "ms-rest-azure": "^2.5.7",
     "request": "^2.87.0"
   },
   "devDependencies": {
-    "dpl": "^3.8.0",
     "eslint": "^5.4.0",
+    "eslint-plugin-mocha": "^5.2.0",
     "mocha": "^5.2.0",
     "nyc": "^13.0.1",
-    "pack-zip": "^0.2.2",
-    "rimraf": "^2.6.2"
+    "pack-zip": "^0.2.2"
   },
+  "bundledDependencies": [
+    "fortigate-autoscale-core"
+  ],
   "scripts": {
     "pretest": "eslint --fix .",
     "deploy": "dpl",
@@ -30,5 +32,9 @@
     "test": "nyc mocha --recursive './test/mocha/*.js'"
   },
   "author": "fortinet",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/fortigate-autoscale"
+  }
 }

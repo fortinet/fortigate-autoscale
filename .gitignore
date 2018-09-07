@@ -1,6 +1,7 @@
 # project-specific
 **/dist
 **/local
+**/local*
 
 # npm
 **/node_modules
@@ -13,3 +14,6 @@
 # visual studio code
 **/.vscode
 **/*.code-workspace
+
+# azure function
+azure_funcapp/host.json

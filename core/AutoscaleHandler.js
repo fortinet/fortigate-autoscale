@@ -78,12 +78,9 @@ module.exports = class AutoscaleHandler {
         const [syncInterface, pskSecret] = matches.map(m => m && m[1]),
             apiEndpoint = callbackUrl,
             config = `
-                        diag sys ha hadiff log enable
-                        diag debug app hasync -1
-                        diag debug enable
                         config system auto-scale
                             set status enable
-                            set sync-interface ${syncInterface}
+                            set sync-interface ${syncInterface ? syncInterface : 'port1'}
                             set role slave
                             set master-ip ${masterIp}
                             set callback-url ${apiEndpoint}
@@ -100,20 +97,24 @@ module.exports = class AutoscaleHandler {
                             set admin-sport 8443
                         end
                     `;
-        if (!syncInterface || !pskSecret) {
-            throw new Error(`Base config is invalid: ${
+        let errorMessage;
+        if (!apiEndpoint) {
+            errorMessage = 'Api endpoint is missing';
+        }
+        if (!masterIp) {
+            errorMessage = 'Master ip is missing';
+        }
+        if (!pskSecret) {
+            errorMessage = 'psksecret is missing';
+        }
+        if (!pskSecret || !apiEndpoint || !masterIp) {
+            throw new Error(`Base config is invalid (${errorMessage}): ${
                 JSON.stringify({
                     syncInterface,
                     apiEndpoint,
                     masterIp,
                     pskSecret: pskSecret && typeof pskSecret
                 })}`);
-        }
-        if (!apiEndpoint) {
-            throw new Error('Api endpoint is missing');
-        }
-        if (!masterIp) {
-            throw new Error('Master ip is missing');
         }
         config.replace(SET_SECRET_EXPR, '$1 *');
         return config;

@@ -154,8 +154,9 @@ function authWithServicePrincipal(app_id, app_secret, tenant_id) {
         MsRest.loginWithServicePrincipalSecret(app_id, app_secret, tenant_id,
             (error, _credentials) => {
                 if (error) {
-                    logger.error(`authWithServicePrincipal > error: ${JSON.stringify(error)}`);
-                    reject(error);
+                    logger.error(`authWithServicePrincipal > error: ${error.message}`);
+                    reject(error.message);
+                    return;
                 }
                 credentials = _credentials.tokenCache._entries[0];
                 token = credentials.accessToken;

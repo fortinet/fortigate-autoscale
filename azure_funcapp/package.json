@@ -1,16 +1,26 @@
 {
-  "name": "az_funcapp",
+  "name": "fortigate-autoscale-azure-funcapp",
   "version": "1.0.0",
-  "description": "",
+  "description": "FortiGate Autoscale Project - Azure Function App",
   "main": "index.js",
   "scripts": {
     "pretest": "eslint --fix .",
     "test": "nyc mocha --recursive './test/mocha/*.js'"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/fortigate-autoscale"
+  },
   "dependencies": {
-    "ftnt-autoscale-azure": "file:../azure"
+    "fortigate-autoscale-azure": "file:../azure"
+  },
+  "devDependencies": {
+    "eslint": "^5.4.0",
+    "eslint-plugin-mocha": "^5.2.0",
+    "mocha": "^5.2.0",
+    "nyc": "^13.0.1"
   },
   "files_to_deploy": [
     "*.js",

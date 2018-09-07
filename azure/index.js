@@ -42,13 +42,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
 
         await Promise.all([
             _initDB(),
-            await armClient.authWithServicePrincipal(process.env.REST_APP_ID,
-                process.env.REST_APP_SECRET, process.env.TENANT_ID)]);
+            armClient.authWithServicePrincipal(process.env.REST_APP_ID,
+                process.env.REST_APP_SECRET, process.env.TENANT_ID)]).catch(error => {
+            throw error;
+        });
         armClient.useSubscription(process.env.SUBSCRIPTION_ID);
     }
 
     async getCallbackEndpointUrl(fromContext = null) {
-        return await fromContext ? fromContext.req.originalUrl : null;
+        return await fromContext ? fromContext.originalUrl : null;
     }
 
     async findInstanceIdById(vmId) {
@@ -142,7 +144,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 logger.info('called getInstanceHealthCheck');
                 return {
                     healthy: !!heartBeatInterval, // TODO: need to implement logic here
-                    heartBeatLostCount: docs[0].heartBeatLostCount,
+                    heartBeatLossCount: docs[0].heartBeatLossCount,
                     nextHeartBeatTime: docs[0].nextHeartBeatTime
                 };
             } else {
@@ -176,7 +178,9 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             logger.info(response);
 
         } catch (error) {
-            response = JSON.stringify(error);
+            if (error instanceof Error) {
+                response = error.message;
+            } else { response = JSON.stringify(error) }
             context.log.error(response);
         }
         context.res = {
@@ -292,8 +296,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // (diagram: heartbeats lost previously? & diagram: loss acceptable?)
             if (selfHealthCheck.healthy ||
                 (!selfHealthCheck.healthy &&
-                    selfHealthCheck.heartBeatLostCount <
-                    process.env.HEART_BEAT_LOST_COUNT)) {
+                    selfHealthCheck.heartBeatLossCount <
+                    process.env.HEART_BEAT_LOSS_COUNT)) {
                 // may long live! (diagram: Mark instance healthy)
                 await this.updateInstanceToMonitor({
                     vmId: this._selfInstance.properties.vmId
@@ -435,7 +439,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             vmId: instance.properties.vmId,
             scaleSetName: process.env.SCALESET_NAME,
             nextHeartBeatTime: nextHeartBeatTime,
-            heartBeatLostCount: 0
+            heartBeatLossCount: 0
         };
 
         let documentId = instance.properties.vmId,
@@ -506,12 +510,13 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     getHeartBeatInterval(_request) {
+        let _interval = 120;
         try {
             if (_request && _request.body && _request.body.interval) {
-                return _request.body.interval;
-            } else { return null }
-        } catch (error) {
-            return error ? null : null;
+                return isNaN(_request.body.interval) ? _interval : parseInt(_request.body.interval);
+            } else { return _interval }
+        } catch (error) { // eslint-disable-line no-unused-var
+            return _interval;
         }
     }
 

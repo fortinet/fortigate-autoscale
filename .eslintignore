@@ -2,3 +2,4 @@
 **/node_modules
 **/local
 **/nyc_output
+**/local.*

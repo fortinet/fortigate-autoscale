@@ -126,7 +126,7 @@ module.exports = class CloudPlatform {
      * @param {Object} instance the platform-specific instance object
      * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
      * @returns {Object}
-     *      {healthy: true | false, heartBeatLostCount: <int>, nextHeartBeatTime: <int>}
+     *      {healthy: <bool>, heartBeatLossCount: <int>, nextHeartBeatTime: <int>}
      */
     async getInstanceHealthCheck(instance, heartBeatInterval) {
         await this.throwNotImplementedException();

@@ -1,0 +1,44 @@
+{
+    "appName": {
+        "value": ""
+    },
+    "dbName": {
+        "value": ""
+    },
+    "storageAccountType": {
+        "value": "Standard_LRS"
+    },
+    "tenant_id": {
+        "value": ""
+    },
+    "subscription_id": {
+        "value": ""
+    },
+    "restapp_id": {
+        "value": ""
+    },
+    "heartbeat": {
+        "value": "3"
+    },
+    "restapp_secret": {
+        "value": ""
+    },
+    "resoure_group": {
+        "value": ""
+    },
+    "scale_name": {
+        "value": ""
+    },
+    "FGT_config": {
+        "value": "diag sys ha hadiff log enable\ndiag debug app hasync -1\ndiag debug enable\nconfig system dns\n unset primary\n    unset secondary\n end\n config system auto-scale\n     set status enable\n     set sync-interface port1\n set role master\n     set callback-url ${CALLBACK_URL}\n     set psksecret 12345678\n end\n config system global\n     set admin-sport 8443\n end\n config system interface\n     edit port1\n        set description ext\n     next\n     edit port2\n        set description int\n        set mode dhcp\n        set defaultgw disable\n     next\n end\n"
+    },
+    "packageResUrl": {
+        "value": ""
+    },
+    "branch": {
+        "value": "master"
+    },
+    "location": {
+        "value": ""
+    }
+}

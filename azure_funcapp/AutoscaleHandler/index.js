@@ -11,6 +11,7 @@ const FtntAutoScaleAzure = require('ftnt-autoscale-azure');
  * @param {Object} req request object from c
  */
 module.exports = async function(context, req) {
+    context.log(`Incoming request: ${JSON.stringify(req)}`);
     await FtntAutoScaleAzure.initModule();
-    FtntAutoScaleAzure.handle(context, req);
+    await FtntAutoScaleAzure.handle(context, req);
 };
