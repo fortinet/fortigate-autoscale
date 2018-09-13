@@ -234,7 +234,7 @@ async function npmInstallAt(location, args = [], options = {}) {
         Object.assign(options, {
             supressError: true
         });
-        return await execCmd('npm', ['install'].concat(args), packPath, {
+        return await runCmd('npm', ['install'].concat(args), packPath, {
             supressError: true
         });
     } else {
@@ -362,7 +362,7 @@ async function makeDistProject() {
     // read the package and determine the distribution zip file name
     packageInfo = readPackageJsonAt(realTmpSrcDir);
     // determine the zip file name
-    zipFileName = `${packageInfo.name}-${packageInfo.version}.zip`;
+    zipFileName = `${packageInfo.name}.zip`;
     // pack to a zip file
     realZipFilePath = await zipSafe(zipFileName, realTmpSrcDir);
     saveAsFilePath = path.resolve(realDistDir, zipFileName);

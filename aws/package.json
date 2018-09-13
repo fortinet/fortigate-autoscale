@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale-aws",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha",
   "description": "FortiGate Autoscale Module - Aws",
   "main": "index.js",
   "directories": {

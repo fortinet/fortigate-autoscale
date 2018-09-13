@@ -7,7 +7,7 @@ Author: Fortinet
 const request = require('request');
 const crypto = require('crypto');
 const MsRest = require('ms-rest-azure');
-const MultiCloudCore = require('ftnt-autoscale-core');
+const MultiCloudCore = require('fortigate-autoscale-core');
 var logger = new MultiCloudCore.DefaultLogger(console);
 var credentials, token, subscription;
 

@@ -4,7 +4,7 @@
 Author: Fortinet
 */
 
-const FtntAutoScaleAzure = require('ftnt-autoscale-azure');
+const FtntAutoScaleAzure = require('fortigate-autoscale-azure');
 /**
  * Azure Function App Entry.
  * @param {Object} context Azure Function App runtime context

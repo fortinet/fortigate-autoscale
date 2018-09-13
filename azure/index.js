@@ -4,7 +4,7 @@
 Author: Fortinet
 */
 exports = module.exports;
-const AutoScaleCore = require('ftnt-autoscale-core');
+const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./AzureArmClient');
 const databaseName = 'fortigateInstances';
 const dbCollectionMonitored = 'instances';

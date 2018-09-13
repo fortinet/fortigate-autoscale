@@ -7,11 +7,11 @@ script:
 deploy:
   provider: releases
   api_key:
-    secure:
+    secure: KsV2eE0mx0CeCJb1rmvXiZoDc0Fd14vv9U9J7wBbbkrsilR5uPY0DNHRxOKln3P0YdUmdwD1A0NeFFzqZgJRjEoPP25X7ombJSi3ZqfgE8aKXAc90UNQ0vnOpmyadnXHt6cdi6CPB2hotDPdkeLGFL1dE9pKUPAAcXodmtbKyKxWP9Aq4bo7uvE5zwB9rXRS5eLqUZAqhH9Fglr4PPOah7IgavsikCbJ6mcFWaVdqH9x/ey+U4H1uXCQ3YK3GMjoFR7rwMm864u854BJKryIDy3+MFuMKoDNqS02RVMcc0lDXHAPVx+gxQmfQiHCx7nA9VB9JiB05ANTF528axrrayPzls/VtcaHOI1z6S3xnR9JUhOPkM8Dbc9+97M9XrV6GyOZ7E8N0OufHFDhylii9aNIrIGrhTBnVUF7jfGl8OK/i7p0/XDdNet294owTB7ovjOkcjYAvXytYXTvZMHctLUb/IGjAV6hv6Q2QLx06u/Zp6lWZEAfmedIqTNRu/tSLCIKPy9401AQ5+KQ+Z//MUiXIGSq9zo2ICxk8bQh0oWtGKjw9fPz5u2cXh6HXtZP38MHFkASi5X76ayqZRCNLyilVIYfD6MwhNAFF0KFMYh2ky3RWF0GEhy5/NjzA5y3M5i0Ne1CXCPEVys7G9EC3HOPuF29luFEerFN7IIT49I=
   file_glob: true
   file: dist/*
   skip_cleanup: true
   on:
-    repo: fortinet/autoscale
+    repo: fortinet/fortigate-autoscale
     tags: true
     all_branches: true

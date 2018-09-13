@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale-core",
-  "version": "1.0.0",
+  "version": "1.0.0-preview",
   "description": "FortiGate Autoscale Module - Core",
   "main": "index.js",
   "directories": {

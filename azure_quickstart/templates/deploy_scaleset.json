@@ -28,7 +28,7 @@
             }
         },
         "vnetName": {
-        "defaultValue": "autoscalevnet",
+            "defaultValue": "autoscalevnet",
             "type": "String",
             "metadata": {
                 "description": "Name of the Azure virtual network."
@@ -480,7 +480,7 @@
                 "tier": "Standard",
                 "capacity": "[parameters('capacity')]"
             },
-            "name": "[variables('namingInfix')]",
+            "name": "[parameters('vmssName')]",
             "apiVersion": "2017-03-30",
             "location": "[resourceGroup().location]",
             "properties": {
@@ -576,7 +576,7 @@
             "name": "Port2IP",
             "apiVersion": "2015-01-01",
             "dependsOn": [
-                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('namingInfix'))]",
+                "[concat('Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
                 "[concat('Microsoft.Insights/autoscalesettings/autoscalewad')]",
                 "[concat('Microsoft.Network/virtualNetworks/', parameters('vnetName'))]"
             ],
@@ -656,14 +656,17 @@
                     "natHTTPSPoolName": {
                         "value":"[variables('natHTTPSPoolName')]"
                     },
-            "EndPoints": {
-            "value":"[parameters('EndPoints')]"
+            "vmssName": {
+            "value":"[parameters('vmssName')]"
             },
+                "EndPoints": {
+                "value":"[parameters('EndPoints')]"
+                },
                     "SecurityGrpforEntrySubnet":{
                         "value": "[variables('SecurityGrpforEntrySubnet')]"
                     },
                     "privateIp":{
-                        "value": "[reference(concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().Name,'/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('namingInfix'),'/virtualMachines/0/networkInterfaces/',variables('namingInfix'),'nic2/','/ipConfigurations/',variables('namingInfix'),'2ipconfig'),'2016-03-30').privateIPAddress]"
+                        "value": "[reference(concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().Name,'/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'),'/virtualMachines/0/networkInterfaces/',variables('namingInfix'),'nic2/','/ipConfigurations/',variables('namingInfix'),'2ipconfig'),'2016-03-30').privateIPAddress]"
                 }
               }
             }
@@ -675,7 +678,7 @@
             "location": "[resourceGroup().location]",
             "properties": {
                 "name": "autoscalewad",
-                "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('namingInfix'))]",
+                "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
                 "enabled": true,
                 "profiles": [
                     {
@@ -690,7 +693,7 @@
                                 "metricTrigger": {
                                     "metricName": "Percentage CPU",
                                     "metricNamespace": "",
-                                    "metricResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('namingInfix'))]",
+                                    "metricResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
                                     "timeGrain": "PT1M",
                                     "statistic": "Average",
                                     "timeWindow": "PT5M",
@@ -709,7 +712,7 @@
                                 "metricTrigger": {
                                     "metricName": "Percentage CPU",
                                     "metricNamespace": "",
-                                    "metricResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('namingInfix'))]",
+                                    "metricResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/',  parameters('vmssName'))]",
                                     "timeGrain": "PT1M",
                                     "statistic": "Average",
                                     "timeWindow": "PT5M",
@@ -729,7 +732,7 @@
                 ]
             },
             "dependsOn": [
-                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('namingInfix'))]"
+                "[concat('Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]"
             ]
         }
     ]

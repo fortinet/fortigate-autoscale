@@ -1,6 +1,6 @@
-# Fortigate Autoscale - Azure
+# Fortigate Autoscale - AWS
 
-This is the Fortigate Autoscale Azure module for Azure Cloud Platform.
+This is the Fortigate Autoscale AWS module for Amazon AWS Cloud Platform.
 
 Please see the Project [README](../README.md) file for more information
 
