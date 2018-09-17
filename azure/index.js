@@ -1,8 +1,10 @@
 'use strict';
 
 /*
+Fortigate Autoscale Azure Module (1.0.0-preview)
 Author: Fortinet
 */
+
 exports = module.exports;
 const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./AzureArmClient');

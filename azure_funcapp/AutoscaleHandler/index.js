@@ -1,10 +1,11 @@
 'use strict';
 
 /*
+Fortigate Autoscale Azure Function (1.0.0-preview)
 Author: Fortinet
 */
 
-const FtntAutoScaleAzure = require('fortigate-autoscale-azure');
+const FtgtAutoScaleAzure = require('fortigate-autoscale-azure');
 /**
  * Azure Function App Entry.
  * @param {Object} context Azure Function App runtime context
@@ -12,6 +13,6 @@ const FtntAutoScaleAzure = require('fortigate-autoscale-azure');
  */
 module.exports = async function(context, req) {
     context.log(`Incoming request: ${JSON.stringify(req)}`);
-    await FtntAutoScaleAzure.initModule();
-    await FtntAutoScaleAzure.handle(context, req);
+    await FtgtAutoScaleAzure.initModule();
+    await FtgtAutoScaleAzure.handle(context, req);
 };

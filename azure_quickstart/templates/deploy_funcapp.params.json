@@ -17,7 +17,7 @@
     "restapp_id": {
         "value": ""
     },
-    "heartbeat": {
+    "heartbeat_loss": {
         "value": "3"
     },
     "restapp_secret": {
@@ -37,8 +37,5 @@
     },
     "branch": {
         "value": "master"
-    },
-    "location": {
-        "value": ""
     }
 }

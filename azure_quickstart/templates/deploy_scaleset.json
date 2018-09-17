@@ -11,7 +11,7 @@
         },
         "sourceImageVhdUri": {
             "type": "String",
-            "defaultValue": "",
+            "defaultValue": "http://ftnt.blob.core.windows.net/vhds/fos-b5089-payg.vhd",
             "metadata": {
                 "description": "The source of the blob containing the custom image, must be in the same region of the deployment."
             }
@@ -210,7 +210,7 @@
         "subnet2KnownIP": "[parameters('subnet2LoadBalancerIP')]",
         "vnetID": "[resourceId(variables('namingInfix'),'Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
         "subnet2Ref": "[concat(variables('vnetID'),'/subnets/', parameters('Subnet2Name'))]",
-        "updateUDURI": "[concat(parameters('artifactsBaseURL'),'/updateuserdata6.json')]",
+        "updateUDURI": "[concat(parameters('artifactsBaseURL'),'/update_userdata.json')]",
         "routeTableId": "[resourceId('Microsoft.Network/routeTables',variables('routeTableName'))]",
         "userdata": "[concat('{\"config-url\": \"', parameters('EndPoints'), '\"}\n')]"
     },

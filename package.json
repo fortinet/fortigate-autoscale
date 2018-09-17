@@ -18,7 +18,7 @@
     "build-azure": "scripts/make_dist.js azure",
     "build-azure-funcapp": "scripts/make_dist.js azure-funcapp",
     "build-azure-quickstart": "scripts/make_dist.js azure-quickstart",
-    "build-aws": "scripts/make_dist.js 'aws'"
+    "build-aws": "scripts/make_dist.js aws"
   },
   "repository": {
     "type": "git",

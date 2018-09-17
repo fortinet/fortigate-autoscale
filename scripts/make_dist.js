@@ -242,11 +242,10 @@ async function npmInstallAt(location, args = [], options = {}) {
     }
 }
 
-
 function oldWayMakeDist() {
     var pkg = require('../package.json'),
         os = require('os'),
-        path = require('path'), // eslint-disable-line no-shadow
+        dpl = require('dpl'),
         rimraf = require('rimraf');
 
     process.env.TMPDIR = fs
@@ -254,7 +253,7 @@ function oldWayMakeDist() {
 
     // Shorter version of node_modules/dpl/dpl.js which avoids the 'upload' phase
 
-    var dpl = require('dpl/lib/index.js');
+    // var dpl = require('dpl/lib/index.js');
     // 'upload' into the ./dist folder instead.
     dpl.upload = function() {
         var fileName = `${pkg.name}.zip`;
@@ -391,7 +390,7 @@ async function makeDistAzureQuickStart() {
 
     // copy azure quick start to temp dir
     await copyAndDelete(rDirSrcQuickStart, rTempDirQuickStart,
-        ['local.deploy_funcapp.params.json']);
+        ['local*']);
     // read package info of azure funcapp module
     packageInfo = readPackageJsonAt(rDirSrcFuncapp);
     zipFileName = `${packageInfo.name}.zip`;

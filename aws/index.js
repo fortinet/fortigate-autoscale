@@ -1,6 +1,7 @@
 'use strict';
 
 /*
+Fortigate Autoscale AWS Module (1.0.0-alpha)
 Author: Fortinet
 */
 

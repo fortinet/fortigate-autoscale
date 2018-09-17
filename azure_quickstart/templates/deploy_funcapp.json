@@ -47,11 +47,11 @@
         "description": "Application ID of the registered App"
       }
     },
-    "heartbeat" : {
+    "heartbeat_loss" : {
       "type": "string",
       "defaultValue": "3",
       "metadata": {
-        "description": "HeartBeat Interval Count"
+        "description": "HeartBeat Loss Count"
       }
     },
     "restapp_secret": {
@@ -84,22 +84,16 @@
     },
     "packageResUrl": {
       "type": "string",
-      "defaultValue": "https://github.com/fortinet/fortigate-autoscale/releases/download/1.0.0-preview/fortigate-autoscale-azure-funcapp.zip",
+      "defaultValue": "https://github.com/fortinet/fortigate-autoscale/releases/download/1.0.0-alpha/fortigate-autoscale-azure-funcapp.zip",
       "metadata": {
         "description": "The public URL of package zip which contains the resource used to deploy the Function App."
-      }
-    },
-    "location": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "Location for all resources."
       }
     }
   },
   "variables": {
     "functionAppName": "[parameters('appName')]",
     "hostingPlanName": "[parameters('appName')]",
+    "location": "[resourceGroup().location]",
     "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
     "storageAccountid": "[concat(resourceGroup().id,'/providers/','Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
   },
@@ -108,7 +102,7 @@
        "apiVersion": "2015-04-08",
        "type": "Microsoft.DocumentDb/databaseAccounts",
        "name": "[parameters('dbName')]",
-       "location": "[parameters('location')]",
+       "location": "[variables('location')]",
        "properties": {
           "name": "[parameters('dbName')]",
           "databaseAccountOfferType":  "Standard"
@@ -118,7 +112,7 @@
       "type": "Microsoft.Storage/storageAccounts",
       "name": "[variables('storageAccountName')]",
       "apiVersion": "2016-12-01",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "kind": "Storage",
       "sku": {
         "name": "[parameters('storageAccountType')]"
@@ -128,7 +122,7 @@
       "apiVersion": "2015-04-01",
       "type": "Microsoft.Web/serverfarms",
       "name": "[variables('hostingPlanName')]",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "properties": {
         "name": "[variables('hostingPlanName')]",
         "computeMode": "Dynamic",
@@ -140,7 +134,7 @@
       "type": "Microsoft.Web/sites",
       "name": "[variables('functionAppName')]",
       "kind": "functionapp",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "dependsOn": [
         "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
         "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('dbName'))]",
@@ -208,7 +202,7 @@
             },
             {
               "name": "HEART_BEAT_LOSS_COUNT",
-              "value": "[parameters('heartbeat')]"
+              "value": "[parameters('heartbeat_loss')]"
             },
             {
                "name": "REST_API_MASTER_KEY",

@@ -3,7 +3,7 @@
         "value": "Standard_F2"
     },
     "sourceImageVhdUri": {
-        "value": "https://plokeshhaaaondemanduk1.blob.core.windows.net/vhds/fortios-5089.vhd"
+        "value": "http://ftnt.blob.core.windows.net/vhds/fos-b5089-payg.vhd"
     },
     "vnetNewOrExisting": {
         "value": "new"
