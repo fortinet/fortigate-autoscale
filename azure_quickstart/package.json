@@ -1,0 +1,19 @@
+{
+  "name": "fortigate-autoscale-azure-quickstart",
+  "version": "1.0.0-alpha.2",
+  "description": "Fortigate Autoscale Azure QuickStart Template.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/fortigate-autoscale.git"
+  },
+  "author": "fortinet",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fortinet/fortigate-autoscale/issues"
+  },
+  "homepage": "https://github.com/fortinet/fortigate-autoscale#readme"
+}
