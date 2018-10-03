@@ -8,10 +8,12 @@ Author: Fortinet
 exports = module.exports;
 const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./AzureArmClient');
-const databaseName = 'fortigateInstances';
-const dbCollectionMonitored = 'instances';
-const dbCollectionMaster = 'masterPool';
-const dbCollectionMutex = 'mutex';
+const DATABASE_NAME = 'fortigateInstances';
+const DB_COLLECTION_MONITORED = 'instances';
+const DB_COLLECTION_MASTER = 'masterPool';
+const DB_COLLECTION_MUTEX = 'mutex';
+const ELECTION_WAITING_PERIOD = 60;// how many seconds to wait for an election before purging it?
+const SCRIPT_TIMEOUT = 300;// Azure script default timeout
 
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 var logger = new AutoScaleCore.DefaultLogger();
@@ -20,20 +22,20 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async init() {
         let _initDB = async function() {
             return await armClient.CosmosDB.createDB(process.env.SCALESET_DB_ACCOUNT,
-                databaseName, process.env.REST_API_MASTER_KEY)
+                DATABASE_NAME, process.env.REST_API_MASTER_KEY)
                 .then(status => {
                     if (status === true) {
                         return Promise.all([
                             // create instances
                             armClient.CosmosDB.createCollection(
-                                process.env.SCALESET_DB_ACCOUNT, databaseName,
-                                dbCollectionMonitored, process.env.REST_API_MASTER_KEY),
+                                process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
+                                DB_COLLECTION_MONITORED, process.env.REST_API_MASTER_KEY),
                             armClient.CosmosDB.createCollection(
-                                process.env.SCALESET_DB_ACCOUNT, databaseName,
-                                dbCollectionMaster, process.env.REST_API_MASTER_KEY),
+                                process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
+                                DB_COLLECTION_MASTER, process.env.REST_API_MASTER_KEY),
                             armClient.CosmosDB.createCollection(
-                                process.env.SCALESET_DB_ACCOUNT, databaseName,
-                                dbCollectionMutex, process.env.REST_API_MASTER_KEY)
+                                process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
+                                DB_COLLECTION_MUTEX, process.env.REST_API_MASTER_KEY)
                         ]);
                     } else {
                         logger.info('DB exists. Skip creating collections.');
@@ -121,7 +123,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return Promise.reject(`invalid instance: ${JSON.stringify(instance)}`);
         }
         const queryObject = {
-            query: `SELECT * FROM ${dbCollectionMonitored} c WHERE c.scaleSetName = @scaleSetName AND c.vmId = @vmId`, // eslint-disable-line max-len
+            query: `SELECT * FROM ${DB_COLLECTION_MONITORED} c WHERE c.scaleSetName = @scaleSetName AND c.vmId = @vmId`, // eslint-disable-line max-len
             parameters: [
                 {
                     name: '@scaleSetName',
@@ -136,8 +138,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
 
         try {
             let docs = await armClient.CosmosDB.query(process.env.SCALESET_DB_ACCOUNT, {
-                dbName: databaseName,
-                collectionName: dbCollectionMonitored,
+                dbName: DATABASE_NAME,
+                collectionName: DB_COLLECTION_MONITORED,
                 partitioned: true,
                 queryObject: queryObject
             }, process.env.REST_API_MASTER_KEY);
@@ -206,7 +208,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             heartBeatInterval = this.getHeartBeatInterval(_request),
             counter = 0,
             nextTime,
-            endTime,
+            getConfigTimeout,
             virtualMachine;
 
         // verify the caller (diagram: trusted source?)
@@ -238,10 +240,10 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
         nextTime = Date.now();
-        endTime = nextTime + 10000; // unit ms
+        getConfigTimeout = nextTime + SCRIPT_TIMEOUT * 1000; // unit ms
 
         // (diagram: master exists?)
-        while (!masterIsHealthy && (nextTime < endTime)) {
+        while (!masterIsHealthy && (nextTime < getConfigTimeout)) {
             // get the current master
             masterInfo = await this.getMasterInfo();
 
@@ -261,7 +263,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // we need a new master! let's hold a master election!
             if (!masterIsHealthy) {
                 // but can I run the election? (diagram: anyone's holding master election?)
-                this._electionLock = await this.AcquireMutex(dbCollectionMaster);
+                this._electionLock = await this.AcquireMutex(DB_COLLECTION_MASTER);
                 if (this._electionLock) {
                     // yes, you run it!
                     logger.info('This thread is running an election.');
@@ -274,7 +276,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         logger.error('Something went wrong in the master election.');
                     } finally {
                         // release the lock, let someone else run the election.
-                        await this.releaseMutex(dbCollectionMaster, this._electionLock);
+                        await this.releaseMutex(DB_COLLECTION_MASTER, this._electionLock);
                         this._electionLock = null;
                     }
                     // (diagram: master exists?)
@@ -286,8 +288,20 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             nextTime = Date.now();
             masterIsHealthy = !!masterInfo;
             if (!masterIsHealthy) {
-                await AutoScaleCore.sleep(1000); // (diagram: wait for a moment (interval))
+                await AutoScaleCore.sleep(5000); // (diagram: wait for a moment (interval))
             }
+        }
+
+        // exit with error if script can't get election done within script timeout
+        if (nextTime >= getConfigTimeout) {
+            // cannot bootstrap due to master election failure.
+            // (diagram: remove instance)
+            await this.removeInstance({
+                vmId: this._selfInstance.properties.vmId
+            });
+            throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
+            ' seconds. This instance is unable to bootstrap. Please report this to' +
+            ' administrators.');
         }
 
         // (diagram: am I a new instance?)
@@ -418,7 +432,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             replaced = true;
         try {
             let doc = await armClient.CosmosDB.createDocument(process.env.SCALESET_DB_ACCOUNT,
-                databaseName, dbCollectionMaster, documentId, documentContent, replaced,
+                DATABASE_NAME, DB_COLLECTION_MASTER, documentId, documentContent, replaced,
                 process.env.REST_API_MASTER_KEY);
             if (doc) {
                 logger.info(`called updateMaster: master(id:${documentContent.instanceId}, ip: ${documentContent.ip}) updated.`); // eslint-disable-line max-len
@@ -448,7 +462,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             replaced = true;
         try {
             let doc = await armClient.CosmosDB.createDocument(process.env.SCALESET_DB_ACCOUNT,
-                databaseName, dbCollectionMonitored, documentId, documentContent, replaced,
+                DATABASE_NAME, DB_COLLECTION_MONITORED, documentId, documentContent, replaced,
                 process.env.REST_API_MASTER_KEY);
             if (doc) {
                 logger.info(`called addInstanceToMonitor: ${documentId} monitored.`);
@@ -465,7 +479,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async listMonitoredInstances() {
         const queryObject = {
-            query: `SELECT * FROM ${dbCollectionMonitored} c WHERE c.scaleSetName = @scaleSetName`, // eslint-disable-line max-len
+            query: `SELECT * FROM ${DB_COLLECTION_MONITORED} c WHERE c.scaleSetName = @scaleSetName`, // eslint-disable-line max-len
             parameters: [
                 {
                     name: '@scaleSetName',
@@ -478,8 +492,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             let instances = {},
                 docs = await armClient.CosmosDB.query(
                     process.env.SCALESET_DB_ACCOUNT, {
-                        dbName: databaseName,
-                        collectionName: dbCollectionMonitored,
+                        dbName: DATABASE_NAME,
+                        collectionName: DB_COLLECTION_MONITORED,
                         partitioned: true,
                         queryObject: queryObject
                     }, process.env.REST_API_MASTER_KEY);
@@ -524,7 +538,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async getMasterInfo() {
         const queryObject = {
-            query: `SELECT * FROM ${dbCollectionMaster} c WHERE c.id = @id`,
+            query: `SELECT * FROM ${DB_COLLECTION_MASTER} c WHERE c.id = @id`,
             parameters: [
                 {
                     name: '@id',
@@ -535,8 +549,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
         try {
             let docs = await armClient.CosmosDB.query(process.env.SCALESET_DB_ACCOUNT, {
-                dbName: databaseName,
-                collectionName: dbCollectionMaster,
+                dbName: DATABASE_NAME,
+                collectionName: DB_COLLECTION_MASTER,
                 partitioned: true,
                 queryObject: queryObject
             }, process.env.REST_API_MASTER_KEY);
@@ -557,7 +571,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             _now = Math.floor(Date.now() / 1000);
         let _getMutex = async function() {
             const queryObject = {
-                query: `SELECT * FROM ${dbCollectionMutex} c WHERE c.collectionName = @collectionName`, // eslint-disable-line max-len
+                query: `SELECT * FROM ${DB_COLLECTION_MUTEX} c WHERE c.collectionName = @collectionName`, // eslint-disable-line max-len
                 parameters: [
                     {
                         name: '@collectionName',
@@ -568,8 +582,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
             try {
                 let docs = await armClient.CosmosDB.query(process.env.SCALESET_DB_ACCOUNT, {
-                    dbName: databaseName,
-                    collectionName: dbCollectionMutex,
+                    dbName: DATABASE_NAME,
+                    collectionName: DB_COLLECTION_MUTEX,
                     partitioned: true,
                     queryObject: queryObject
                 }, process.env.REST_API_MASTER_KEY);
@@ -596,12 +610,13 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             try {
                 if (purge && _electionLock) {
                     await armClient.CosmosDB.deleteDocument(process.env.SCALESET_DB_ACCOUNT,
-                        databaseName, dbCollectionMutex, _electionLock.id,
+                        DATABASE_NAME, DB_COLLECTION_MUTEX, _electionLock.id,
                         process.env.REST_API_MASTER_KEY);
+                    logger.info(`mutex(id: ${_electionLock.id}) was purged.`);
                 }
                 let doc = await armClient.CosmosDB.createDocument(
-                    process.env.SCALESET_DB_ACCOUNT, databaseName,
-                    dbCollectionMutex, documentId, documentContent, replaced,
+                    process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
+                    DB_COLLECTION_MUTEX, documentId, documentContent, replaced,
                     process.env.REST_API_MASTER_KEY);
                 if (doc) {
                     _electionLock = doc;
@@ -618,8 +633,9 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         };
 
         await _getMutex();
-        // mutex should last no more than 5 minute (Azure function default timeout)
-        if (_electionLock && _now - _electionLock.acquireLocalTime > 300) {
+        // mutex should last no more than a certain waiting period
+        // (Azure function default timeout is 5 minutes)
+        if (_electionLock && _now - _electionLock.acquireLocalTime > ELECTION_WAITING_PERIOD) {
             // purge the dead mutex
             _purge = true;
         }
@@ -642,7 +658,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         try {
             let deleted =
                 await armClient.CosmosDB.deleteDocument(
-                    process.env.SCALESET_DB_ACCOUNT, databaseName, dbCollectionMutex,
+                    process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME, DB_COLLECTION_MUTEX,
                     documentId, process.env.REST_API_MASTER_KEY);
             if (deleted) {
                 logger.info(`called releaseMutex: mutex(${collectionName}) released.`);
