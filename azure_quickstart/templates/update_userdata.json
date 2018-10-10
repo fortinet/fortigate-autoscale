@@ -1,247 +1,256 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-      "instanceType":{
-        "type": "string"
-    },
-    "capacity":{
-        "type": "int"
-    },
-    "namingInfix":{
-        "type": "string"
-    },
-    "sourceImageVhdUri":{
-        "type": "string"
-    },
-    "adminUsername":{
-        "type": "string"
-    },
-    "adminPassword":{
-        "type": "string"
-    },
-    "scaleupthreshold":{
-        "type": "int"
-    },
-    "scaledownthreshold":{
-        "type": "int"
-    },
-    "nicName":{
-        "type": "string"
-    },
-    "nic2Name":{
-        "type": "string"
-    },
-    "ipConfigName":{
-        "type": "string"
-    },
-    "internalLBName":{
-      "type": "string"
-    },
-    "loadBalancerName":{
-        "type": "string"
-    },
-    "ipConfig2Name":{
-        "type": "string"
-    },
-    "Subnet1Name":{
-        "type": "string"
-    },
-    "Subnet2Name":{
-        "type": "string"
-    },
-    "bePoolName":{
-        "type": "string"
-    },
-    "maxcapacity":{
-        "type": "int"
-    },
-    "mincapacity":{
-        "type": "int"
-    },
-    "internalLBBEName":{
-        "type": "string"
-    },
-    "natPoolName":{
-        "type": "string"
-    },
-    "natHTTPSPoolName":{
-        "type": "string"
-    },
-    "EndPoints":{
-        "type": "string"
-    },
-    "vnetName":{
-        "type": "string"
-    },
-    "SecurityGrpforEntrySubnet":{
-      "type": "string"
-    },
-    "vmssName": {
-      "type": "string"
-    },
-   "privateIp":{
-      "type": "string"
-    }
-    },
-    "variables": {
-      "userdata": "[concat('{\"config-url\": \"' , parameters('EndPoints') , '\"}')]"
-    },
-    "resources": [
-      {
-          "type": "Microsoft.Compute/virtualMachineScaleSets",
-          "sku": {
-              "name": "[parameters('instanceType')]",
-              "tier": "Standard",
-              "capacity": "[parameters('capacity')]"
-          },
-          "name": "[parameters('vmssName')]",
-          "apiVersion": "2017-03-30",
-          "location": "[resourceGroup().location]",
-          "properties": {
-              "overprovision": "true",
-              "upgradePolicy": {
-                  "mode": "Manual"
-              },
-              "virtualMachineProfile": {
-                  "storageProfile": {
-                      "osDisk": {
-                          "name": "vmssosdisk",
-                          "caching": "ReadWrite",
-                          "createOption": "FromImage",
-                          "osType": "Linux",
-                          "image": {
-                              "uri": "[parameters('sourceImageVhdUri')]"
-                          }
-                      }
-                  },
-                  "osProfile": {
-                      "computerNamePrefix": "[parameters('namingInfix')]",
-                      "adminUsername": "[parameters('adminUsername')]",
-                      "adminPassword": "[parameters('adminPassword')]",
-                      "customData": "[base64(variables('userdata'))]"
-                  },
-                  "networkProfile": {
-                      "networkInterfaceConfigurations": [
-                          {
-                              "name": "[parameters('nicName')]",
-                              "properties": {
-                                  "primary": true,
-                                  "networkSecurityGroup": {
-                                                     "id": "[resourceID('Microsoft.Network/networkSecurityGroups/',parameters('SecurityGrpforEntrySubnet'))]"
-                                  },
-                                  "ipConfigurations": [
-                                      {
-                                          "name": "[parameters('ipConfigName')]",
-                                          "properties": {
-                                              "subnet": {
-                                                      "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', parameters('vnetName'), '/subnets/', parameters('Subnet1Name'))]"
-                                              },
-                                              "loadBalancerBackendAddressPools": [
-                                                  {
-                                                      "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('loadBalancerName'), '/backendAddressPools/', parameters('bePoolName'))]"
-                                                  }
-                                              ],
-                                              "loadBalancerInboundNatPools": [
-                                                  {
-                                                      "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('loadBalancerName'), '/inboundNatPools/', parameters('natPoolName'))]"
-                                                  },
-                                                  {
-                                                    "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('loadBalancerName'), '/inboundNatPools/', parameters('natHTTPSPoolName'))]"
-                                                }
-                                              ]
-                                          }
-                                      }
-                                  ]
-                              }
-                          },
-                          {
-                              "name": "[parameters('nic2Name')]",
-                              "properties": {
-                                  "primary": false,
-                                  "ipConfigurations": [
-                                      {
-                                          "name": "[parameters('ipConfig2Name')]",
-                                          "properties": {
-                                              "subnet": {
-                                                  "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', parameters('vnetName'), '/subnets/', parameters('Subnet2Name'))]"
-                                              },
-                                              "loadBalancerBackendAddressPools": [
-                                                  {
-                                                      "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('internalLBName'), '/backendAddressPools/', parameters('internalLBBEName'))]"
-                                                  }
-                                              ]
-                                          }
-                                      }
-                                  ]
-                              }
-                          }
-                      ]
-                  }
-              }
-          }
-      },
-      {
-        "type": "Microsoft.Insights/autoscaleSettings",
-        "name": "autoscalewad",
-        "apiVersion": "2015-04-01",
-        "location": "[resourceGroup().location]",
-        "properties": {
-            "name": "autoscalewad",
-            "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
-            "enabled": true,
-            "profiles": [
-                {
-                    "name": "Profile1",
-                    "capacity": {
-                        "minimum": "[parameters('mincapacity')]",
-                        "maximum": "[parameters('maxcapacity')]",
-                        "default": "[parameters('capacity')]"
-                    },
-                    "rules": [
-                        {
-                            "metricTrigger": {
-                                "metricName": "Percentage CPU",
-                                "metricNamespace": "",
-                                "metricResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
-                                "timeGrain": "PT1M",
-                                "statistic": "Average",
-                                "timeWindow": "PT5M",
-                                "timeAggregation": "Average",
-                                "operator": "GreaterThan",
-                                "threshold": "[parameters('scaleupthreshold')]"
-                            },
-                            "scaleAction": {
-                                "direction": "Increase",
-                                "type": "ChangeCount",
-                                "value": "1",
-                                "cooldown": "PT1M"
-                            }
-                        },
-                        {
-                            "metricTrigger": {
-                                "metricName": "Percentage CPU",
-                                "metricNamespace": "",
-                                "metricResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
-                                "timeGrain": "PT1M",
-                                "statistic": "Average",
-                                "timeWindow": "PT5M",
-                                "timeAggregation": "Average",
-                                "operator": "LessThan",
-                                "threshold": "[parameters('scaledownthreshold')]"
-                            },
-                            "scaleAction": {
-                                "direction": "Decrease",
-                                "type": "ChangeCount",
-                                "value": "1",
-                                "cooldown": "PT5M"
-                            }
-                        }
-                    ]
-                }
-            ]
+    "$schema":"https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion":"1.0.0.0",
+    "parameters":{
+        "instanceType":{
+            "type":"string"
+        },
+        "capacity":{
+            "type":"int"
+        },
+        "namingInfix":{
+            "type":"string"
+        },
+        "fosversion":{
+            "type":"string"
+        },
+        "adminUsername":{
+            "type":"string"
+        },
+        "adminPassword":{
+            "type":"string"
+        },
+        "scaleupthreshold":{
+            "type":"int"
+        },
+        "scaledownthreshold":{
+            "type":"int"
+        },
+        "nicName":{
+            "type":"string"
+        },
+        "nic2Name":{
+            "type":"string"
+        },
+        "ipConfigName":{
+            "type":"string"
+        },
+        "internalLBName":{
+            "type":"string"
+        },
+        "loadBalancerName":{
+            "type":"string"
+        },
+        "ipConfig2Name":{
+            "type":"string"
+        },
+        "Subnet1Name":{
+            "type":"string"
+        },
+        "Subnet2Name":{
+            "type":"string"
+        },
+        "bePoolName":{
+            "type":"string"
+        },
+        "maxcapacity":{
+            "type":"int"
+        },
+        "mincapacity":{
+            "type":"int"
+        },
+        "internalLBBEName":{
+            "type":"string"
+        },
+        "natPoolName":{
+            "type":"string"
+        },
+        "natHTTPSPoolName":{
+            "type":"string"
+        },
+        "EndPoints":{
+            "type":"string"
+        },
+        "vnetName":{
+            "type":"string"
+        },
+        "SecurityGrpforEntrySubnet":{
+            "type":"string"
+        },
+        "vmssName":{
+            "type":"string"
+        },
+        "privateIp":{
+            "type":"string"
         }
-    }
+    },
+    "variables":{
+        "userdata":"[concat('{\"config-url\": \"' , parameters('EndPoints') , '\"}')]"
+    },
+    "resources":[
+        {
+            "type":"Microsoft.Compute/virtualMachineScaleSets",
+            "sku":{
+                "name":"[parameters('instanceType')]",
+                "tier":"Standard",
+                "capacity":"[parameters('capacity')]"
+            },
+            "name":"[parameters('vmssName')]",
+            "apiVersion":"2017-03-30",
+            "location":"[resourceGroup().location]",
+            "plan":{
+                "name":"fortinet_fg-vm_payg",
+                "publisher":"fortinet",
+                "product":"fortinet_fortigate-vm_v5"
+            },
+            "properties":{
+                "overprovision":"true",
+                "upgradePolicy":{
+                    "mode":"Manual"
+                },
+                "virtualMachineProfile":{
+                    "storageProfile":{
+                        "osDisk":{
+                            "caching":"ReadWrite",
+                            "createOption":"FromImage",
+                            "osType":"Linux"
+                        },
+                        "imageReference":{
+                            "publisher":"Fortinet",
+                            "offer":"fortinet_fortigate-vm_v5",
+                            "sku":"fortinet_fg-vm_payg",
+                            "version":"[parameters('fosversion')]"
+                        }
+                    },
+                    "osProfile":{
+                        "computerNamePrefix":"[parameters('namingInfix')]",
+                        "adminUsername":"[parameters('adminUsername')]",
+                        "adminPassword":"[parameters('adminPassword')]",
+                        "customData":"[base64(variables('userdata'))]"
+                    },
+                    "networkProfile":{
+                        "networkInterfaceConfigurations":[
+                            {
+                                "name":"[parameters('nicName')]",
+                                "properties":{
+                                    "primary":true,
+                                    "networkSecurityGroup":{
+                                        "id":"[resourceID('Microsoft.Network/networkSecurityGroups/',parameters('SecurityGrpforEntrySubnet'))]"
+                                    },
+                                    "ipConfigurations":[
+                                        {
+                                            "name":"[parameters('ipConfigName')]",
+                                            "properties":{
+                                                "subnet":{
+                                                    "id":"[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', parameters('vnetName'), '/subnets/', parameters('Subnet1Name'))]"
+                                                },
+                                                "loadBalancerBackendAddressPools":[
+                                                    {
+                                                        "id":"[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('loadBalancerName'), '/backendAddressPools/', parameters('bePoolName'))]"
+                                                    }
+                                                ],
+                                                "loadBalancerInboundNatPools":[
+                                                    {
+                                                        "id":"[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('loadBalancerName'), '/inboundNatPools/', parameters('natPoolName'))]"
+                                                    },
+                                                    {
+                                                        "id":"[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('loadBalancerName'), '/inboundNatPools/', parameters('natHTTPSPoolName'))]"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "name":"[parameters('nic2Name')]",
+                                "properties":{
+                                    "primary":false,
+                                    "ipConfigurations":[
+                                        {
+                                            "name":"[parameters('ipConfig2Name')]",
+                                            "properties":{
+                                                "subnet":{
+                                                    "id":"[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', parameters('vnetName'), '/subnets/', parameters('Subnet2Name'))]"
+                                                },
+                                                "loadBalancerBackendAddressPools":[
+                                                    {
+                                                        "id":"[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', parameters('internalLBName'), '/backendAddressPools/', parameters('internalLBBEName'))]"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "type":"Microsoft.Insights/autoscaleSettings",
+            "name":"autoscalewad",
+            "apiVersion":"2015-04-01",
+            "location":"[resourceGroup().location]",
+            "properties":{
+                "name":"autoscalewad",
+                "targetResourceUri":"[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
+                "enabled":true,
+                "profiles":[
+                    {
+                        "name":"Profile1",
+                        "capacity":{
+                            "minimum":"[parameters('mincapacity')]",
+                            "maximum":"[parameters('maxcapacity')]",
+                            "default":"[parameters('capacity')]"
+                        },
+                        "rules":[
+                            {
+                                "metricTrigger":{
+                                    "metricName":"Percentage CPU",
+                                    "metricNamespace":"",
+                                    "metricResourceUri":"[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
+                                    "timeGrain":"PT1M",
+                                    "statistic":"Average",
+                                    "timeWindow":"PT5M",
+                                    "timeAggregation":"Average",
+                                    "operator":"GreaterThan",
+                                    "threshold":"[parameters('scaleupthreshold')]"
+                                },
+                                "scaleAction":{
+                                    "direction":"Increase",
+                                    "type":"ChangeCount",
+                                    "value":"1",
+                                    "cooldown":"PT1M"
+                                }
+                            },
+                            {
+                                "metricTrigger":{
+                                    "metricName":"Percentage CPU",
+                                    "metricNamespace":"",
+                                    "metricResourceUri":"[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  resourceGroup().name, '/providers/Microsoft.Compute/virtualMachineScaleSets/', parameters('vmssName'))]",
+                                    "timeGrain":"PT1M",
+                                    "statistic":"Average",
+                                    "timeWindow":"PT5M",
+                                    "timeAggregation":"Average",
+                                    "operator":"LessThan",
+                                    "threshold":"[parameters('scaledownthreshold')]"
+                                },
+                                "scaleAction":{
+                                    "direction":"Decrease",
+                                    "type":"ChangeCount",
+                                    "value":"1",
+                                    "cooldown":"PT5M"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
     ],
-    "outputs": {}
-  }
+    "outputs":{
+
+    }
+}

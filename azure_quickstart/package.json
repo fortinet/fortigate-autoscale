@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale-azure-quickstart",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-beta",
   "description": "Fortigate Autoscale Azure QuickStart Template.",
   "main": "index.js",
   "scripts": {

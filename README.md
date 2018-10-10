@@ -11,7 +11,7 @@ The project also contains a deployment script which can generate packages for ea
 Version tag in parenthese refers to the autoscale module version in Fortigate Autoscale project.
 
   * Amazon AWS (1.0.0-alpha)
-  * Microsoft Azure (1.0.0-preview)
+  * Microsoft Azure (1.0.0-beta)
 
 ## Install
 
