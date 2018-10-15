@@ -19,6 +19,9 @@ To make deployment packages locally
   1. Clone this project and run `npm run build` at the project root directory.
   2. The deployment package zip files will be available in the **dist** directory.
 
+For full installation guide, please see:
+  * [ FortiGate / FortiOS Deploying Auto Scaling on Microsoft Azure](https://docs2.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
+
 More information and instructions will be available soon.
 
 # Support

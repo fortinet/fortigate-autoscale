@@ -16,7 +16,8 @@
                 "description":"FOS Version supported for auto-scaling."
             },
             "allowedValues":[
-                "6.0.02"
+                "6.0.02",
+                "6.0.3"
             ]
         },
         "vnetNewOrExisting":{

@@ -3,7 +3,7 @@
         "value": "Standard_F2"
     },
     "sourceImageVhdUri": {
-        "value": "http://ftnt.blob.core.windows.net/vhds/fos-b5089-payg.vhd"
+        "value": ""
     },
     "vnetNewOrExisting": {
         "value": "new"
