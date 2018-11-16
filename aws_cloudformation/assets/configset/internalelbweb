@@ -1,0 +1,8 @@
+
+config firewall address
+    edit internal-elb-web
+        set type fqdn
+        set fqdn "{INTERNAL_ELB_DNS}"
+        set associated-interface "{ASSOCIATED_INTERFACE}"
+    next
+end

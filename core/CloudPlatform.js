@@ -7,6 +7,9 @@ Author: Fortinet
 * Class used to define the capabilities required from cloud platform.
 */
 module.exports = class CloudPlatform {
+    constructor() {
+
+    }
     throwNotImplementedException() {
         throw new Error('Not Implemented');
     }
@@ -37,31 +40,31 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
     /**
-     * Get an existing lifecyle action from the database.
+     * Get all existing lifecyle actions for a fortigate instance from the database.
      * Abstract class method.
      * @param {String} instanceId Instance ID of a fortigate.
      * @returns {LifecycleItem} Item used by the platform to complete a lifecycleAction.
      */
-    async getPendingLifecycleAction(instanceId) {
+    async getLifecycleItems(instanceId) {
         await this.throwNotImplementedException();
     }
     /**
-     * Put a new lifecycle action into the database.
+     * Update one life cycle action item hooked with an instance.
      * Abstract class method.
      * @param {LifecycleItem} item Item used by the platform to complete
      *  a lifecycleAction.
      */
-    async putPendingLifecycleAction(item) {
+    async updateLifecycleItem(item) {
         await this.throwNotImplementedException();
     }
     /**
-     * Clean up database the current database entry (or any expired entries).
+     * Clean up database the current LifeCycleItem entries (or any expired entries).
      * Abstract class method.
-     * @param {LifecycleItem} [item] Item used to complete a lifecycle
-     *  action. When provided, only this item will be cleaned up, otherwise scan for expired
+     * @param {LifecycleItem} [items] an array of LifeCycleItem to remove from database.
+     * When provided, only the list of items will be cleaned up, otherwise scan for expired
      *  items to purge.
      */
-    async cleanUpDb(item = null) {
+    async cleanUpDbLifeCycleActions(items = []) {
         await this.throwNotImplementedException();
     }
     /**

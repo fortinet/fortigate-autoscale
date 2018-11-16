@@ -6,12 +6,22 @@
   "directories": {
     "test": "tests"
   },
+  "files_to_deploy": [
+    "*.js",
+    "package.json"
+  ],
+  "dependencies": {
+    "fortigate-autoscale-core": "file:../core"
+  },
   "devDependencies": {
     "eslint": "^5.4.0",
-    "fortigate-autoscale-core": "file:../core",
+    "eslint-plugin-mocha": "^5.2.0",
     "mocha": "^5.2.0",
     "nyc": "^13.0.1"
   },
+  "bundledDependencies": [
+    "fortigate-autoscale-core"
+  ],
   "scripts": {
     "pretest": "eslint --fix .",
     "deploy": "dpl",

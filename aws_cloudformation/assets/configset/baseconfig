@@ -1,0 +1,16 @@
+
+config system dns
+    unset primary
+    unset secondary
+end
+config system auto-scale
+    set status enable
+    set sync-interface "{SYNC_INTERFACE}"
+    set role master
+    set callback-url {CALLBACK_URL}
+    set psksecret {PSK_SECRET}
+end
+
+config system global
+    set admin-sport {ADMIN_PORT}
+end

@@ -1,7 +1,7 @@
 {
-  "name": "fortigate-autoscale-azure-funcapp",
-  "version": "1.0.0-beta",
-  "description": "FortiGate Autoscale Project - Azure Function App",
+  "name": "fortigate-autoscale-aws-lambda",
+  "version": "1.0.0-alpha",
+  "description": "FortiGate Autoscale Project - AWS Lambda",
   "main": "index.js",
   "scripts": {
     "pretest": "eslint --fix .",
@@ -14,7 +14,7 @@
     "url": "git+https://github.com/fortinet/fortigate-autoscale"
   },
   "dependencies": {
-    "fortigate-autoscale-azure": "file:lib/azure"
+    "fortigate-autoscale-aws": "file:../aws"
   },
   "devDependencies": {
     "eslint": "^5.4.0",
@@ -25,7 +25,7 @@
   "files_to_deploy": [
     "*.js",
     "host.json",
-    "autoscaleHandler/**",
+    "AutoscaleHandler/**",
     "package.json",
     "!package-lock.json"
   ]

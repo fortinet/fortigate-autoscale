@@ -44,22 +44,8 @@ module.exports = class AutoscaleHandler {
     }
 
     async getConfig(ip) {
-        this.step = 'handler:getConfig:holdElection';
-        const
-            masterIp = await this.holdMasterElection(ip);
-        if (masterIp === ip) {
-
-            this.step = 'handler:getConfig:completeMaster';
-            await this.completeMasterInstance(await this.platform.findInstanceIdByIp(ip));
-
-            this.step = 'handler:getConfig:getMasterConfig';
-            return await this.getMasterConfig(await this.platform.getCallbackEndpointUrl());
-        } else {
-
-            this.step = 'handler:getConfig:getSlaveConfig';
-            return await this.getSlaveConfig(masterIp,
-                await this.platform.getCallbackEndpointUrl());
-        }
+        await this.throwNotImplementedException();
+        return ip;
     }
 
     async getMasterConfig(callbackUrl) {
@@ -68,14 +54,14 @@ module.exports = class AutoscaleHandler {
 
     async getSlaveConfig(masterIp, callbackUrl) {
         const
-            autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR
-            .exec(await this._baseConfig),
+            autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
             matches = [
                 /set\s+sync-interface\s+(.+)/.exec(autoScaleSection),
-                /set\s+psksecret\s+(.+)/.exec(autoScaleSection)
+                /set\s+psksecret\s+(.+)/.exec(autoScaleSection),
+                /set\s+admin-sport\s+(.+)/.exec(autoScaleSection)
             ];
-        const [syncInterface, pskSecret] = matches.map(m => m && m[1]),
+        const [syncInterface, pskSecret, adminPort] = matches.map(m => m && m[1]),
             apiEndpoint = callbackUrl,
             config = `
                         config system auto-scale
@@ -94,7 +80,7 @@ module.exports = class AutoscaleHandler {
                             set admin-console-timeout 300
                         end
                         config system global
-                            set admin-sport 8443
+                            set admin-sport ${adminPort ? adminPort : '8443'}
                         end
                     `;
         let errorMessage;
@@ -116,58 +102,18 @@ module.exports = class AutoscaleHandler {
                     pskSecret: pskSecret && typeof pskSecret
                 })}`);
         }
-        config.replace(SET_SECRET_EXPR, '$1 *');
+        await config.replace(SET_SECRET_EXPR, '$1 *');
         return config;
     }
 
     async holdMasterElection(ip) {
-        let masterIp;
-        try {
-            masterIp = await this.platform.getElectedMaster();
-        } catch (ex) {
-            console.log(ex.message);
-        }
-        const masterInstanceId =
-            masterIp && await this.platform.findInstanceIdByIp(masterIp);
-        if (!masterInstanceId || !masterIp) {
-            console.log(!masterIp ?
-                'no master, maybe I will be the new master?' :
-                'master is dead, long live the master');
-            await this.platform.putMasterElectionVote(ip, masterIp);
-            masterIp = await this.platform.getElectedMaster();
-        }
-        console.log(ip === masterIp ? `Election won! new master is ${masterIp}` :
-            `${ip} lost the election, master is ${masterIp}`);
-        return masterIp;
-    }
-
-    async completeLifecycleAction(instanceId, success = true) {
-        const
-            item = await this.platform.getPendingLifecycleAction(instanceId),
-            data = await this.platform.completeLifecycleAction(item, success);
-
-        await this.platform.cleanUpDb(item);
-        return {
-            item,
-            data
-        };
+        await this.throwNotImplementedException();
+        return ip;
     }
 
     async completeMasterInstance(instanceId) {
-        const {
-            item,
-            result
-        } = await this.completeLifecycleAction(instanceId, true);
-        let instanceProtected = false;
-        try {
-            instanceProtected = await this.platform.protectInstanceFromScaleIn(item);
-        } catch (ex) {
-            console.error('Unable to protect instance from scale in:');
-            console.error(ex);
-        }
-        console.log(`Lifecycle for master ${instanceId} has been completed. ` +
-            `Protected: ${instanceProtected}`);
-        return result;
+        await this.throwNotImplementedException();
+        return instanceId;
     }
 
     responseToHeartBeat(masterIp) {

@@ -22,7 +22,7 @@ class DefaultLogger extends Logger {
     }
     log() {
         if (!(this.level && this.level.log === false)) {
-            this.logger.apply(null, arguments);
+            this.logger.log.apply(null, arguments);
         }
     }
     debug() {

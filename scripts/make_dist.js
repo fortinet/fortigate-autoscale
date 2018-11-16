@@ -102,6 +102,11 @@ async function removeTempDir(options = {}) {
     return true;
 }
 
+function resetTempDir() {
+    _tempDir = null;
+    return true;
+}
+
 async function makeDir(location, cwd = process.cwd(), options = {}) {
     await execCmd(`mkdir -p ${path.resolve(cwd, location)}`, cwd, options);
 }
@@ -195,6 +200,33 @@ function readPackageJsonAt(location) {
     }
 }
 
+function readJSONTemplateAt(filePath) {
+    filePath = path.resolve(process.cwd(), filePath);
+    try {
+        let stat = fs.statSync(filePath);
+        if (stat.isFile()) {
+            return require(filePath);
+        } else {
+            return {};
+        }
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveJSONTemplateAt(filePath, jsonObject) {
+    filePath = path.resolve(process.cwd(), filePath);
+    try {
+        if (typeof jsonObject === 'string') {
+            jsonObject = JSON.parse(jsonObject);
+        }
+        fs.writeFileSync(filePath, JSON.stringify(jsonObject, null, 4));
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
 async function moveSafe(src, des, options = {}) {
     if (!(src && des)) {
         console.error('<src> and <des> must be provided.');
@@ -204,8 +236,13 @@ async function moveSafe(src, des, options = {}) {
         throw new Error(`\n\n( ͡° ͜ʖ ͡°) moving <${src}> to its subdir <${des}> creates` +
         ' a circular reference. I won\'t allow this happen.');
     }
-    return await execCmd(`mv ${path.resolve(src)} ${path.resolve(des)}`,
+    if (options.moveSourceFiles) {
+        return await execCmd(`mv ${path.resolve(src)}/* ${path.resolve(des)}`,
         process.cwd(), options);
+    } else {
+        return await execCmd(`mv ${path.resolve(src)} ${path.resolve(des)}`,
+        process.cwd(), options);
+    }
 }
 
 async function zipSafe(fileName, src, excludeList = [], options = {}) {
@@ -276,16 +313,135 @@ function oldWayMakeDist() {
     }
 }
 
+// TODO: save for later. to make a fortigate-autoscale-core node module distribution
 function makeDistCore() {
 
 }
 
+// TODO: save for later. to make a fortigate-autoscale-aws node module distribution
 function makeDistAWS() {
 
 }
 
+// TODO: save for later. to make a fortigate-autoscale-azure node module distribution
 function makeDistAzure() {
 
+}
+
+async function makeDistAWSLambda(options = {saveToDist: 'zip', keepTemp: false}) {
+    console.info('Making distribution zip package for: AWS Lambda');
+    let rTempDir = await makeTempDir(),
+        rTempDirSrc = path.resolve(rTempDir, 'src'),
+        rTempDirSrcLambda = path.resolve(rTempDirSrc, 'aws_lambda'),
+        rTempDirSrcLib = path.resolve(rTempDirSrcLambda, 'lib'),
+        rTempDirSrcCore = path.resolve(rTempDirSrcLib, 'core'),
+        rTempDirSrcAws = path.resolve(rTempDirSrcLib, 'aws'),
+        packageInfo,
+        zipFilePath,
+        rDirSrcCore = path.resolve(REAL_PROJECT_ROOT, './core'),
+        rDirSrcAws = path.resolve(REAL_PROJECT_ROOT, './aws'),
+        rDirSrcLambda = path.resolve(REAL_PROJECT_ROOT, './aws_lambda'),
+        rDirDist = path.resolve(REAL_PROJECT_ROOT, './dist'),
+        zipFileName,
+        saveAs;
+
+    // create temp dirs
+    await makeDir(rTempDirSrc);
+    await makeDir(rDirDist);
+    // copy lambda module to temp dir
+    await copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, ['node_modules', 'local*', 'test',
+        '.nyc_output', '.vscode', 'package-lock.json']);
+    // create library dir on funcapp
+    await makeDir(rTempDirSrcLib);
+    // copy core module to temp dir and remove unnecessary files
+    await copyAndDelete(rDirSrcCore, rTempDirSrcCore,
+        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    // copy aws module to temp dir and remove unnecessary files
+    await copyAndDelete(rDirSrcAws, rTempDirSrcAws,
+        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    // install aws as dependency
+    await npmInstallAt(rTempDirSrcLambda,
+        ['--save', rTempDirSrcAws.replace(rTempDirSrcLambda, '.')]);
+
+    // read package info of module lambda
+    packageInfo = readPackageJsonAt(rTempDirSrcLambda);
+    zipFileName = `${packageInfo.name}.zip`;
+    // if only make zip file distribution file
+    if (options && options.saveToDist === 'zip') {
+    // zip
+        zipFilePath = await zipSafe(zipFileName, rTempDirSrcLambda, ['*.git*', '*.vsc*']);
+        // copy the zip file to distribution directory
+        await copy(zipFilePath, rDirDist);
+        // move zip file to upper level directory
+        await moveSafe(zipFilePath, path.resolve(rTempDirSrcLambda, '..'));
+        saveAs = path.resolve(rDirDist, zipFileName);
+    } else if (options && options.saveToDist === 'directory') {
+        // copy folder to distribution directory
+        await copy(rTempDirSrcLambda, rDirDist);
+        saveAs = rDirSrcLambda;
+    } else {
+        saveAs = rTempDirSrcLambda;
+    }
+    // if keep temp is true, the kept temp dir will be return and the calle is responsible for
+    // deleteing it after use.
+    if (options && options.keepTemp) {
+        resetTempDir();
+    } else {
+        await removeTempDir();
+    }
+    console.info('\n\n( ͡° ͜ʖ ͡°) package is saved as:');
+    console.info(`${saveAs}`);
+    return options && options.keepTemp ? rTempDirSrcLambda : null;
+}
+
+async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart: false}) {
+    // create the aws cloud formation package
+    console.info('Making distribution zip package for: AWS Cloud Formation');
+    // create the aws lambda pacakge (directory)
+    let lambdaTempDir = await makeDistAWSLambda({saveToDist: 'none', keepTemp: true}),
+        rTempDir = await makeTempDir(), // create temp folder
+        rTempDirCloudFormation = path.resolve(rTempDir, 'aws_cloudformation'),
+        rTempDirFunctionPackages = path.resolve(rTempDirCloudFormation, 'functions/packages'),
+        rTempDirFunctionSources = path.resolve(rTempDirCloudFormation, 'functions/source'),
+        rDirSrcCloudFormation = path.resolve(REAL_PROJECT_ROOT, './aws_cloudformation'),
+        rDirDist = path.resolve(REAL_PROJECT_ROOT, 'dist'),
+        zipFileName,
+        zipFilePath;
+
+    let excludeList = ['local*', '.gitignore', 'autoscale_params.txt'];
+    if (Array.isArray(options.excludeList)) {
+        excludeList = excludeList.concat(options.excludeList);
+    }
+    if (options.quickstart) {
+        excludeList = excludeList.concat(['LICENSE', 'README.md', 'NOTICE.txt',
+            'deploy_autoscale.sh']);
+    }
+    // copy aws cloud formation to temp dir
+    await copyAndDelete(rDirSrcCloudFormation, rTempDirCloudFormation,
+        excludeList);
+
+    // create /functions/packages folder
+    await makeDir(rTempDirFunctionPackages);
+    await makeDir(rTempDirFunctionSources);
+    // remove aws-quickstart unwanted files
+    await remove(excludeList, lambdaTempDir);
+    // zip the aws lambda
+    zipFilePath = await zipSafe('lambda.zip', lambdaTempDir);
+    // move the lambda.zip to  into functions/packages/lambda.zip
+    await moveSafe(zipFilePath, rTempDirFunctionPackages);
+    // move the aws lambda source into functions/source
+    await moveSafe(lambdaTempDir, rTempDirFunctionSources, {moveSourceFiles: true});
+    // move the aws lambda init configset pacakge into the cloud formation dir
+    // await moveSafe(lambdaInitConfigSetTempDir, rTempDirCloudFormation);
+    // zip the aws cloud formation dir
+    zipFileName = options.quickstart ? 'fortigate-autoscale-aws-quickstart.zip' :
+        'fortigate-autoscale-aws-cloudformation.zip';
+    zipFilePath = await zipSafe(zipFileName, rTempDirCloudFormation);
+    // copy the zip file to dist
+    await moveSafe(zipFilePath, rDirDist);
+    await removeTempDir();
+    console.info('\n\n( ͡° ͜ʖ ͡°) package is saved as:');
+    console.info(`${path.resolve(rDirDist, zipFileName)}`);
 }
 
 async function makeDistAzureFuncApp() {
@@ -410,10 +566,12 @@ async function makeDistAzureQuickStart() {
 async function makeDistAll() {
     await makeDistCore();
     // await makeDistAWS();
+    await makeDistAWSLambda();
     await makeDistAzure();
     await makeDistAzureFuncApp();
     await makeDistAzureQuickStart();
     await makeDistProject();
+    await makeDistAwsCloudFormation();
 }
 
 let scrptName = process.argv[ARGV_PROCESS_PACKAGING_SCRIPT_NAME] || 'default';
@@ -434,6 +592,15 @@ switch (scrptName.toLowerCase()) {
     case 'azure-funcapp':
         makeDistAzureFuncApp();
         break;
+    case 'aws-lambda':
+        makeDistAWSLambda();
+        break;
+    case 'aws-cloudformation':
+        makeDistAwsCloudFormation();
+        break;
+    case 'aws-quickstart-special':
+        makeDistAwsCloudFormation({quickstart: true});
+        break;
     case 'project':
         makeDistProject();
         break;
@@ -452,5 +619,8 @@ switch (scrptName.toLowerCase()) {
         console.warn('npm run build-azure');
         console.warn('npm run build-azure-funcapp');
         console.warn('npm run build-azure-quickstart');
+        console.warn('npm run build-aws-lambda');
+        console.warn('npm run build-aws-cloudformation');
+        console.warn('npm run build-aws-quickstart-special');
         break;
 }

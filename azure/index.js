@@ -18,6 +18,17 @@ const SCRIPT_TIMEOUT = 300;// Azure script default timeout
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 var logger = new AutoScaleCore.DefaultLogger();
 
+class AzureLogger extends AutoScaleCore.DefaultLogger {
+    constructor(loggerObject) {
+        super(loggerObject);
+    }
+    log() {
+        if (!(this.level && this.level.log === false)) {
+            this.logger.apply(null, arguments);
+        }
+    }
+}
+
 class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async init() {
         let _initDB = async function() {
@@ -57,7 +68,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         return await fromContext ? fromContext.originalUrl : null;
     }
 
-    async findInstanceIdById(vmId) {
+    async getInstanceById(vmId) {
         let parameters = {
             resourceGroup: process.env.RESOURCE_GROUP,
             scaleSetName: process.env.SCALESET_NAME
@@ -204,15 +215,15 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             isNewInstance = false,
             selfHealthCheck,
             masterHealthCheck,
-            callingInstanceId = this.getCallingInstanceId(_request),
-            heartBeatInterval = this.getHeartBeatInterval(_request),
+            callingInstanceId = this.findCallingInstanceId(_request),
+            heartBeatInterval = this.findHeartBeatInterval(_request),
             counter = 0,
             nextTime,
             getConfigTimeout,
             virtualMachine;
 
         // verify the caller (diagram: trusted source?)
-        virtualMachine = await this.platform.findInstanceIdById(callingInstanceId);
+        virtualMachine = await this.platform.getInstanceById(callingInstanceId);
         if (!virtualMachine) {
             // not trusted
             throw new Error(`Unauthorized calling instance (vmid: ${callingInstanceId}). Instance not found in scale set.`); // eslint-disable-line max-len
@@ -509,7 +520,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return null;
     }
 
-    getCallingInstanceId(_request) {
+    findCallingInstanceId(_request) {
         try {
             // try to get instance id from headers
             if (_request && _request.headers && _request.headers['fos-instance-id']) {
@@ -525,7 +536,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    getHeartBeatInterval(_request) {
+    findHeartBeatInterval(_request) {
         let _interval = 120;
         try {
             if (_request && _request.body && _request.body.interval) {
@@ -716,7 +727,7 @@ exports.initModule = async () => {
      * @param {*} req the request object to the Azure function app.
      */
     exports.handle = async (context, req) => {
-        logger = new AutoScaleCore.DefaultLogger(context.log);
+        logger = new AzureLogger(context.log);
         const handler = new AzureAutoscaleHandler();
         return await handler.handle(context, req);
     };
