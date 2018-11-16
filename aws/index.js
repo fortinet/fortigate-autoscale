@@ -151,7 +151,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             ]);
             return true;
         } catch (ex) {
-            this._initErrorTableNotExists = true;
             logger.warn('some tables are missing, script enters instance termination process');
             return false;
         }
@@ -219,7 +218,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         throw new Error(`Api Gateway not found looking for ${gwName}`);
     }
 
-    // Override
+    /**
+     * @override
+     */
     async getLifecycleItems(instanceId) {
         logger.info(`calling getLifecycleItems, instanceId: ${instanceId}`);
         const query = {
@@ -253,7 +254,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         return await docClient.put(params).promise();
     }
 
-    // override
+    /**
+     * @override
+     */
     async cleanUpDbLifeCycleActions(items = []) {
         try {
             const tableName = DB.LIFECYCLEITEM.TableName;
@@ -499,22 +502,22 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         super(platform, baseConfig);
         this._step = '';
         this._selfInstance = null;
-        this._init = false;
     }
 
     async init() {
-        this._init = await this.platform.init();
+        const success = await this.platform.init();
         // retrieve base config from an S3 bucket
         this._baseConfig = await this.getBaseConfig();
+        return success;
     }
 
     async handle(event, context, callback) {
         this._step = 'initializing';
         let proxyMethod = 'httpMethod' in event && event.httpMethod, result;
         try {
-            await this.init();
+            const platformInitSuccess = await this.init();
             // enter instance termination process if cannot init for any reason
-            if (!this._init) {
+            if (!platformInitSuccess) {
                 result = 'fatal error, cannot initialize.';
                 logger.error(result);
                 callback(null, proxyResponse(500, result));
@@ -639,7 +642,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return data && data.Body && data.Body.toString('ascii');
     }
 
-    // override
+    /**
+     * @override
+     */
     async getBaseConfig() {
         let baseConfig = await this.getConfigSetFromS3('baseconfig');
         if (baseConfig) {
@@ -743,8 +748,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleSyncedCallback(event) {
         const callingInstanceId = this.findCallingInstanceId(event),
             heartBeatInterval = this.findHeartBeatInterval(event),
-            forigateStatus = this.findFortiGateStatus(event),
-            statusSuccess = forigateStatus && forigateStatus === 'success' || false;
+            fortigateStatus = this.findFortiGateStatus(event),
+            statusSuccess = fortigateStatus && fortigateStatus === 'success' || false;
         // if fortigate is sending callback in response to obtaining config, this is a state
         // message
         let parameters = {}, selfHealthCheck;
@@ -757,7 +762,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
         this._selfInstance = await this.platform.describeInstance(parameters);
         // if it is a response from fgt for getting its config
-        if (forigateStatus) {
+        if (fortigateStatus) {
             // handle get config callback
             return await this.handleGetConfigCallback(
                 this._selfInstance.InstanceId === masterInfo.InstanceId, statusSuccess);
@@ -905,6 +910,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleGetConfig(event) {
         logger.info('calling handleGetConfig');
         let
+            electionLock = null,
             masterIsHealthy = false,
             config,
             getConfigTimeout,
@@ -948,12 +954,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             if (!masterIsHealthy) {
                 // but can I run the election? (diagram: anyone's holding master election?)
                 // try to put myself as the master candidate
-                this._electionLock = !masterRecord &&
+                electionLock = !masterRecord &&
                 await this.putMasterElectionVote(this._selfInstance,
                     // even if master record exists, this master is unhealthy so need to purge it.
                     masterRecord && masterRecord.voteState === 'done');
 
-                if (this._electionLock) {
+                if (electionLock) {
                     // yes, you run it!
                     logger.info(`This instance (id: ${this._selfInstance.InstanceId})` +
                     ' is running an election.');
@@ -964,7 +970,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     } catch (error) {
                         logger.error('Something went wrong in the master election.');
                     } finally {
-                        this._electionLock = null;
+                        electionLock = null;
                     }
                     // (diagram: master exists?)
                     masterInfo = await this.getMasterInfo();

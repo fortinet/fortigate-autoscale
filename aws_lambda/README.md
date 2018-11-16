@@ -1,6 +1,6 @@
 # Fortigate Autoscale - AWS Lambda
 
-This is a complete Fortigate Autoscale handler script source code for AWS Cloud Platform. A 'simple' autoscaling setup which takes advantage of the 6.0.1 `auto-scale` callback feature to automate autoscaling group config syncronization.
+This is a complete Fortigate Autoscale handler script source code for AWS Cloud Platform. A 'simple' autoscaling setup which takes advantage of the 6.0.3 `auto-scale` callback feature to automate autoscaling group config syncronization.
 
 ## Install
 

@@ -7,9 +7,6 @@ Author: Fortinet
 * Class used to define the capabilities required from cloud platform.
 */
 module.exports = class CloudPlatform {
-    constructor() {
-
-    }
     throwNotImplementedException() {
         throw new Error('Not Implemented');
     }

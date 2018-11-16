@@ -200,33 +200,6 @@ function readPackageJsonAt(location) {
     }
 }
 
-function readJSONTemplateAt(filePath) {
-    filePath = path.resolve(process.cwd(), filePath);
-    try {
-        let stat = fs.statSync(filePath);
-        if (stat.isFile()) {
-            return require(filePath);
-        } else {
-            return {};
-        }
-    } catch (error) {
-        return {};
-    }
-}
-
-function saveJSONTemplateAt(filePath, jsonObject) {
-    filePath = path.resolve(process.cwd(), filePath);
-    try {
-        if (typeof jsonObject === 'string') {
-            jsonObject = JSON.parse(jsonObject);
-        }
-        fs.writeFileSync(filePath, JSON.stringify(jsonObject, null, 4));
-        return true;
-    } catch (error) {
-        return false;
-    }
-}
-
 async function moveSafe(src, des, options = {}) {
     if (!(src && des)) {
         console.error('<src> and <des> must be provided.');
