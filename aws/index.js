@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-Fortigate Autoscale AWS Module (1.0.0-alpha)
+FortiGate Autoscale AWS Module (1.0.0-beta)
 Author: Fortinet
 */
 exports = module.exports;
@@ -56,7 +56,7 @@ const
                 ReadCapacityUnits: 1,
                 WriteCapacityUnits: 1
             },
-            TableName: `${custom_id}-FortigateLifecycleItem-${unique_id}`
+            TableName: `${custom_id}-FortiGateLifecycleItem-${unique_id}`
         },
         AUTOSCALE: {
             AttributeDefinitions: [
@@ -75,7 +75,7 @@ const
                 ReadCapacityUnits: 1,
                 WriteCapacityUnits: 1
             },
-            TableName: `${custom_id}-FortigateAutoscale-${unique_id}`
+            TableName: `${custom_id}-FortiGateAutoscale-${unique_id}`
         },
         ELECTION: {
             AttributeDefinitions: [
@@ -111,7 +111,7 @@ const
                 }
             ],
             ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
-            TableName: `${custom_id}-FortigateMasterElection-${unique_id}`
+            TableName: `${custom_id}-FortiGateMasterElection-${unique_id}`
         },
         CONFIGSET: {
             AttributeDefinitions: [
@@ -131,7 +131,7 @@ const
                 }
             ],
             ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
-            TableName: `${custom_id}-FortigateConfigSet-${unique_id}`
+            TableName: `${custom_id}-FortiGateConfigSet-${unique_id}`
         }
 
     },
@@ -330,7 +330,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     /**
      * Get the ip address which won the master election
-     * @returns {Object} Master record of the fortigate which should be the auto-sync master
+     * @returns {Object} Master record of the FortiGate which should be the auto-sync master
      */
     async getElectedMaster() {
         const
@@ -581,7 +581,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /**
      * Submit an election vote for this ip address to become the master.
-     * @param {Object} candidateInstance instance of the fortigate which wants to become the master
+     * @param {Object} candidateInstance instance of the FortiGate which wants to become the master
      * @param {Object} purgeMasterRecord master record of the old master, if it's dead.
      */
     async putMasterElectionVote(candidateInstance, purgeMasterRecord = null) {
@@ -740,7 +740,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /* eslint-disable max-len */
     /**
-     * Handle the 'auto-scale synced' callback from the fortigate.
+     * Handle the 'auto-scale synced' callback from the FortiGate.
      * @param {AWS.ProxyIntegrationEvent} event Event from the api-gateway.
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
      */
@@ -750,7 +750,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             heartBeatInterval = this.findHeartBeatInterval(event),
             fortigateStatus = this.findFortiGateStatus(event),
             statusSuccess = fortigateStatus && fortigateStatus === 'success' || false;
-        // if fortigate is sending callback in response to obtaining config, this is a state
+        // if FortiGate is sending callback in response to obtaining config, this is a state
         // message
         let parameters = {}, selfHealthCheck;
 
@@ -902,7 +902,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /* eslint-disable max-len */
     /**
-     * Handle the 'getConfig' callback from the fortigate.
+     * Handle the 'getConfig' callback from the FortiGate.
      * @param {Aws.ProxyIntegrationEvent} event Event from the api-gateway.
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
      */

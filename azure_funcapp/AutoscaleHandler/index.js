@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-Fortigate Autoscale Azure Function (1.0.0-preview)
+FortiGate Autoscale Azure Function (1.0.0-beta)
 Author: Fortinet
 */
 

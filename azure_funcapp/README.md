@@ -1,8 +1,8 @@
-# Fortigate Autoscale - Azure Function Apps
+# FortiGate Autoscale - Azure Function Apps
 
-This is a complete Fortigate Autoscale Function App source code for Azure Cloud Platform.
+This is a complete FortiGate Autoscale Function App source code for Azure Cloud Platform.
 
-To make a deployment package, go to the root directory of Fortigate Autoscale project and run `npm run build-azure-funcapp`.
+To make a deployment package, go to the root directory of FortiGate Autoscale project and run `npm run build-azure-funcapp`.
 
 Please see the Project [README](../README.md) file for more information
 

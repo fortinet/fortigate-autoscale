@@ -1,6 +1,6 @@
 'use strict';
 
 /*
-Fortigate Autoscale Main (1.0.0-preview)
+FortiGate Autoscale Main (1.0.0-beta)
 Author: Fortinet
 */

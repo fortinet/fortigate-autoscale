@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-Fortigate Autoscale AWS Lambda Function (1.0.0-alpha)
+FortiGate Autoscale AWS Lambda Function (1.0.0-beta)
 Author: Fortinet
 */
 

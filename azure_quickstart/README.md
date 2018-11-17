@@ -1,4 +1,4 @@
-# Fortigate Autoscale Azure QuickStart Template
+# FortiGate Autoscale Azure QuickStart Template
 
 Please see the [README](../README.md) on the main project for more information.
 

@@ -125,7 +125,7 @@ then
     echo ""
 fi
 
-echo -e "It is going to deploy the Fortigate Autoscale\nwith stack name: ${coloryellow}${STACK}${colorreset}\nusing the S3 bucket: ${coloryellow}${BUCKET}${colorreset}\nin AWS Region: ${coloryellow}$(aws configure get region)${colorreset}"
+echo -e "It is going to deploy the FortiGate Autoscale\nwith stack name: ${coloryellow}${STACK}${colorreset}\nusing the S3 bucket: ${coloryellow}${BUCKET}${colorreset}\nin AWS Region: ${coloryellow}$(aws configure get region)${colorreset}"
 
 if [ $ifprompt -eq 1 ]
 then

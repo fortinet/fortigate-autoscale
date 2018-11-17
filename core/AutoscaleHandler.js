@@ -9,7 +9,7 @@ Author: Fortinet
 * Use this class in various serverless cloud contexts. For each serverless cloud
 * implementation extend this class and implement the handle() method. The handle() method
 * should call other methods as needed based on the input events from that cloud's
-* autoscale mechanism and api gateway requests from the fortigate's callback-urls.
+* autoscale mechanism and api gateway requests from the FortiGate's callback-urls.
 * (see reference AWS implementation {@link AwsAutoscaleHandler})
 *
 * Each cloud implementation should also implement a concrete version of the abstract
@@ -17,7 +17,7 @@ Author: Fortinet
 * CloudPlatform interface should abstract each specific cloud's api. The reference
 * implementation {@link AwsPlatform} handles access to the dynamodb for persistence and
 * locking, interacting with the aws autoscaling api and determining the api endpoint url
-* needed for the fortigate config's callback-url parameter.
+* needed for the FortiGate config's callback-url parameter.
 */
 const
     AUTOSCALE_SECTION_EXPR =

@@ -22,7 +22,7 @@ module.exports = class CloudPlatform {
     /**
      * Submit an election vote for this ip address to become the master.
      * Abstract class method.
-     * @param {String} ip Ip of the fortigate which wants to become the master
+     * @param {String} ip Ip of the FortiGate which wants to become the master
      * @param {String} purgeMasterIp Ip of the dead master we should purge before voting
      */
     async putMasterElectionVote(ip, purgeMasterIp) {
@@ -31,15 +31,15 @@ module.exports = class CloudPlatform {
     /**
      * Get the ip address which won the master election.
      * Abstract class method.
-     * @returns {String} Ip of the fortigate which should be the auto-sync master
+     * @returns {String} Ip of the FortiGate which should be the auto-sync master
      */
     async getElectedMaster() {
         await this.throwNotImplementedException();
     }
     /**
-     * Get all existing lifecyle actions for a fortigate instance from the database.
+     * Get all existing lifecyle actions for a FortiGate instance from the database.
      * Abstract class method.
-     * @param {String} instanceId Instance ID of a fortigate.
+     * @param {String} instanceId Instance ID of a FortiGate.
      * @returns {LifecycleItem} Item used by the platform to complete a lifecycleAction.
      */
     async getLifecycleItems(instanceId) {

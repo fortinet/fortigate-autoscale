@@ -1,6 +1,6 @@
-# Fortigate Autoscale - Azure
+# FortiGate Autoscale - Azure
 
-This is the Fortigate Autoscale Azure module for Azure Cloud Platform.
+This is the FortiGate Autoscale Azure module for Azure Cloud Platform.
 
 Please see the Project [README](../README.md) file for more information
 

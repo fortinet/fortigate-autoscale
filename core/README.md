@@ -1,4 +1,4 @@
-# Fortigate Autoscale - Core
+# FortiGate Autoscale - Core
 
 `fortigate-autoscale/core` contains the core logic used to handle autoscaling groups of FortiGate VM instances in various cloud platforms.
 The provided classes are extended for each cloud platform in the neighbouring modules.

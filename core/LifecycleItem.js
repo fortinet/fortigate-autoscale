@@ -4,12 +4,12 @@
 Author: Fortinet
 *
 * Contains all the relevant information needed to complete lifecycle actions for a given
-* fortigate instance, as well as info needed to clean up the related database entry.
+* FortiGate instance, as well as info needed to clean up the related database entry.
 */
 
 module.exports = class LifecycleItem {
     /**
-     * @param {String} instanceId Id of the fortigate instance.
+     * @param {String} instanceId Id of the FortiGate instance.
      * @param {Object} detail Opaque information used by the platform to manage this item.
      * @param {String} [actionName=null] Optional name for this record to lookup. should be one in
      * ['syncconfig', 'attachnic']
