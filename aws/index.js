@@ -461,6 +461,36 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         return instance && instance.InstanceId;
     }
 
+    /**
+     * Extract useful info from request event.
+     * @param {Object} request the request event
+     * @returns {Array} an array of required info per platform.
+     */
+    extractRequestInfo(request) {
+        let instanceId = null,
+            interval = null,
+            status = null;
+
+        if (request && request.headers && request.headers['Fos-instance-id']) {
+            instanceId = request.headers['Fos-instance-id'];
+        } else if (request && request.body) {
+            try {
+                let jsonBodyObject = JSON.parse(request.body);
+                instanceId = jsonBodyObject.instance;
+                interval = jsonBodyObject.interval;
+                status = jsonBodyObject.status;
+            } catch (ex) {
+                logger.info('calling extractRequestInfo: unexpected body content format ' +
+                `(${request.body})`);
+            }
+        } else {
+            logger.error('calling extractRequestInfo: no request body found.');
+        }
+        logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
+        `interval(${interval}), status(${status})`);
+        return {instanceId, interval, status};
+    }
+
     async protectInstanceFromScaleIn(asgName, item, protect = true) {
         const
             MAX_TRIES = 10,
@@ -528,7 +558,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             } else if (proxyMethod === 'POST') {
                 this._step = 'fortigate:handleSyncedCallback';
                 // authenticate the calling instance
-                const instanceId = this.findCallingInstanceId(event);
+                const instanceId = this.getCallingInstanceId(event);
                 if (!instanceId) {
                     callback(null, proxyResponse(403, 'Instance id not provided.'));
                     return;
@@ -746,15 +776,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      */
     /* eslint-enable max-len */
     async handleSyncedCallback(event) {
-        const callingInstanceId = this.findCallingInstanceId(event),
-            heartBeatInterval = this.findHeartBeatInterval(event),
-            fortigateStatus = this.findFortiGateStatus(event),
-            statusSuccess = fortigateStatus && fortigateStatus === 'success' || false;
-        // if FortiGate is sending callback in response to obtaining config, this is a state
+        const {instanceId, interval, status} =
+            this.platform.extractRequestInfo(event),
+            statusSuccess = status && status === 'success' || false;
+        // if fortigate is sending callback in response to obtaining config, this is a state
         // message
         let parameters = {}, selfHealthCheck;
 
-        parameters.instanceId = callingInstanceId;
+        parameters.instanceId = instanceId;
         // handle hb monitor
         // get master instance monitoring
         let masterInfo = await this.getMasterInfo();
@@ -762,7 +791,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
         this._selfInstance = await this.platform.describeInstance(parameters);
         // if it is a response from fgt for getting its config
-        if (fortigateStatus) {
+        if (status) {
             // handle get config callback
             return await this.handleGetConfigCallback(
                 this._selfInstance.InstanceId === masterInfo.InstanceId, statusSuccess);
@@ -771,12 +800,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // do self health check
         selfHealthCheck = await this.platform.getInstanceHealthCheck({
             instanceId: this._selfInstance.InstanceId
-        }, heartBeatInterval);
+        }, interval);
         // if no record found, this instance not under monitor. should make sure its all
         // lifecycle actions are complete before starting to monitor it
         if (!selfHealthCheck) {
             await this.addInstanceToMonitor(this._selfInstance,
-                Date.now() + heartBeatInterval * 1000);
+                Date.now() + interval * 1000);
             logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
                 `ip: ${this._selfInstance.PrivateIpAddress}) is added to monitor.`);
             return '';
@@ -918,7 +947,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             masterInfo,
             masterHealthCheck,
             masterRecord,
-            callingInstanceId = this.findCallingInstanceId(event);
+            callingInstanceId = this.getCallingInstanceId(event);
 
         // get instance object from platform
         this._selfInstance = await this.platform.describeInstance({instanceId: callingInstanceId});
@@ -1034,66 +1063,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    findCallingInstanceId(request) {
-        if (request.headers && request.headers['Fos-instance-id']) {
-            logger.info('called findCallingInstanceId: instance Id ' +
-            `(${request.headers['Fos-instance-id']}) found.`);
-            return request.headers['Fos-instance-id'];
-        } else if (request.body) {
-            try {
-                let jsonBodyObject = JSON.parse(request.body);
-                logger.info('called findCallingInstanceId: instance Id ' +
-            `(${jsonBodyObject.instance}) found.`);
-                return jsonBodyObject.instance;
-            } catch (ex) {
-                logger.info('called findCallingInstanceId: unexpected body content format ' +
-            `(${request.body})`);
-                return null;
-            }
-        } else {
-            logger.error('called findCallingInstanceId: instance Id not found' +
-                `. original request: ${JSON.stringify(request)}`);
-            return null;
-        }
-    }
-
-    findHeartBeatInterval(request) {
-        if (request.body && request.body !== '') {
-            try {
-                let jsonBodyObject = JSON.parse(request.body);
-                logger.info('called findHeartBeatInterval: interval ' +
-            `(${jsonBodyObject.interval}) found.`);
-                return jsonBodyObject.interval;
-            } catch (ex) {
-                logger.info('called findCallingInstanceId: unexpected body content format ' +
-            `(${request.body})`);
-                return null;
-            }
-
-        } else {
-            logger.error('called findHeartBeatInterval: interval not found' +
-                `. original request: ${JSON.stringify(request)}`);
-            return null;
-        }
-    }
-
-    findFortiGateStatus(request) {
-        if (request.body && request.body !== '') {
-            try {
-                let jsonBodyObject = JSON.parse(request.body);
-                if (jsonBodyObject.status) {
-                    logger.info('called findFortiGateStatus: ' +
-                    `status ${jsonBodyObject.status} found`);
-                } else {
-                    logger.info('called findFortiGateStatus: status not found');
-                }
-                return jsonBodyObject.status;
-            } catch (ex) {
-                logger.info('called findFortiGateStatus: unexpected body content format ' +
-            `(${request.body})`);
-                return null;
-            }
-        }
+    getCallingInstanceId(request) {
+        return this.platform.extractRequestInfo(request).instanceId;
     }
 
     async findCallingInstance(request) {

@@ -83,12 +83,13 @@ module.exports = class CloudPlatform {
     }
 
     /**
-     * Lookup the instanceid using an id.
-     * Abstract class method.
-     * @param {String} id unique id of an instance.
+     * Extract useful info from request event.
+     * @param {Object} request the request event
+     * @returns {Object} an object of required info per platform.
      */
-    async findInstanceIdById(id) {
-        await this.throwNotImplementedException();
+    extractRequestInfo(request) {
+        this.throwNotImplementedException();
+        return {};
     }
 
     /**

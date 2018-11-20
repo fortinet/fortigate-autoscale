@@ -82,6 +82,43 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         return null;
     }
 
+    /**
+     * Extract useful info from request event.
+     * @param {Object} request the request event
+     * @returns {Array} an array of required info per platform.
+     */
+    extractRequestInfo(request) {
+        let instanceId = null,
+            interval = 120,
+            status = null;
+        try {
+            // try to get instance id from headers
+            if (request && request.headers && request.headers['fos-instance-id']) {
+                instanceId = request.headers['fos-instance-id'];
+            } else {
+                // try to get instance id from body
+                if (request && request.body && request.body.instance) {
+                    instanceId = request.body.instance;
+                }
+                // try to get get config status from body
+                if (request && request.body && request.body.status) {
+                    status = request.body.status;
+                }
+                // try to get heartbeat interval from body
+                if (request && request.body && request.body.interval &&
+                    !isNaN(request.body.interval)) {
+                    interval = parseInt(request.body.interval);
+                }
+            }
+        } catch (error) {
+            logger.error('invalid JSON format in request body');
+            logger.error(error);
+        }
+        logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
+        `interval(${interval}), status(${status})`);
+        return {instanceId, interval, status};
+    }
+
     async protectInstanceFromScaleIn(item, protect = true) {
         return await Promise.reject(false && protect);
     }
@@ -215,18 +252,18 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             isNewInstance = false,
             selfHealthCheck,
             masterHealthCheck,
-            callingInstanceId = this.findCallingInstanceId(_request),
-            heartBeatInterval = this.findHeartBeatInterval(_request),
             counter = 0,
             nextTime,
             getConfigTimeout,
             virtualMachine;
 
+        let {instanceId, interval} = this.platform.extractRequestInfo(_request);
+
         // verify the caller (diagram: trusted source?)
-        virtualMachine = await this.platform.getInstanceById(callingInstanceId);
+        virtualMachine = await this.platform.getInstanceById(instanceId);
         if (!virtualMachine) {
             // not trusted
-            throw new Error(`Unauthorized calling instance (vmid: ${callingInstanceId}). Instance not found in scale set.`); // eslint-disable-line max-len
+            throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). Instance not found in scale set.`); // eslint-disable-line max-len
         }
 
         // describe self
@@ -241,13 +278,13 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // do self health check
         selfHealthCheck = await this.platform.getInstanceHealthCheck({
             vmId: this._selfInstance.properties.vmId
-        }, heartBeatInterval);
+        }, interval);
         // not monitored instance?
         if (!selfHealthCheck) {
             isNewInstance = true;
             // save self to monitored instances db (diagram: add instance to monitor)
             await this.addInstanceToMonitor(this._selfInstance,
-                Date.now() + heartBeatInterval * 1000);
+                Date.now() + interval * 1000);
         }
 
         nextTime = Date.now();
@@ -266,7 +303,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 } else {
                     masterHealthCheck =
                         await this.platform.getInstanceHealthCheck(masterInfo,
-                            heartBeatInterval);
+                            interval);
                 }
                 masterIsHealthy = !!masterHealthCheck && masterHealthCheck.healthy;
             }
@@ -518,33 +555,6 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             logger.error(error);
         }
         return null;
-    }
-
-    findCallingInstanceId(_request) {
-        try {
-            // try to get instance id from headers
-            if (_request && _request.headers && _request.headers['fos-instance-id']) {
-                return _request.headers['fos-instance-id'];
-            } else {
-                // try to get instance id from body
-                if (_request && _request.body && _request.body.instance) {
-                    return _request.body.instance;
-                } else { return null }
-            }
-        } catch (error) {
-            return error ? null : null;
-        }
-    }
-
-    findHeartBeatInterval(_request) {
-        let _interval = 120;
-        try {
-            if (_request && _request.body && _request.body.interval) {
-                return isNaN(_request.body.interval) ? _interval : parseInt(_request.body.interval);
-            } else { return _interval }
-        } catch (error) { // eslint-disable-line no-unused-var
-            return _interval;
-        }
     }
 
     async getMasterInfo() {
