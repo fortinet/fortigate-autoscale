@@ -188,52 +188,43 @@
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [
-                {
+            "Fn::Equals": [{
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
             ]
         },
         "IfAddNewInternalLoadBalancer": {
-            "Fn::Equals": [
-                {
+            "Fn::Equals": [{
                     "Ref": "InternalLoadBalancingOptions"
                 },
                 "add a new internal load balancer"
             ]
         },
         "IfUseExistingInternalLoadBalancer": {
-            "Fn::Equals": [
-                {
+            "Fn::Equals": [{
                     "Ref": "InternalLoadBalancingOptions"
                 },
                 "use a load balancer specified below"
             ]
         },
         "IfNeedInternalLoadBalancing": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "InternalLoadBalancingOptions"
-                        },
-                        "do not need one"
-                    ]
-                }
-            ]
+            "Fn::Not": [{
+                "Fn::Equals": [{
+                        "Ref": "InternalLoadBalancingOptions"
+                    },
+                    "do not need one"
+                ]
+            }]
         },
         "IfCustomBalanceWebTrafficOverPort": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "BalanceWebTrafficOverPort"
-                        },
-                        "0"
-                    ]
-                }
-            ]
+            "Fn::Not": [{
+                "Fn::Equals": [{
+                        "Ref": "BalanceWebTrafficOverPort"
+                    },
+                    "0"
+                ]
+            }]
         }
     },
     "Mappings": {
@@ -639,17 +630,13 @@
                     "InstanceType": {
                         "Ref": "FortiGateInstanceType"
                     },
-                    "NetworkInterfaces": [
-                        {
-                            "DeviceIndex": 0,
-                            "Groups": [
-                                {
-                                    "Ref": "FgtAsgSecurityGroup"
-                                }
-                            ],
-                            "AssociatePublicIpAddress": true
-                        }
-                    ],
+                    "NetworkInterfaces": [{
+                        "DeviceIndex": 0,
+                        "Groups": [{
+                            "Ref": "FgtAsgSecurityGroup"
+                        }],
+                        "AssociatePublicIpAddress": true
+                    }],
                     "KeyName": {
                         "Ref": "KeyPairName"
                     }
@@ -665,8 +652,7 @@
                 "AutoScalingGroupName": {
                     "Fn::Join": [
                         "-",
-                        [
-                            {
+                        [{
                                 "Ref": "CustomIdentifier"
                             },
                             "FortiGateAutoScalingGroup",
@@ -718,8 +704,7 @@
                 "MinSize": {
                     "Ref": "FortiGateAsgMinSize"
                 },
-                "VPCZoneIdentifier": [
-                    {
+                "VPCZoneIdentifier": [{
                         "Ref": "PublicSubnet1"
                     },
                     {
@@ -729,11 +714,9 @@
                 "TerminationPolicies": [
                     "Default"
                 ],
-                "TargetGroupARNs": [
-                    {
-                        "Ref": "ElbV2TargetGroupFgtAsg"
-                    }
-                ]
+                "TargetGroupARNs": [{
+                    "Ref": "ElbV2TargetGroupFgtAsg"
+                }]
             },
             "DependsOn": [
                 "LaunchTemplateFgtAutoscale",
@@ -779,20 +762,16 @@
                 "Period": {
                     "Ref": "FortiGateAsgCooldown"
                 },
-                "AlarmActions": [
-                    {
-                        "Ref": "ScaleOutPolicy"
-                    }
-                ],
+                "AlarmActions": [{
+                    "Ref": "ScaleOutPolicy"
+                }],
                 "Namespace": "AWS/EC2",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "FortiGateScalingGroup"
-                        }
+                "Dimensions": [{
+                    "Name": "AutoScalingGroupName",
+                    "Value": {
+                        "Ref": "FortiGateScalingGroup"
                     }
-                ],
+                }],
                 "ComparisonOperator": "GreaterThanThreshold",
                 "MetricName": "CPUUtilization"
             }
@@ -809,20 +788,16 @@
                 "Period": {
                     "Ref": "FortiGateAsgCooldown"
                 },
-                "AlarmActions": [
-                    {
-                        "Ref": "AsgScaleInPolicy"
-                    }
-                ],
+                "AlarmActions": [{
+                    "Ref": "AsgScaleInPolicy"
+                }],
                 "Namespace": "AWS/EC2",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "FortiGateScalingGroup"
-                        }
+                "Dimensions": [{
+                    "Name": "AutoScalingGroupName",
+                    "Value": {
+                        "Ref": "FortiGateScalingGroup"
                     }
-                ],
+                }],
                 "ComparisonOperator": "LessThanThreshold",
                 "MetricName": "CPUUtilization"
             }
@@ -833,8 +808,7 @@
                 "FunctionName": {
                     "Fn::Join": [
                         "-",
-                        [
-                            {
+                        [{
                                 "Ref": "CustomIdentifier"
                             },
                             "lfFgt",
@@ -899,8 +873,7 @@
                         "API_GATEWAY_NAME": {
                             "Fn::Join": [
                                 "-",
-                                [
-                                    {
+                                [{
                                         "Ref": "CustomIdentifier"
                                     },
                                     "agwFgt",
@@ -961,8 +934,7 @@
                         "AUTO_SCALING_GROUP_NAME": {
                             "Fn::Join": [
                                 "-",
-                                [
-                                    {
+                                [{
                                         "Ref": "CustomIdentifier"
                                     },
                                     "FortiGateAutoScalingGroup",
@@ -998,8 +970,7 @@
                         "STACK_ASSETS_S3_BUCKET_NAME": {
                             "Ref": "QSS3BucketName"
                         },
-                        "STACK_ASSETS_S3_KEY_PREFIX":
-                        {
+                        "STACK_ASSETS_S3_KEY_PREFIX": {
                             "Fn::Sub": [
                                 "${QSS3KeyPrefix}assets",
                                 {
@@ -1012,23 +983,21 @@
                         "REQUIRED_CONFIG_SET": {
                             "Fn::Join": [
                                 ",",
-                                [
-                                    {
-                                        "Fn::Join": [
-                                            "-",
-                                            [
-                                                "httpsroutingpolicy",
-                                                {
-                                                    "Fn::If": [
-                                                        "IfNeedInternalLoadBalancing",
-                                                        "yes",
-                                                        "no"
-                                                    ]
-                                                }
-                                            ]
+                                [{
+                                    "Fn::Join": [
+                                        "-",
+                                        [
+                                            "httpsroutingpolicy",
+                                            {
+                                                "Fn::If": [
+                                                    "IfNeedInternalLoadBalancing",
+                                                    "yes",
+                                                    "no"
+                                                ]
+                                            }
                                         ]
-                                    }
-                                ]
+                                    ]
+                                }]
                             ]
                         },
                         "FORTIGATE_INTERNAL_ELB_DNS": {
@@ -1074,8 +1043,7 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [
-                            {
+                        [{
                                 "Ref": "CustomIdentifier"
                             },
                             "agwFgt",
@@ -1153,26 +1121,20 @@
                         }
                     ]
                 },
-                "SecurityGroupIds": [
-                    {
-                        "Ref": "FgtAsgSecurityGroup"
-                    }
-                ],
-                "SubnetIds": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    }
-                ]
+                "SecurityGroupIds": [{
+                    "Ref": "FgtAsgSecurityGroup"
+                }],
+                "SubnetIds": [{
+                    "Ref": "PublicSubnet1"
+                }]
             }
         },
         "IamInstanceProfileFgt": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "Roles": [
-                    {
-                        "Ref": "IamRoleFgtInstance"
-                    }
-                ]
+                "Roles": [{
+                    "Ref": "IamRoleFgtInstance"
+                }]
             }
         },
         "IamRoleFgtInstance": {
@@ -1184,46 +1146,40 @@
                 ],
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ec2.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ec2.amazonaws.com"
+                        },
+                        "Action": "sts:AssumeRole"
+                    }]
                 },
                 "Path": "/",
-                "Policies": [
-                    {
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Action": [
-                                        "s3:GetObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": [
-                                            "arn:aws:s3:::${QSS3BucketName}/${QSS3KeyPrefix}*",
-                                            {
-                                                "QSS3BucketName": {
-                                                    "Ref": "QSS3BucketName"
-                                                },
-                                                "QSS3KeyPrefix": {
-                                                    "Ref": "QSS3KeyPrefix"
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    "Effect": "Allow"
-                                }
-                            ]
-                        },
-                        "PolicyName": "aws-quick-start-s3-policy"
-                    }
-                ]
+                "Policies": [{
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                            "Action": [
+                                "s3:GetObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": [
+                                    "arn:aws:s3:::${QSS3BucketName}/${QSS3KeyPrefix}*",
+                                    {
+                                        "QSS3BucketName": {
+                                            "Ref": "QSS3BucketName"
+                                        },
+                                        "QSS3KeyPrefix": {
+                                            "Ref": "QSS3KeyPrefix"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Effect": "Allow"
+                        }]
+                    },
+                    "PolicyName": "aws-quick-start-s3-policy"
+                }]
             }
         },
         "ApiGwResFgtAsgComplete": {
@@ -1337,160 +1293,154 @@
                 ],
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": [
-                                    "lambda.amazonaws.com"
-                                ]
-                            },
-                            "Action": [
-                                "sts:AssumeRole"
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "lambda.amazonaws.com"
                             ]
-                        }
-                    ]
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ]
+                    }]
                 },
                 "Path": "/",
-                "Policies": [
-                    {
-                        "PolicyName": "autoscale-handler-inline-policy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "dynamodb:CreateTable",
-                                        "dynamodb:DescribeTable",
-                                        "dynamodb:Scan",
-                                        "dynamodb:Query",
-                                        "dynamodb:DeleteItem",
-                                        "dynamodb:GetItem",
-                                        "dynamodb:PutItem",
-                                        "dynamodb:UpdateItem"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Split": [
-                                            ",",
-                                            {
-                                                "Fn::GetAtt": [
-                                                    "StackCreateDynamoDBTable",
-                                                    "Outputs.DdbTableArnList"
+                "Policies": [{
+                    "PolicyName": "autoscale-handler-inline-policy",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                                "Effect": "Allow",
+                                "Action": [
+                                    "dynamodb:CreateTable",
+                                    "dynamodb:DescribeTable",
+                                    "dynamodb:Scan",
+                                    "dynamodb:Query",
+                                    "dynamodb:DeleteItem",
+                                    "dynamodb:GetItem",
+                                    "dynamodb:PutItem",
+                                    "dynamodb:UpdateItem"
+                                ],
+                                "Resource": {
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Fn::GetAtt": [
+                                                "StackCreateDynamoDBTable",
+                                                "Outputs.DdbTableArnList"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "autoscaling:CompleteLifecycleAction",
+                                    "autoscaling:SetDesiredCapacity",
+                                    "autoscaling:SetInstanceProtection"
+                                ],
+                                "Resource": {
+                                    "Fn::Sub": [
+                                        "arn:aws:autoscaling:${AWS_REGION}:${AWS_ACCOUNT_ID}:autoScalingGroup:*:autoScalingGroupName/${ASG_NAME}",
+                                        {
+                                            "AWS_REGION": {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "AWS_ACCOUNT_ID": {
+                                                "Ref": "AWS::AccountId"
+                                            },
+                                            "ASG_NAME": {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    [{
+                                                            "Ref": "CustomIdentifier"
+                                                        },
+                                                        "FortiGateAutoScalingGroup",
+                                                        {
+                                                            "Fn::Select": [
+                                                                0,
+                                                                {
+                                                                    "Fn::Split": [
+                                                                        "-",
+                                                                        {
+                                                                            "Fn::Select": [
+                                                                                2,
+                                                                                {
+                                                                                    "Fn::Split": [
+                                                                                        "/",
+                                                                                        {
+                                                                                            "Ref": "AWS::StackId"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
                                                 ]
                                             }
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "autoscaling:CompleteLifecycleAction",
-                                        "autoscaling:SetDesiredCapacity",
-                                        "autoscaling:SetInstanceProtection"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": [
-                                            "arn:aws:autoscaling:${AWS_REGION}:${AWS_ACCOUNT_ID}:autoScalingGroup:*:autoScalingGroupName/${ASG_NAME}",
-                                            {
-                                                "AWS_REGION": {
-                                                    "Ref": "AWS::Region"
-                                                },
-                                                "AWS_ACCOUNT_ID": {
-                                                    "Ref": "AWS::AccountId"
-                                                },
-                                                "ASG_NAME": {
-                                                    "Fn::Join": [
-                                                        "-",
-                                                        [
-                                                            {
-                                                                "Ref": "CustomIdentifier"
-                                                            },
-                                                            "FortiGateAutoScalingGroup",
-                                                            {
-                                                                "Fn::Select": [
-                                                                    0,
-                                                                    {
-                                                                        "Fn::Split": [
-                                                                            "-",
-                                                                            {
-                                                                                "Fn::Select": [
-                                                                                    2,
-                                                                                    {
-                                                                                        "Fn::Split": [
-                                                                                            "/",
-                                                                                            {
-                                                                                                "Ref": "AWS::StackId"
-                                                                                            }
-                                                                                        ]
-                                                                                    }
-                                                                                ]
-                                                                            }
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    ]
-                                                }
-                                            }
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "autoscaling:DescribeAutoScalingInstances",
-                                        "dynamodb:ListTables"
-                                    ],
-                                    "Resource": "*"
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "ec2:DescribeInstances",
-                                        "ec2:DescribeVpcs",
-                                        "ec2:DescribeInstanceAttribute"
-                                    ],
-                                    "Resource": "*"
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "apigateway:GET"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": [
-                                            "arn:aws:apigateway:${AWS_REGION}::*",
-                                            {
-                                                "AWS_REGION": {
-                                                    "Ref": "AWS::Region"
-                                                }
-                                            }
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": "s3:GetObject",
-                                    "Resource": {
-                                        "Fn::Sub": [
-                                            "arn:aws:s3:::${bucketname}/${keyprefix}assets/configset/*",
-                                            {
-                                                "bucketname": {
-                                                    "Ref": "QSS3BucketName"
-                                                },
-                                                "keyprefix": {
-                                                    "Ref": "QSS3KeyPrefix"
-                                                }
-                                            }
-                                        ]
-                                    }
+                                        }
+                                    ]
                                 }
-                            ]
-                        }
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "autoscaling:DescribeAutoScalingInstances",
+                                    "dynamodb:ListTables"
+                                ],
+                                "Resource": "*"
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "ec2:DescribeInstances",
+                                    "ec2:DescribeVpcs",
+                                    "ec2:DescribeInstanceAttribute"
+                                ],
+                                "Resource": "*"
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "apigateway:GET"
+                                ],
+                                "Resource": {
+                                    "Fn::Sub": [
+                                        "arn:aws:apigateway:${AWS_REGION}::*",
+                                        {
+                                            "AWS_REGION": {
+                                                "Ref": "AWS::Region"
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": "s3:GetObject",
+                                "Resource": {
+                                    "Fn::Sub": [
+                                        "arn:aws:s3:::${bucketname}/${keyprefix}assets/configset/*",
+                                        {
+                                            "bucketname": {
+                                                "Ref": "QSS3BucketName"
+                                            },
+                                            "keyprefix": {
+                                                "Ref": "QSS3KeyPrefix"
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
                     }
-                ]
+                }]
             }
         },
         "ErAsgLifecycleHookTrigger": {
@@ -1503,8 +1453,7 @@
                             "asg": {
                                 "Fn::Join": [
                                     "-",
-                                    [
-                                        {
+                                    [{
                                             "Ref": "CustomIdentifier"
                                         },
                                         "FortiGateAutoScalingGroup",
@@ -1539,17 +1488,15 @@
                 },
                 "State": "ENABLED",
                 "Description": "Trigger when FortiGate auto-scaling group is launching / terminating instances or taking lifecycle actions.",
-                "Targets": [
-                    {
-                        "Id": "erFortiGateAutoScalingTriggerToLambda",
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "LambdaFunctionFgtAsg",
-                                "Arn"
-                            ]
-                        }
+                "Targets": [{
+                    "Id": "erFortiGateAutoScalingTriggerToLambda",
+                    "Arn": {
+                        "Fn::GetAtt": [
+                            "LambdaFunctionFgtAsg",
+                            "Arn"
+                        ]
                     }
-                ]
+                }]
             }
         },
         "LpAsgLifecyclePermission": {
@@ -1642,8 +1589,7 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [
-                            {
+                        [{
                                 "Ref": "CustomIdentifier"
                             },
                             "tgFgt",
@@ -1709,8 +1655,7 @@
             "Properties": {
                 "Scheme": "internet-facing",
                 "Type": "network",
-                "Subnets": [
-                    {
+                "Subnets": [{
                         "Ref": "PublicSubnet1"
                     },
                     {
@@ -1720,8 +1665,7 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [
-                            {
+                        [{
                                 "Ref": "CustomIdentifier"
                             },
                             "nlbFgt",
@@ -1762,14 +1706,12 @@
                 "LoadBalancerArn": {
                     "Ref": "ElbV2LoadBalancerFgtAsg"
                 },
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ElbV2TargetGroupFgtAsg"
-                        }
+                "DefaultActions": [{
+                    "Type": "forward",
+                    "TargetGroupArn": {
+                        "Ref": "ElbV2TargetGroupFgtAsg"
                     }
-                ],
+                }],
                 "Protocol": "TCP",
                 "Port": {
                     "Fn::If": [
@@ -1799,8 +1741,7 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [
-                            {
+                        [{
                                 "Ref": "CustomIdentifier"
                             },
                             "tgPrSn",
@@ -1873,8 +1814,7 @@
             "Properties": {
                 "Scheme": "internal",
                 "Type": "network",
-                "Subnets": [
-                    {
+                "Subnets": [{
                         "Ref": "PrivateSubnet1"
                     },
                     {
@@ -1884,8 +1824,7 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [
-                            {
+                        [{
                                 "Ref": "CustomIdentifier"
                             },
                             "nlbPrSn",
@@ -1927,14 +1866,12 @@
                 "LoadBalancerArn": {
                     "Ref": "ElbV2LoadBalancerInternal"
                 },
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ElbV2TargetGroupInternal"
-                        }
+                "DefaultActions": [{
+                    "Type": "forward",
+                    "TargetGroupArn": {
+                        "Ref": "ElbV2TargetGroupInternal"
                     }
-                ],
+                }],
                 "Protocol": "TCP",
                 "Port": {
                     "Fn::If": [
@@ -1960,8 +1897,7 @@
     },
     "Metadata": {
         "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
-                {
+            "ParameterGroups": [{
                     "Label": {
                         "default": "Network configuration"
                     },

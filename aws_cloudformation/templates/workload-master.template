@@ -195,8 +195,7 @@
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [
-                {
+            "Fn::Equals": [{
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
@@ -385,8 +384,7 @@
     },
     "Metadata": {
         "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
-                {
+            "ParameterGroups": [{
                     "Label": {
                         "default": "Network configuration"
                     },

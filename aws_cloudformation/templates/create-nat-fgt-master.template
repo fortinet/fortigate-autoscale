@@ -70,8 +70,7 @@
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [
-                {
+            "Fn::Equals": [{
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
@@ -83,8 +82,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "FortiGate instance base security group",
-                "SecurityGroupIngress": [
-                    {
+                "SecurityGroupIngress": [{
                         "IpProtocol": "tcp",
                         "CidrIp": {
                             "Ref": "FortiGateAdminCidr"
@@ -105,12 +103,10 @@
                         }
                     }
                 ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": "-1",
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
+                "SecurityGroupEgress": [{
+                    "IpProtocol": "-1",
+                    "CidrIp": "0.0.0.0/0"
+                }],
                 "VpcId": {
                     "Ref": "VpcId"
                 }
@@ -125,56 +121,48 @@
                 ],
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ec2.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ec2.amazonaws.com"
+                        },
+                        "Action": "sts:AssumeRole"
+                    }]
                 },
                 "Path": "/",
-                "Policies": [
-                    {
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Action": [
-                                        "s3:GetObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": [
-                                            "arn:aws:s3:::${QSS3BucketName}/${QSS3KeyPrefix}*",
-                                            {
-                                                "QSS3BucketName": {
-                                                    "Ref": "QSS3BucketName"
-                                                },
-                                                "QSS3KeyPrefix": {
-                                                    "Ref": "QSS3KeyPrefix"
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    "Effect": "Allow"
-                                }
-                            ]
-                        },
-                        "PolicyName": "aws-quick-start-s3-policy"
-                    }
-                ]
+                "Policies": [{
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                            "Action": [
+                                "s3:GetObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": [
+                                    "arn:aws:s3:::${QSS3BucketName}/${QSS3KeyPrefix}*",
+                                    {
+                                        "QSS3BucketName": {
+                                            "Ref": "QSS3BucketName"
+                                        },
+                                        "QSS3KeyPrefix": {
+                                            "Ref": "QSS3KeyPrefix"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Effect": "Allow"
+                        }]
+                    },
+                    "PolicyName": "aws-quick-start-s3-policy"
+                }]
             }
         },
         "IamInstanceProfileFgt": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "Roles": [
-                    {
-                        "Ref": "IamRoleFgtInstance"
-                    }
-                ]
+                "Roles": [{
+                    "Ref": "IamRoleFgtInstance"
+                }]
             }
         },
         "StackCreateFortiGateInstance1": {

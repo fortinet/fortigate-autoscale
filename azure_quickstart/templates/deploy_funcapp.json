@@ -1,220 +1,218 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.0",
-  "parameters": {
-    "appName": {
-      "type": "string",
-      "metadata": {
-        "description": "The name of the function app that you wish to create."
-      }
-    },
-    "dbName": {
-      "type": "string",
-      "metadata": {
-        "description": "The name of the Cosmos DB that you wish to create. The field can contain only lowercase letters, numbers and the '-' character, and must be between 3 and 31 characters."
-      }
-    },
-    "storageAccountType": {
-      "type": "string",
-      "defaultValue": "Standard_LRS",
-      "allowedValues": [
-        "Standard_LRS",
-        "Standard_GRS",
-        "Standard_RAGRS"
-      ],
-      "metadata": {
-        "description": "Storage Account type"
-      }
-    },
-    "tenant_id": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Azure Account Directory ID"
-      }
-    },
-    "subscription_id": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Azure Subscription ID"
-      }
-    },
-    "restapp_id": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Application ID of the registered App"
-      }
-    },
-    "heartbeat_loss" : {
-      "type": "string",
-      "defaultValue": "3",
-      "metadata": {
-        "description": "HeartBeat Loss Count"
-      }
-    },
-    "restapp_secret": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Application secret of the registered App"
-      }
-    },
-    "autoscale_resource_group": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Name of the resource group of FGT autoscale is deployed in"
-      }
-    },
-    "scale_name": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Name of the VMSS scale set that FGT is deployed in"
-      }
-    },
-    "FGT_config": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "FGT VM config.  Please make sure the callback url is point to the proper app-service url"
-      }
-    },
-    "packageResUrl": {
-      "type": "string",
-      "defaultValue": "https://github.com/fortinet/fortigate-autoscale/releases/download/1.0.0-beta/fortigate-autoscale-azure-funcapp.zip",
-      "metadata": {
-        "description": "The public URL of package zip which contains the resource used to deploy the Function App."
-      }
-    }
-  },
-  "variables": {
-    "functionAppName": "[parameters('appName')]",
-    "hostingPlanName": "[parameters('appName')]",
-    "location": "[resourceGroup().location]",
-    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
-    "storageAccountid": "[concat(resourceGroup().id,'/providers/','Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
-  },
-  "resources": [
-    {
-       "apiVersion": "2015-04-08",
-       "type": "Microsoft.DocumentDb/databaseAccounts",
-       "name": "[parameters('dbName')]",
-       "location": "[variables('location')]",
-       "properties": {
-          "name": "[parameters('dbName')]",
-          "databaseAccountOfferType":  "Standard"
-       }
-    },
-    {
-      "type": "Microsoft.Storage/storageAccounts",
-      "name": "[variables('storageAccountName')]",
-      "apiVersion": "2016-12-01",
-      "location": "[variables('location')]",
-      "kind": "Storage",
-      "sku": {
-        "name": "[parameters('storageAccountType')]"
-      }
-    },
-    {
-      "apiVersion": "2015-04-01",
-      "type": "Microsoft.Web/serverfarms",
-      "name": "[variables('hostingPlanName')]",
-      "location": "[variables('location')]",
-      "properties": {
-        "name": "[variables('hostingPlanName')]",
-        "computeMode": "Dynamic",
-        "sku": "Dynamic"
-      }
-    },
-    {
-      "apiVersion": "2015-08-01",
-      "type": "Microsoft.Web/sites",
-      "name": "[variables('functionAppName')]",
-      "kind": "functionapp",
-      "location": "[variables('location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-        "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('dbName'))]",
-        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
-      ],
-      "properties": {
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-        "siteConfig": {
-          "appSettings": [
-            {
-              "name": "AzureWebJobsDashboard",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
-            },
-            {
-              "name": "AzureWebJobsStorage",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTSHARE",
-              "value": "[toLower(variables('functionAppName'))]"
-            },
-            {
-              "name": "FUNCTIONS_EXTENSION_VERSION",
-              "value": "beta"
-            },
-            {
-              "name": "WEBSITE_NODE_DEFAULT_VERSION",
-              "value": "8.11.1"
-            },
-            {
-              "name": "FTGT_BASE_CONFIG",
-              "value": "[parameters('FGT_config')]"
-            },
-            {
-              "name": "RESOURCE_GROUP",
-              "value": "[parameters('autoscale_resource_group')]"
-            },
-            {
-              "name": "REST_APP_ID",
-              "value": "[parameters('restapp_id')]"
-            },
-            {
-              "name": "REST_APP_SECRET",
-              "value": "[parameters('restapp_secret')]"
-            },
-            {
-              "name": "WEBSITE_RUN_FROM_ZIP",
-              "value": "[parameters('packageResUrl')]"
-                  },
-            {
-              "name": "SCALESET_DB_ACCOUNT",
-              "value": "[parameters('dbName')]"
-            },
-            {
-              "name": "SCALESET_NAME",
-              "value": "[parameters('scale_name')]"
-            },
-            {
-              "name": "TENANT_ID",
-              "value": "[parameters('tenant_id')]"
-            },
-            {
-              "name": "HEART_BEAT_LOSS_COUNT",
-              "value": "[parameters('heartbeat_loss')]"
-            },
-            {
-               "name": "REST_API_MASTER_KEY",
-               "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('dbName')), '2015-04-08').primaryMasterKey]"
-            },
-            {
-            "name": "SUBSCRIPTION_ID",
-            "value": "[parameters('subscription_id')]"
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the function app that you wish to create."
             }
-          ]
+        },
+        "dbName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Cosmos DB that you wish to create. The field can contain only lowercase letters, numbers and the '-' character, and must be between 3 and 31 characters."
+            }
+        },
+        "storageAccountType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_GRS",
+                "Standard_RAGRS"
+            ],
+            "metadata": {
+                "description": "Storage Account type"
+            }
+        },
+        "tenant_id": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Azure Account Directory ID"
+            }
+        },
+        "subscription_id": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Azure Subscription ID"
+            }
+        },
+        "restapp_id": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Application ID of the registered App"
+            }
+        },
+        "heartbeat_loss": {
+            "type": "string",
+            "defaultValue": "3",
+            "metadata": {
+                "description": "HeartBeat Loss Count"
+            }
+        },
+        "restapp_secret": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Application secret of the registered App"
+            }
+        },
+        "autoscale_resource_group": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Name of the resource group of FGT autoscale is deployed in"
+            }
+        },
+        "scale_name": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Name of the VMSS scale set that FGT is deployed in"
+            }
+        },
+        "FGT_config": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "FGT VM config.  Please make sure the callback url is point to the proper app-service url"
+            }
+        },
+        "packageResUrl": {
+            "type": "string",
+            "defaultValue": "https://github.com/fortinet/fortigate-autoscale/releases/download/1.0.0-beta/fortigate-autoscale-azure-funcapp.zip",
+            "metadata": {
+                "description": "The public URL of package zip which contains the resource used to deploy the Function App."
+            }
         }
-      }
-    }
-  ]
+    },
+    "variables": {
+        "functionAppName": "[parameters('appName')]",
+        "hostingPlanName": "[parameters('appName')]",
+        "location": "[resourceGroup().location]",
+        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+        "storageAccountid": "[concat(resourceGroup().id,'/providers/','Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
+    },
+    "resources": [{
+            "apiVersion": "2015-04-08",
+            "type": "Microsoft.DocumentDb/databaseAccounts",
+            "name": "[parameters('dbName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "name": "[parameters('dbName')]",
+                "databaseAccountOfferType": "Standard"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageAccountName')]",
+            "apiVersion": "2016-12-01",
+            "location": "[variables('location')]",
+            "kind": "Storage",
+            "sku": {
+                "name": "[parameters('storageAccountType')]"
+            }
+        },
+        {
+            "apiVersion": "2015-04-01",
+            "type": "Microsoft.Web/serverfarms",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "computeMode": "Dynamic",
+                "sku": "Dynamic"
+            }
+        },
+        {
+            "apiVersion": "2015-08-01",
+            "type": "Microsoft.Web/sites",
+            "name": "[variables('functionAppName')]",
+            "kind": "functionapp",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('dbName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "appSettings": [{
+                            "name": "AzureWebJobsDashboard",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "beta"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "8.11.1"
+                        },
+                        {
+                            "name": "FTGT_BASE_CONFIG",
+                            "value": "[parameters('FGT_config')]"
+                        },
+                        {
+                            "name": "RESOURCE_GROUP",
+                            "value": "[parameters('autoscale_resource_group')]"
+                        },
+                        {
+                            "name": "REST_APP_ID",
+                            "value": "[parameters('restapp_id')]"
+                        },
+                        {
+                            "name": "REST_APP_SECRET",
+                            "value": "[parameters('restapp_secret')]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_ZIP",
+                            "value": "[parameters('packageResUrl')]"
+                        },
+                        {
+                            "name": "SCALESET_DB_ACCOUNT",
+                            "value": "[parameters('dbName')]"
+                        },
+                        {
+                            "name": "SCALESET_NAME",
+                            "value": "[parameters('scale_name')]"
+                        },
+                        {
+                            "name": "TENANT_ID",
+                            "value": "[parameters('tenant_id')]"
+                        },
+                        {
+                            "name": "HEART_BEAT_LOSS_COUNT",
+                            "value": "[parameters('heartbeat_loss')]"
+                        },
+                        {
+                            "name": "REST_API_MASTER_KEY",
+                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('dbName')), '2015-04-08').primaryMasterKey]"
+                        },
+                        {
+                            "name": "SUBSCRIPTION_ID",
+                            "value": "[parameters('subscription_id')]"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
 }
