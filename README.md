@@ -20,6 +20,7 @@ To make deployment packages locally
   2. The deployment package zip files will be available in the **dist** directory.
 
 Deployment packages overview:
+
 | Package Name | Description |
 | ------ | ------ |
 | fortigate-autoscale.zip | Source code of entire project. |
@@ -31,9 +32,7 @@ Deployment packages overview:
 
 For full installation guide, please see:
   * [ FortiGate / FortiOS Deploying Auto Scaling on Microsoft Azure](https://docs2.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
-  * documentation for AWS platform is coming soon.
-
-More information and instructions will be available soon.
+  * [ FortiGate / FortiOS Deploying Auto Scaling on AWS](https://docs2.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0/543390/introduction)
 
 # Support
 Note Fortinet-provided scripts (in this GitHub project and others) are not supported within regular Fortinet technical support scope.
