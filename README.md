@@ -40,4 +40,4 @@ For direct issues, please refer to the [Issues](https://github.com/fortinet/fort
 For other questions related to the Lambda scripts, contact [github@fortinet.com](mailto:github@fortinet.com).
 
 ## License
-[License](../LICENSE) © Fortinet Technologies. All rights reserved.
+[License](./LICENSE) © Fortinet Technologies. All rights reserved.
