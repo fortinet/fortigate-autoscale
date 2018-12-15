@@ -13,7 +13,7 @@ end
 config firewall policy
     edit 2
         set name "internal-web-https"
-        set srcintf "{ASSOCIATED_INTERFACE}"
+        set srcintf "port1"
         set dstintf "{ASSOCIATED_INTERFACE}"
         set srcaddr "all"
         set dstaddr "internal-web"

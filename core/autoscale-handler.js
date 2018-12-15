@@ -124,6 +124,11 @@ module.exports = class AutoscaleHandler {
         return JSON.stringify(response);
     }
 
+    async getFazIp() {
+        await this.throwNotImplementedException();
+        return null;
+    }
+
     async handleNicAttachment(event) {
         await this.throwNotImplementedException();
         return null || event;

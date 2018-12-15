@@ -8,6 +8,7 @@ exports = module.exports;
 const path = require('path');
 const AWS = require('aws-sdk');
 const AutoScaleCore = require('fortigate-autoscale-core');
+const dbDefinitions = require('./db-definitions');
 
 // lock the API versions
 AWS.config.apiVersions = {
@@ -30,112 +31,9 @@ const
     unique_id = process.env.UNIQUE_ID.replace(/.*\//, ''),
     custom_id = process.env.CUSTOM_ID.replace(/.*\//, ''),
     SCRIPT_TIMEOUT = 300,
-    DB = {
-        LIFECYCLEITEM: {
-            AttributeDefinitions: [
-                {
-                    AttributeName: 'instanceId',
-                    AttributeType: 'S'
-                },
-                {
-                    AttributeName: 'actionName',
-                    AttributeType: 'S'
-                }
-            ],
-            KeySchema: [
-                {
-                    AttributeName: 'instanceId',
-                    KeyType: 'HASH'
-                },
-                {
-                    AttributeName: 'actionName',
-                    KeyType: 'RANGE'
-                }
-            ],
-            ProvisionedThroughput: {
-                ReadCapacityUnits: 1,
-                WriteCapacityUnits: 1
-            },
-            TableName: `${custom_id}-FortiGateLifecycleItem-${unique_id}`
-        },
-        AUTOSCALE: {
-            AttributeDefinitions: [
-                {
-                    AttributeName: 'instanceId',
-                    AttributeType: 'S'
-                }
-            ],
-            KeySchema: [
-                {
-                    AttributeName: 'instanceId',
-                    KeyType: 'HASH'
-                }
-            ],
-            ProvisionedThroughput: {
-                ReadCapacityUnits: 1,
-                WriteCapacityUnits: 1
-            },
-            TableName: `${custom_id}-FortiGateAutoscale-${unique_id}`
-        },
-        ELECTION: {
-            AttributeDefinitions: [
-                {
-                    AttributeName: 'asgName',
-                    AttributeType: 'S'
-                },
-                {
-                    AttributeName: 'instanceId',
-                    AttributeType: 'S'
-                },
-                {
-                    AttributeName: 'ip',
-                    AttributeType: 'S'
-                },
-                {
-                    AttributeName: 'vpcId',
-                    AttributeType: 'S'
-                },
-                {
-                    AttributeName: 'subnetId',
-                    AttributeType: 'S'
-                },
-                {
-                    AttributeName: 'voteState',
-                    AttributeType: 'S'
-                }
-            ],
-            KeySchema: [
-                {
-                    AttributeName: 'asgName',
-                    KeyType: 'HASH'
-                }
-            ],
-            ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
-            TableName: `${custom_id}-FortiGateMasterElection-${unique_id}`
-        },
-        CONFIGSET: {
-            AttributeDefinitions: [
-                {
-                    AttributeName: 'configName',
-                    AttributeType: 'S'
-                },
-                {
-                    AttributeName: 'configContent',
-                    AttributeType: 'S'
-                }
-            ],
-            KeySchema: [
-                {
-                    AttributeName: 'configName',
-                    KeyType: 'HASH'
-                }
-            ],
-            ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
-            TableName: `${custom_id}-FortiGateConfigSet-${unique_id}`
-        }
-
-    },
-    moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
+    DB = dbDefinitions.getTables(custom_id, unique_id),
+    moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
+    settingItems = AutoScaleCore.settingItems;
 
 let logger = new AutoScaleCore.DefaultLogger();
 /**
@@ -158,13 +56,13 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     async createTable(schema) {
         try {
-            await dynamodb.describeTable({TableName: schema.TableName}).promise();
+            await dynamodb.describeTable({ TableName: schema.TableName }).promise();
             console.log('found table', schema.TableName);
         } catch (ex) {
             console.log('creating table ', schema.TableName);
             await dynamodb.createTable(schema).promise();
         }
-        await dynamodb.waitFor('tableExists', {TableName: schema.TableName}).promise();
+        await dynamodb.waitFor('tableExists', { TableName: schema.TableName }).promise();
     }
 
     async tableExists(schema) {
@@ -267,7 +165,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         TableName: tableName,
                         Limit: 5
                     })
-                    .promise();
+                        .promise();
                 items = response.Items;
                 if (Array.isArray(items) && items.length) {
                     return await this.cleanUpDbLifeCycleActions(items);
@@ -318,7 +216,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 await autoScaling.completeLifecycleAction(params).promise();
             }
             logger.info(
-            `[${params.LifecycleActionResult}] applied to hook[${params.LifecycleHookName}] with
+                `[${params.LifecycleActionResult}] applied to hook[${params.LifecycleHookName}] with
             token[${params.LifecycleActionToken}] in auto-scaling group
             [${params.AutoScalingGroupName}]`);
             return true;
@@ -382,7 +280,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // TODO: not fully implemented in V3
         if (!(instance && instance.instanceId)) {
             logger.error('getInstanceHealthCheck > error: no instanceId property found' +
-            ` on instance: ${JSON.stringify(instance)}`);
+                ` on instance: ${JSON.stringify(instance)}`);
             return Promise.reject(`invalid instance: ${JSON.stringify(instance)}`);
         }
         var params = {
@@ -409,7 +307,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             }
         } catch (error) {
             logger.info('called getInstanceHealthCheck with error. ' +
-            `error: ${JSON.stringify(error)}`);
+                `error: ${JSON.stringify(error)}`);
             return null;
         }
     }
@@ -421,7 +319,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      */
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
-        let params = {Filters: []};
+        let params = { Filters: [] };
         if (parameters.instanceId) {
             params.Filters.push({
                 Name: 'instance-id',
@@ -481,14 +379,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 status = jsonBodyObject.status;
             } catch (ex) {
                 logger.info('calling extractRequestInfo: unexpected body content format ' +
-                `(${request.body})`);
+                    `(${request.body})`);
             }
         } else {
             logger.error('calling extractRequestInfo: no request body found.');
         }
         logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
-        `interval(${interval}), status(${status})`);
-        return {instanceId, interval, status};
+            `interval(${interval}), status(${status})`);
+        return { instanceId, interval, status };
     }
 
     async protectInstanceFromScaleIn(asgName, item, protect = true) {
@@ -521,10 +419,201 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             const precision = Math.max(0, 3 - Math.log10(interval / 100));
             logger.log(`Delaying for ${(interval / 1000).toFixed(precision)}s > `,
                 callback.toString()
-                .replace(/.*(?:function|=>)\s*(.*?)(?:[(\n]|$)(?:\n|.)*/, '$1'));
+                    .replace(/.*(?:function|=>)\s*(.*?)(?:[(\n]|$)(?:\n|.)*/, '$1'));
             return new Promise(resolve => setTimeout(() => resolve(callback()), interval));
         }
     }
+
+    async createNetworkInterface(parameters) {
+        try {
+            logger.info('called createNetworkInterface');
+            let result = await ec2.createNetworkInterface(parameters).promise();
+            return result && result.NetworkInterface;
+        } catch (error) {
+            logger.warn(`called createNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async deleteNetworkInterface(parameters) {
+        try {
+            logger.info('called deleteNetworkInterface');
+            return await ec2.deleteNetworkInterface(parameters).promise();
+        } catch (error) {
+            logger.warn(`called deleteNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async describeNetworkInterface(parameters) {
+        try {
+            logger.info('called describeNetworkInterface');
+            let result = await ec2.describeNetworkInterfaces(parameters).promise();
+            return result && result.NetworkInterfaces && result.NetworkInterfaces[0];
+        } catch (error) {
+            logger.warn('called describeNetworkInterface. ' +
+            `failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async attachNetworkInterface(instance, nic) {
+        logger.info('calling attachNetworkInterface');
+        if (!instance || !instance.NetworkInterfaces) {
+            logger.warn(`invalid instance: ${JSON.stringify(instance)}`);
+            return false;
+        } else if (!nic) {
+            logger.warn(`invalid network interface controller: ${JSON.stringify(nic)}`);
+            return false;
+        }
+        try {
+            let params = {
+                DeviceIndex: instance.NetworkInterfaces.length,
+                InstanceId: instance.InstanceId,
+                NetworkInterfaceId: nic.NetworkInterfaceId
+            };
+            await ec2.attachNetworkInterface(params).promise();
+            let promiseEmitter = () => {
+                    return ec2.describeNetworkInterfaces({
+                        NetworkInterfaceIds: [nic.NetworkInterfaceId]
+                    }).promise();
+                },
+                comparer = result => {
+                    return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
+                        result.NetworkInterfaces[0].Attachment &&
+                        result.NetworkInterfaces[0].Attachment.Status === 'attached';
+                };
+            let result = await AutoScaleCore.waitFor(promiseEmitter, comparer);
+            logger.info('called attachNetworkInterface. ' +
+                `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`);
+            return result.NetworkInterfaces[0].Attachment.AttachmentId;
+        } catch (error) {
+            await this.deleteNicAttachmentRecord(instance.InstanceId, 'pending_attach');
+            logger.warn(`called attachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async detachNetworkInterface(instance, nic) {
+        logger.info('calling detachNetworkInterface');
+        if (!instance || !instance.NetworkInterfaces) {
+            logger.warn(`invalid instance: ${JSON.stringify(instance)}`);
+            return false;
+        } else if (!nic) {
+            logger.warn(`invalid network interface controller: ${JSON.stringify(nic)}`);
+            return false;
+        }
+        let attachedNic = instance.NetworkInterfaces.some(item => {
+            return item.NetworkInterfaceId === nic.NetworkInterfaceId;
+        });
+        if (!attachedNic) {
+            logger.warn(`nic(id: ${nic.NetworkInterfaceId}) is not attached to ` +
+                `instance(id: ${instance.InstanceId})`);
+            return false;
+        }
+        try {
+            let params = {
+                AttachmentId: nic.Attachment.AttachmentId
+            };
+            await ec2.detachNetworkInterface(params).promise();
+            let promiseEmitter = () => {
+                    return ec2.describeNetworkInterfaces({
+                        NetworkInterfaceIds: [nic.NetworkInterfaceId]
+                    }).promise();
+                },
+                comparer = result => {
+                    return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
+                    result.NetworkInterfaces[0] &&
+                    result.NetworkInterfaces[0].Status === 'available';
+                };
+            let result = await AutoScaleCore.waitFor(promiseEmitter, comparer);
+            logger.info('called detachNetworkInterface. ' +
+                `done.(nic status: ${result.NetworkInterfaces[0].Status})`);
+            return result.NetworkInterfaces[0].Status === 'available';
+        } catch (error) {
+            logger.warn(`called detachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async getNicAttachmentRecord(instanceId) {
+        let params = {
+            TableName: DB.NICATTACHMENT.TableName,
+            Key: { instanceId: instanceId }
+        };
+        try {
+            let result = await docClient.get(params).promise();
+            return result && result.Item;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async updateNicAttachmentRecord(instanceId, nicId, state, conditionState = null) {
+        let params = {
+            Key: {instanceId: instanceId},
+            TableName: DB.NICATTACHMENT.TableName
+        };
+        if (conditionState) {
+            params.UpdateExpression = 'set nicId = :NicId, attachmentState = :State';
+            params.ExpressionAttributeValues = {
+                ':NicId': nicId,
+                ':State': state
+            };
+            return await docClient.update(params).promise();
+        } else {
+            params.Item = {
+                instanceId: instanceId,
+                nicId: nicId,
+                attachmentState: state
+            };
+            params.ConditionExpression = 'attribute_not_exists(instanceId)';
+            return await docClient.put(params).promise();
+        }
+    }
+
+    async deleteNicAttachmentRecord(instanceId, conditionState = null) {
+        let params = {
+            TableName: DB.NICATTACHMENT.TableName,
+            Key: { instanceId: instanceId }
+        };
+        if (conditionState) {
+            params.ConditionExpression = 'attachmentState = :State';
+            params.ExpressionAttributeValues = { ':State': conditionState };
+        }
+        try {
+            return await docClient.delete(params).promise();
+        } catch (error) {
+            return error;
+        }
+    }
+
+    async getSettingItem(key) {
+        let params = {
+            TableName: DB.SETTINGS.TableName,
+            Key: { settingKey: key }
+        };
+        try {
+            let result = await docClient.get(params).promise();
+            if (result && result.Item) {
+                return JSON.parse(result.Item.settingValue);
+            }
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async setSettingItem(key, jsonValue) {
+        var params = {
+            Item: {
+                settingKey: key,
+                settingValue: JSON.stringify(jsonValue)
+            },
+            TableName: DB.SETTINGS.TableName
+        };
+        return !!await docClient.put(params).promise();
+    }
+    // end of awsPlatform class
 }
 
 class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
@@ -652,17 +741,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await instance;
     }
 
-    async getConfigSetFromDb(name) {
-        const query = {
-                TableName: DB.CONFIGSET.TableName,
-                Key: {
-                    configName: name
-                }
-            },
-            response = await docClient.get(query).promise();
-        return response && response.Item && response.Item.configContent;
-    }
-
     async getConfigSetFromS3(configName) {
         let data = await s3.getObject({
             Bucket: process.env.STACK_ASSETS_S3_BUCKET_NAME,
@@ -672,33 +750,66 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return data && data.Body && data.Body.toString('ascii');
     }
 
+    async getFazIp() {
+        try {
+            let keyValue = settingItems.FortiAnalyzerSettingItem.SETTING_KEY;
+            const query = {
+                    TableName: DB.SETTINGS.TableName,
+                    KeyConditionExpression: '#SettingKey = :SettingKey',
+                    ExpressionAttributeNames: {
+                        '#SettingKey': 'settingKey'
+                    },
+                    ExpressionAttributeValues: {
+                        ':SettingKey': keyValue
+                    }
+                },
+                response = await docClient.query(query).promise();
+            if (response.Items && Array.isArray(response.Items) && response.Items.length === 1) {
+                let settingItem = settingItems.FortiAnalyzerSettingItem.fromDb(response.Items[0]);
+                return settingItem.vip;
+            } else {
+                return null;
+            }
+        } catch (error) {
+            return null;
+        }
+
+    }
     /**
      * @override
      */
     async getBaseConfig() {
         let baseConfig = await this.getConfigSetFromS3('baseconfig');
+        let psksecret = process.env.FORTIGATE_PSKSECRET,
+            fazConfig = '',
+            fazIp;
         if (baseConfig) {
             // check if other config set are required
             let requiredConfigSet = process.env.REQUIRED_CONFIG_SET.split(',');
-            let configContent = '', elbWebRequired = false;
+            let configContent = '';
             for (let configset of requiredConfigSet) {
                 let [name, selected] = configset.trim().split('-');
                 if (selected.toLowerCase() === 'yes') {
                     switch (name) {
+                        // handle https routing policy
                         case 'httpsroutingpolicy':
-                            elbWebRequired = true;
-                            configContent = await this.getConfigSetFromS3(name);
+                            configContent += await this.getConfigSetFromS3('internalelbweb');
+                            configContent += await this.getConfigSetFromS3(name);
+                            break;
+                        // handle fortianalyzer logging config
+                        case 'storelogtofaz':
+                            fazConfig = await this.getConfigSetFromS3(name);
+                            fazIp = await this.getFazIp();
+                            configContent += fazConfig.replace(
+                                new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
                             break;
                         default:
                             break;
                     }
                 }
             }
-            if (elbWebRequired) {
-                configContent = await this.getConfigSetFromS3('internalelbweb') + configContent;
-            }
-            baseConfig = baseConfig + configContent;
-            let psksecret = process.env.FORTIGATE_PSKSECRET;
+            baseConfig += configContent;
+
             baseConfig = baseConfig
                 .replace(new RegExp('{SYNC_INTERFACE}', 'gm'),
                     process.env.FORTIGATE_SYNC_INTERFACE ?
@@ -729,11 +840,11 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         let masterRecord, masterIp;
         try {
             masterRecord = await this.platform.getElectedMaster();
-            masterIp = masterRecord.ip;
+            masterIp = masterRecord && masterRecord.ip;
         } catch (ex) {
-            logger.error(ex.message);
+            logger.error(ex);
         }
-        return masterRecord && await this.platform.describeInstance({privateIp: masterIp});
+        return masterRecord && await this.platform.describeInstance({ privateIp: masterIp });
     }
 
     /* ==== Sub-Handlers ==== */
@@ -757,9 +868,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 break;
             case 'EC2 Instance-terminate Lifecycle Action':
                 if (event.detail.LifecycleTransition === 'autoscaling:EC2_INSTANCE_TERMINATING') {
+
                     await this.platform.cleanUpDbLifeCycleActions();
                     result = await this.handleTerminatingInstanceHook(event);
+
                 }
+                break;
+            case 'EC2 Instance Launch Successful':
+                // attach nic2
+                result = await this.handleNicAttachment(event);
+                break;
+            case 'EC2 Instance Terminate Successful':
+                // detach nic2
+                result = await this.handleNicDetachment(event);
                 break;
             default:
                 logger.warn(`Ignore autoscaling event type: ${event['detail-type']}`);
@@ -776,7 +897,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      */
     /* eslint-enable max-len */
     async handleSyncedCallback(event) {
-        const {instanceId, interval, status} =
+        const { instanceId, interval, status } =
             this.platform.extractRequestInfo(event),
             statusSuccess = status && status === 'success' || false;
         // if fortigate is sending callback in response to obtaining config, this is a state
@@ -789,7 +910,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         let masterInfo = await this.getMasterInfo();
         // TODO: master health check
 
-        this._selfInstance = await this.platform.describeInstance(parameters);
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
         // if it is a response from fgt for getting its config
         if (status) {
             // handle get config callback
@@ -822,9 +943,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleGetConfigCallback(isMaster, statusSuccess) {
         let lifecycleItem, instanceProtected = false;
         lifecycleItem = await this.completeGetConfigLifecycleAction(
-                this._selfInstance.InstanceId, statusSuccess) ||
-                new AutoScaleCore.LifecycleItem(this._selfInstance.InstanceId, {},
-                    AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG);
+            this._selfInstance.InstanceId, statusSuccess) ||
+            new AutoScaleCore.LifecycleItem(this._selfInstance.InstanceId, {},
+                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG);
         // is it master?
         if (isMaster) {
             try {
@@ -862,32 +983,42 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async handleLaunchingInstanceHook(event) {
         logger.info('calling handleLaunchingInstanceHook');
-        const instanceId = event.detail.EC2InstanceId,
-            item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false),
+        let result;
+        // add an additional nic to instance
+        result = await this.handleNicAttachment(event);
+        if (result) {
+            const instanceId = event.detail.EC2InstanceId,
+                item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
             result = await this.platform.updateLifecycleItem(item);
-        logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
+            logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
             `lifecyclehook(${event.detail.LifecycleActionToken})`);
+        }
         return result;
     }
 
     async handleTerminatingInstanceHook(event) {
         logger.info('calling handleTerminatingInstanceHook');
-        let instanceId = event.detail.EC2InstanceId,
-            item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-            AutoScaleCore.LifecycleItem.ACTION_NAME_TERMINATING_INSTANCE, false);
-        // check if master
-        let masterInfo = this.getMasterInfo();
-        logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
-        logger.log(`lifecycle item: ${JSON.stringify(item)}`);
-        if (masterInfo && masterInfo.InstanceId === item.instanceId) {
-            await this.deregisterMasterInstance(masterInfo);
+        let result;
+        // detach addtional nic
+        result = await this.handleNicDetachment(event);
+        if (result) {
+            let instanceId = event.detail.EC2InstanceId,
+                item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_TERMINATING_INSTANCE, false);
+            // check if master
+            let masterInfo = this.getMasterInfo();
+            logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
+            logger.log(`lifecycle item: ${JSON.stringify(item)}`);
+            if (masterInfo && masterInfo.InstanceId === item.instanceId) {
+                await this.deregisterMasterInstance(masterInfo);
+            }
+            await this.platform.completeLifecycleAction(item, true);
+            await this.platform.cleanUpDbLifeCycleActions([item]);
+            logger.info(`ForgiGate (instance id: ${instanceId}) is terminating, lifecyclehook(${
+                event.detail.LifecycleActionToken})`);
         }
-        await this.platform.completeLifecycleAction(item, true);
-        await this.platform.cleanUpDbLifeCycleActions([item]);
-        logger.info(`ForgiGate (instance id: ${instanceId}) is terminating, lifecyclehook(${
-            event.detail.LifecycleActionToken})`);
-        return;
+        return result;
     }
 
     async addInstanceToMonitor(instance, nextHeartBeatTime) {
@@ -950,11 +1081,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             callingInstanceId = this.getCallingInstanceId(event);
 
         // get instance object from platform
-        this._selfInstance = await this.platform.describeInstance({instanceId: callingInstanceId});
+        this._selfInstance = this._selfInstance ||
+            await this.platform.describeInstance({ instanceId: callingInstanceId });
         if (!this._selfInstance || this._selfInstance.VpcId !== process.env.VPC_ID) {
             // not trusted
             throw new Error(`Unauthorized calling instance (instanceId: ${callingInstanceId}).` +
-            'Instance not found in VPC.');
+                'Instance not found in VPC.');
         }
 
         nextTime = Date.now();
@@ -972,9 +1104,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 // is current master healthy?
                 if (masterInfo) {
                     masterHealthCheck =
-                            await this.platform.getInstanceHealthCheck({
-                                instanceId: masterInfo.InstanceId
-                            });
+                        await this.platform.getInstanceHealthCheck({
+                            instanceId: masterInfo.InstanceId
+                        });
                     masterIsHealthy = !!masterHealthCheck && masterHealthCheck.healthy;
                 }
             }
@@ -984,14 +1116,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 // but can I run the election? (diagram: anyone's holding master election?)
                 // try to put myself as the master candidate
                 electionLock = !masterRecord &&
-                await this.putMasterElectionVote(this._selfInstance,
-                    // even if master record exists, this master is unhealthy so need to purge it.
-                    masterRecord && masterRecord.voteState === 'done');
+                    await this.putMasterElectionVote(this._selfInstance,
+                        // even if master record exists, this master is unhealthy so need to purge it.
+                        masterRecord && masterRecord.voteState === 'done');
 
                 if (electionLock) {
                     // yes, you run it!
                     logger.info(`This instance (id: ${this._selfInstance.InstanceId})` +
-                    ' is running an election.');
+                        ' is running an election.');
                     try {
                         // (diagram: elect new master from queue (existing instances))
                         await this.holdMasterElection(this._selfInstance);
@@ -1023,8 +1155,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 vmId: this._selfInstance.properties.vmId
             });
             throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
-            ' seconds. This instance is unable to bootstrap. Please report this to' +
-            ' administrators.');
+                ' seconds. This instance is unable to bootstrap. Please report this to' +
+                ' administrators.');
         }
 
         // the master ip same as mine? (diagram: master IP same as mine?)
@@ -1032,7 +1164,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             this._step = 'handler:getConfig:getMasterConfig';
             config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl());
             logger.info('called handleGetConfig: returning master config' +
-            `(master-ip: ${masterInfo.PrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${masterInfo.PrivateIpAddress}):\n ${config}`);
             return config;
         } else {
 
@@ -1054,7 +1186,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } else if (request.requestContext && request.requestContext.identity &&
             request.requestContext.identity.sourceIp) {
             logger.info('called findCallingInstanceIp: ' +
-            `Ip (${request.requestContext.identity.sourceIp})`);
+                `Ip (${request.requestContext.identity.sourceIp})`);
             return request.requestContext.identity.sourceIp;
         } else {
             logger.error('called findCallingInstanceIp: instance Ip not found' +
@@ -1075,36 +1207,208 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await this.platform.findInstanceIdByIp(localIp);
     }
 
-}
+    async handleNicAttachment(event) {
+        logger.info('calling handleNicAttachment');
+        if (!event || !event.detail || !event.detail.EC2InstanceId) {
+            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(event)}`);
+            return null;
+        }
+        try {
+            let params, result, nic;
+            this._selfInstance = this._selfInstance ||
+                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
+            // create a nic
+            let description = `Addtional nic for instance(id:${this._selfInstance.InstanceId}) ` +
+                `in auto-scaling group: ${process.env.AUTO_SCALING_GROUP_NAME}`;
+            let securityGroups = [];
+            this._selfInstance.SecurityGroups.forEach(sgItem => {
+                securityGroups.push(sgItem.GroupId);
+            });
+            let attachmentRecord =
+                await this.platform.getNicAttachmentRecord(this._selfInstance.InstanceId);
+            if (!attachmentRecord) {
+                params = {
+                    Description: description,
+                    Groups: securityGroups,
+                    SubnetId: this._selfInstance.SubnetId
+                };
+                nic = await this.platform.createNetworkInterface(params);
+                if (!nic) {
+                    throw new Error('create network interface unsuccessfully.');
+                }
+                await this.platform.updateNicAttachmentRecord(this._selfInstance.InstanceId,
+                    nic.NetworkInterfaceId, 'pending_attach');
+                result = await this.platform.attachNetworkInterface(this._selfInstance, nic);
+                if (!result) {
+                    params = {
+                        NetworkInterfaceId: nic.NetworkInterfaceId
+                    };
+                    await this.platform.deleteNetworkInterface(params);
+                    throw new Error('attach network interface unsuccessfully.');
+                }
+                await this.platform.updateNicAttachmentRecord(this._selfInstance.InstanceId,
+                    nic.NetworkInterfaceId, 'attached', 'pending_attach');
+                // reload the instance info
+                this._selfInstance =
+                    await this.platform.describeInstance(
+                        { instanceId: event.detail.EC2InstanceId });
+                return true;
+            } else {
+                logger.info(`instance (id: ${attachmentRecord.instanceId}) has been in ` +
+                    `association with nic (id: ${attachmentRecord.nicId}) ` +
+                    `in state (${attachmentRecord.attachmentState})`);
+                return true;
+            }
+        } catch (error) {
+            logger.warn(`called handleNicAttachment with error: ${JSON.stringify(error)}`);
+            return null;
+        }
+    }
 
-exports.AutoScaleCore = AutoScaleCore; // get a reference to the core
-exports.AwsPlatform = AwsPlatform;
-exports.AwsAutoscaleHandler = AwsAutoscaleHandler;
+    async handleNicDetachment(event) {
+        logger.info('calling handleNicDetachment');
+        let attachmentRecord, nic;
+        if (!event || !event.detail || !event.detail.EC2InstanceId) {
+            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(event)}`);
+            return null;
+        }
+        try {
+            this._selfInstance = this._selfInstance ||
+                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
+            attachmentRecord =
+                await this.platform.getNicAttachmentRecord(this._selfInstance.InstanceId);
+            if (attachmentRecord && attachmentRecord.attachmentState === 'attached') {
+                // get nic
+                nic = await this.platform.describeNetworkInterface({NetworkInterfaceIds: [
+                    attachmentRecord.nicId
+                ]});
+                // updete attachment record for in transition
+                await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
+                    attachmentRecord.nicId, 'pending_detach', 'attached');
+                // detach nic
+                await this.platform.detachNetworkInterface(this._selfInstance, nic);
+                // delete nic
+                await this.platform.deleteNetworkInterface({
+                    NetworkInterfaceId: attachmentRecord.nicId
+                });
+                // delete attachment record
+                await this.platform.deleteNicAttachmentRecord(
+                    attachmentRecord.instanceId, 'pending_detach');
+                // reload the instance info
+                this._selfInstance =
+                    await this.platform.describeInstance(
+                        { instanceId: event.detail.EC2InstanceId });
+                return true;
+            } else if (!attachmentRecord) {
+                logger.info('no tracking record of network interface attached to instance ' +
+                `(id: ${this._selfInstance.InstanceId})`);
+            } else {
+                logger.info(`instance (id: ${attachmentRecord.instanceId}) with nic ` +
+                `(id: ${attachmentRecord.nicId}) is not in in the 'attached' state ` +
+                `(${attachmentRecord.attachmentState})`);
+                return true;
+            }
+        } catch (error) {
+            // rollback attachment record to attached state
+            if (attachmentRecord) {
+                // reload nic info
+                nic = await this.platform.describeNetworkInterface({NetworkInterfaceIds: [
+                    attachmentRecord.nicId
+                ]});
+                // if nic is still attached to the same instance
+                if (nic && nic.Attachment &&
+                        nic.Attachment.InstanceId === attachmentRecord.instanceId) {
+                    await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
+                    attachmentRecord.nicId, 'attached', 'pending_detach');
+                }
+            }
+            logger.warn(`called handleNicDetachment with error: ${JSON.stringify(error)}`);
+            return null;
+        }
+    }
+
+    async updateCapacity(desiredCapacity, minSize, maxSize) {
+        logger.info('calling updateCapacity');
+        let params = {
+            AutoScalingGroupName: process.env.AUTO_SCALING_GROUP_NAME
+        };
+        if (desiredCapacity !== null && !isNaN(desiredCapacity)) {
+            params.DesiredCapacity = parseInt(desiredCapacity);
+        }
+        if (minSize !== null && !isNaN(minSize)) {
+            params.MinSize = parseInt(minSize);
+        }
+        if (maxSize !== null && !isNaN(maxSize)) {
+            params.MaxSize = parseInt(maxSize);
+        }
+        try {
+            let result = await autoScaling.updateAutoScalingGroup(params).promise();
+            logger.info('called updateCapacity. done.', result);
+            return true;
+        } catch (error) {
+            logger.warn('called updateCapacity. failed.', error);
+            return false;
+        }
+
+    }
+
+    async resetMasterElection() {
+        logger.info('calling resetMasterElection');
+        const params = {
+            TableName: DB.ELECTION.TableName,
+            Key: { asgName: process.env.AUTO_SCALING_GROUP_NAME }
+        };
+        try {
+            await docClient.delete(params).promise();
+            logger.info('called resetMasterElection. done.');
+            return true;
+        } catch (error) {
+            logger.info('called resetMasterElection. failed.', error);
+            return false;
+        }
+    }
+
+    // end of AwsAutoscaleHandler class
+
+}
 
 /**
  * Initialize the module to be able to run via the 'handle' function.
  * Otherwise, this module only exposes some classes.
  * @returns {Object} exports
  */
-exports.initModule = () => {
+function initModule() {
     AWS.config.update({
         region: process.env.AWS_REGION
     });
-    /**
+
+    logger = new AutoScaleCore.DefaultLogger(console);
+    exports.logger = logger;
+
+    return exports;
+}
+
+/**
+ * Handle the auto-scaling
+ * @param {Object} event The event been passed to
+ * @param {Object} context The Lambda function runtime context
+ * @param {Function} callback a callback function been triggered by AWS Lambda mechanism
+ */
+exports.handler = async (event, context, callback) => {
+    initModule();
+    const handler = new AwsAutoscaleHandler();
+    await handler.handle(event, context, callback);
+};
+
+/**
      * expose the module runtime id
      * @returns {String} a unique id.
      */
-    exports.moduleRuntimeId = () => moduleId;
-    /**
-     * Handle the auto-scaling
-     * @param {Object} event The event been passed to
-     * @param {Object} context The Lambda function runtime context
-     * @param {Function} callback a callback function been triggered by AWS Lambda mechanism
-     */
-    exports.handler = async (event, context, callback) => {
-        logger = new AutoScaleCore.DefaultLogger(console);
-        const handler = new AwsAutoscaleHandler();
-        await handler.handle(event, context, callback);
-    };
-    return exports;
-};
+exports.moduleRuntimeId = () => moduleId;
+exports.initModule = initModule;
+exports.AutoScaleCore = AutoScaleCore; // get a reference to the core
+exports.AwsPlatform = AwsPlatform;
+exports.AwsAutoscaleHandler = AwsAutoscaleHandler;
+exports.dbDefinitions = dbDefinitions;
+exports.settingItems = settingItems;
+exports.logger = logger;

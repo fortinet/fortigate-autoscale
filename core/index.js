@@ -5,14 +5,11 @@ Author: Fortinet
 */
 
 const uuidv5 = require('uuid/v5');
-const Logger = require('./Logger');
-var LifecycleItem = require('./LifecycleItem');
-var CloudPlatform = require('./CloudPlatform');
-var AutoscaleHandler = require('./AutoscaleHandler');
-
-exports.AutoscaleHandler = AutoscaleHandler;
-exports.LifecycleItem = LifecycleItem;
-exports.CloudPlatform = CloudPlatform;
+const Logger = require('./logger');
+exports.LifecycleItem = require('./lifecycle-item');
+exports.CloudPlatform = require('./cloud-platform');
+exports.AutoscaleHandler = require('./autoscale-handler');
+exports.settingItems = require('./setting-items');
 
 const uuidGenerator = inStr => uuidv5(inStr, uuidv5.URL);
 
@@ -57,7 +54,25 @@ const sleep = ms => {
         setTimeout(resolve, ms);
     });
 };
+const waitFor = async (promiseEmitter, comparer, interval = 5000, count = 12) => {
+    let currentCount = 0, result;
+    try {
+        result = await promiseEmitter();
+        while (currentCount < count && !comparer(result)) {
+            await sleep(interval);
+            result = await promiseEmitter();
+            count ++;
+        }
+    } catch (error) {
+        return Promise.reject(`failed to wait due to error: ${JSON.stringify(error)}`);
+    }
+    if (count === currentCount) {
+        return Promise.reject(`failed to wait for a result within ${count} attempts.`);
+    }
+    return Promise.resolve(result);
+};
 
 exports.moduleRuntimeId = () => moduleId;
 exports.uuidGenerator = uuidGenerator;
 exports.sleep = sleep;
+exports.waitFor = waitFor;

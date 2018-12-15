@@ -119,15 +119,15 @@
                 }
             }
         },
-        "DdbTableConfigSet": {
+        "DdbTableFortiAnalyzer": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
-                    "AttributeName": "configName",
+                    "AttributeName": "instanceId",
                     "AttributeType": "S"
                 }],
                 "KeySchema": [{
-                    "AttributeName": "configName",
+                    "AttributeName": "instanceId",
                     "KeyType": "HASH"
                 }],
                 "ProvisionedThroughput": {
@@ -140,7 +140,67 @@
                         [{
                                 "Ref": "CustomIdentifier"
                             },
-                            "FortiGateConfigSet",
+                            "FortiAnalyzer",
+                            {
+                                "Ref": "UniqueId"
+                            }
+                        ]
+                    ]
+                }
+            }
+        },
+        "DdbTableSettings": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "AttributeDefinitions": [{
+                    "AttributeName": "settingKey",
+                    "AttributeType": "S"
+                }],
+                "KeySchema": [{
+                    "AttributeName": "settingKey",
+                    "KeyType": "HASH"
+                }],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": "1",
+                    "WriteCapacityUnits": "1"
+                },
+                "TableName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "CustomIdentifier"
+                            },
+                            "Settings",
+                            {
+                                "Ref": "UniqueId"
+                            }
+                        ]
+                    ]
+                }
+            }
+        },
+        "DdbTableNicAttachment": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "AttributeDefinitions": [{
+                    "AttributeName": "instanceId",
+                    "AttributeType": "S"
+                }],
+                "KeySchema": [{
+                    "AttributeName": "instanceId",
+                    "KeyType": "HASH"
+                }],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": "1",
+                    "WriteCapacityUnits": "1"
+                },
+                "TableName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "CustomIdentifier"
+                            },
+                            "NicAttachment",
                             {
                                 "Ref": "UniqueId"
                             }
@@ -176,7 +236,19 @@
                         },
                         {
                             "Fn::GetAtt": [
-                                "DdbTableConfigSet",
+                                "DdbTableFortiAnalyzer",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "DdbTableSettings",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "DdbTableNicAttachment",
                                 "Arn"
                             ]
                         }

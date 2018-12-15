@@ -1,0 +1,15 @@
+{
+  "name": "async-cfn-response",
+  "version": "1.0.2",
+  "description": "AWS Cloud Formation async response for Fortinet projects",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/fortigate-autoscale"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "fortinet",
+  "license": "MIT"
+}

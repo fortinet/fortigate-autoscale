@@ -142,6 +142,46 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    async createNetworkInterface(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    async deleteNetworkInterface(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    async describeNetworkInterface(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    async attachNetworkInterface(instance, nic) {
+        await this.throwNotImplementedException();
+    }
+
+    async detachNetworkInterface(instance, nic) {
+        await this.throwNotImplementedException();
+    }
+
+    async getNicAttachmentRecord(instanceId) {
+        await this.throwNotImplementedException();
+    }
+
+    async updateNicAttachmentRecord(instanceId, nicId, state, conditionState = null) {
+        await this.throwNotImplementedException();
+    }
+
+    async deleteNicAttachmentRecord(instanceId, conditionState = null) {
+        await this.throwNotImplementedException();
+    }
+
+    async getSettingItem(key) {
+        await this.throwNotImplementedException();
+    }
+
+    async setSettingItem(key, jsonValue) {
+        await this.throwNotImplementedException();
+    }
+
     /**
      * return a platform-specific logger class
      */
