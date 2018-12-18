@@ -277,7 +277,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      * @param {Number} heartBeatInterval integer value, unit is second.
      */
     async getInstanceHealthCheck(instance, heartBeatInterval) {
-        // TODO: not fully implemented in V3
         if (!(instance && instance.instanceId)) {
             logger.error('getInstanceHealthCheck > error: no instanceId property found' +
                 ` on instance: ${JSON.stringify(instance)}`);
@@ -285,21 +284,36 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
         var params = {
             Key: {
-                instanceId: {
-                    S: instance.instanceId
-                }
+                instanceId: instance.instanceId
             },
             TableName: DB.AUTOSCALE.TableName
         };
         try {
-            let data = await dynamodb.getItem(params).promise();
+            let compensatedScriptTime,
+                healthy,
+                heartBeatLossCount,
+                data = await docClient.get(params).promise();
             if (data.Item) {
+                // to get a more accurate heart beat elapsed time, the script execution time so far
+                // is compensated.
+                compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
+                healthy = compensatedScriptTime < data.Item.nextHeartBeatTime;
+                if (compensatedScriptTime < data.Item.nextHeartBeatTime) {
+                    // reset hb loss cound if instance sends hb within its interval
+                    healthy = true;
+                    heartBeatLossCount = 0;
+                } else {
+                    // consider instance as health if hb loss < 3
+                    healthy = data.Item.heartBeatLossCount < 3;
+                    heartBeatLossCount = data.Item.heartBeatLossCount + 1;
+                }
                 logger.info('called getInstanceHealthCheck');
-                // TODO: now always return healthy
                 return {
-                    healthy: !!heartBeatInterval || true, // TODO: need to implement logic here
-                    heartBeatLossCount: 0,
-                    nextHeartBeatTime: 0
+                    instanceId: instance.instanceId,
+                    healthy: healthy,
+                    heartBeatLossCount: heartBeatLossCount,
+                    nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
+                    syncState: data.Item.syncState
                 };
             } else {
                 logger.info('called getInstanceHealthCheck: no record found');
@@ -309,6 +323,69 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called getInstanceHealthCheck with error. ' +
                 `error: ${JSON.stringify(error)}`);
             return null;
+        }
+    }
+
+    /**
+     * update the instance health check result to DB.
+     * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
+     * getInstanceHealthCheck
+     * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
+     * @param {Number} checkPointTime the check point time of when the health check is performed.
+     * @returns {bool} resul: true or false
+     */
+    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, checkPointTime) {
+        if (!(healthCheckObject && healthCheckObject.instanceId)) {
+            logger.error('updateInstanceHealthCheck > error: no instanceId property found' +
+                ` on healthCheckObject: ${JSON.stringify(healthCheckObject)}`);
+            return Promise.reject('invalid healthCheckObject: ' +
+            `${JSON.stringify(healthCheckObject)}`);
+        }
+        try {
+            let params = {
+                Key: {instanceId: healthCheckObject.instanceId},
+                TableName: DB.AUTOSCALE.TableName,
+                UpdateExpression: 'set heartBeatLossCount = :HeartBeatLossCount, ' +
+                    'nextHeartBeatTime = :NextHeartBeatTime, ' +
+                    'syncState = :SyncState',
+                ExpressionAttributeValues: {
+                    ':HeartBeatLossCount': healthCheckObject.heartBeatLossCount,
+                    ':NextHeartBeatTime': checkPointTime + heartBeatInterval * 1000,
+                    ':SyncState': healthCheckObject.healthy ? 'in-sync' : 'out-of-sync'
+                },
+                ConditionExpression: 'attribute_exists(instanceId)'
+            };
+            let result = await docClient.update(params).promise();
+            logger.info('called updateInstanceHealthCheck');
+            return !!result;
+        } catch (error) {
+            logger.info('called updateInstanceHealthCheck with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    /**
+     * delete the instance health check monitoring record from DB.
+     * Abstract class method.
+     * @param {Object} instanceId the instanceId of instance
+     * @returns {bool} resul: true or false
+     */
+    async deleteInstanceHealthCheck(instanceId) {
+        try {
+            let params = {
+                TableName: DB.AUTOSCALE.TableName,
+                Key: { instanceId: instanceId },
+                ConditionExpression: 'syncState = :State',
+                ExpressionAttributeValues: {
+                    ':State': 'out-of-sync'
+                }
+            };
+            let result = await docClient.delete(params).promise();
+            return !!result;
+        } catch (error) {
+            logger.warn('called deleteInstanceHealthCheck. error:', error);
+            return false;
         }
     }
 
@@ -931,12 +1008,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 `ip: ${this._selfInstance.PrivateIpAddress}) is added to monitor.`);
             return '';
         } else {
-            logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
+            // if instance is health
+            if (selfHealthCheck.healthy) {
+                await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval, Date.now());
+                logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
                 `ip: ${this._selfInstance.PrivateIpAddress}) health check ` +
                 `(${selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
                 `heartBeatLossCount: ${selfHealthCheck.heartBeatLossCount}, ` +
                 `nextHeartBeatTime: ${selfHealthCheck.nextHeartBeatTime}).`);
-            return '';
+                return '';
+            } else {
+                // deregister unhealth instance
+                return this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+            }
         }
     }
 
@@ -1015,6 +1099,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
             await this.platform.completeLifecycleAction(item, true);
             await this.platform.cleanUpDbLifeCycleActions([item]);
+            // remove monitoring record
+            await this.removeInstanceFromMonitor(instanceId);
             logger.info(`ForgiGate (instance id: ${instanceId}) is terminating, lifecyclehook(${
                 event.detail.LifecycleActionToken})`);
         }
@@ -1029,11 +1115,17 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 ip: instance.PrivateIpAddress,
                 autoScalingGroupName: process.env.AUTO_SCALING_GROUP_NAME,
                 nextHeartBeatTime: nextHeartBeatTime,
-                heartBeatLossCount: 0
+                heartBeatLossCount: 0,
+                syncState: 'in-sync'
             },
             TableName: DB.AUTOSCALE.TableName
         };
         return await docClient.put(params).promise();
+    }
+
+    async removeInstanceFromMonitor(instanceId) {
+        logger.info('calling removeInstanceFromMonitor');
+        return await this.platform.deleteInstanceHealthCheck(instanceId);
     }
 
     async purgeMaster(asgName) {
@@ -1058,6 +1150,22 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async deregisterMasterInstance(instance) {
         logger.info('calling deregisterMasterInstance', JSON.stringify(instance));
         return await this.purgeMaster(process.env.AUTO_SCALING_GROUP_NAME);
+    }
+
+    async terminateInstanceInAutoScalingGroup(instance) {
+        logger.info('calling terminateInstanceInAutoScalingGroup');
+        let params = {
+            InstanceId: instance.InstanceId,
+            ShouldDecrementDesiredCapacity: false
+        };
+        try {
+            let result = await autoScaling.terminateInstanceInAutoScalingGroup(params).promise();
+            logger.info('called terminateInstanceInAutoScalingGroup. done.', result);
+            return true;
+        } catch (error) {
+            logger.warn('called terminateInstanceInAutoScalingGroup. failed.', error);
+            return false;
+        }
     }
 
     /* eslint-disable max-len */
@@ -1298,7 +1406,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 this._selfInstance =
                     await this.platform.describeInstance(
                         { instanceId: event.detail.EC2InstanceId });
-                return true;
             } else if (!attachmentRecord) {
                 logger.info('no tracking record of network interface attached to instance ' +
                 `(id: ${this._selfInstance.InstanceId})`);
@@ -1306,8 +1413,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 logger.info(`instance (id: ${attachmentRecord.instanceId}) with nic ` +
                 `(id: ${attachmentRecord.nicId}) is not in in the 'attached' state ` +
                 `(${attachmentRecord.attachmentState})`);
-                return true;
             }
+            return true;
         } catch (error) {
             // rollback attachment record to attached state
             if (attachmentRecord) {
@@ -1349,7 +1456,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             logger.warn('called updateCapacity. failed.', error);
             return false;
         }
-
     }
 
     async resetMasterElection() {
@@ -1378,6 +1484,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
  * @returns {Object} exports
  */
 function initModule() {
+    process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT = Date.now();
     AWS.config.update({
         region: process.env.AWS_REGION
     });

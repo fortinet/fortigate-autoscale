@@ -52,7 +52,12 @@ const DB = {
             WriteCapacityUnits: 1
         },
         TableName: 'FortiGateAutoscale',
-        AdditionalAttributeDefinitions: []
+        AdditionalAttributeDefinitions: [
+            {
+                AttributeName: 'syncState',
+                AttributeType: 'S'
+            }
+        ]
     },
     ELECTION: {
         AttributeDefinitions: [

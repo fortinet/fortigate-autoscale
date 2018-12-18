@@ -160,4 +160,24 @@ module.exports = class AutoscaleHandler {
     async resetMasterElection() {
         await this.throwNotImplementedException();
     }
+
+    async addInstanceToMonitor(instance, nextHeartBeatTime) {
+        return await this.throwNotImplementedException() || instance && nextHeartBeatTime;
+    }
+
+    async removeInstanceFromMonitor(instance) {
+        return await this.throwNotImplementedException() || instance;
+    }
+
+    async purgeMaster(asgName) {
+        return await this.throwNotImplementedException() || asgName;
+    }
+
+    async deregisterMasterInstance(instance) {
+        return await this.throwNotImplementedException() || instance;
+    }
+
+    async terminateInstanceInAutoScalingGroup(instance) {
+        return await this.throwNotImplementedException() || instance;
+    }
 };

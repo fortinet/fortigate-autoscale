@@ -134,6 +134,29 @@ module.exports = class CloudPlatform {
     }
 
     /**
+     * update the instance health check result to DB.
+     * Abstract class method.
+     * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
+     * getInstanceHealthCheck
+     * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
+     * @param {Number} checkPointTime the check point time of when the health check is performed.
+     * @returns {bool} resul: true or false
+     */
+    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, checkPointTime) {
+        await this.throwNotImplementedException();
+    }
+
+    /**
+     * delete the instance health check monitoring record from DB.
+     * Abstract class method.
+     * @param {Object} instanceId the instanceId of instance
+     * @returns {bool} resul: true or false
+     */
+    async deleteInstanceHealthCheck(instanceId) {
+        await this.throwNotImplementedException();
+    }
+
+    /**
      * Delete one or more instances from the auto scaling group.
      * Abstract class method.
      * @param {Object} parameters parameters necessary for instance deletion.

@@ -2561,5 +2561,82 @@
                 }
             }
         }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "The FortiGate Auto Scale VPC",
+            "Value": {
+                "Fn::Sub": [
+                    "<a href='#vpcs:search=${vpcId};sort=VpcId'>${vpcId}</a>",
+                    {
+                        "vpcId": {
+                            "Ref": "VpcId"
+                        }
+                    }
+                ]
+            }
+        },
+        "FortiGateAutoScalingGroup": {
+            "Description": "The FortiGate Auto Scaling Group",
+            "Value": {
+                "Fn::Sub": [
+                    "<a href='#AutoScalingGroups:id=${asgName};filter=${asgName}'>${asgName}</a>",
+                    {
+                        "asgName": {
+                            "Ref": "FortiGateScalingGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "FortiGateAutoScaleMasterElectionDynamoDbTable": {
+            "Description": "The FortiGate Auto Scale - Master FortiGate record in DB.",
+            "Value": {
+                "Fn::Sub": [
+                    "<a href='#tables:selected=${customIdentifier}-FortiGateMasterElection-${uniqueId};tab=items'>Master Election Record in DB</a>",
+                    {
+                        "customIdentifier": {
+                            "Ref": "CustomIdentifier"
+                        },
+                        "uniqueId": {
+                            "Fn::Select": [
+                                0,
+                                {
+                                    "Fn::Split": [
+                                        "-",
+                                        {
+                                            "Fn::Select": [
+                                                2,
+                                                {
+                                                    "Fn::Split": [
+                                                        "/",
+                                                        {
+                                                            "Ref": "AWS::StackId"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "FortiGateAutoScaleHandlerLambdaFunction": {
+            "Description": "The FortiGate Auto Scale hander function",
+            "Value": {
+                "Fn::Sub": [
+                    "<a href='#/functions/{lambdaFunctionName}'>{lambdaFunctionName}</a>",
+                    {
+                        "lambdaFunctionName": {
+                            "Ref": "LambdaFunctionFgtAsg"
+                        }
+                    }
+                ]
+            }
+        }
     }
 }
