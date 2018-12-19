@@ -317,7 +317,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     logger.info('This thread is running an election.');
                     try {
                         // (diagram: elect new master from queue (existing instances))
-                        await this.holdMasterElection(
+                        await this.completeMasterElection(
                             this._selfInstance.getPrimaryPrivateIp());
                         logger.info('Election completed.');
                     } catch (error) {
@@ -397,7 +397,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    async holdMasterElection(ip) { // eslint-disable-line no-unused-vars
+    async completeMasterElection(ip) { // eslint-disable-line no-unused-vars
         // list all election candidates
         let parameters = {
             resourceGroup: process.env.RESOURCE_GROUP,

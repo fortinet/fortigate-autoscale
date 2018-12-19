@@ -45,15 +45,14 @@ async function createTable(schema) {
     }
     try {
         logger.info(`creating table (${schema.TableName})...`);
-        await dynamodb.createTable(schema).promise();
         let promiseEmitter = () => {
-
+                dynamodb.createTable(schema).promise();
             },
-            comparer = result => {
-
+            validator = result => {
+                return !!result;
             };
         await ftgtAutoscaleAws.AutoScaleCore.sleep(3000);
-        await ftgtAutoscaleAws.AutoScaleCore.waitFor(promiseEmitter, comparer);
+        await ftgtAutoscaleAws.AutoScaleCore.waitFor(promiseEmitter, validator);
         logger.info(`table (${schema.TableName}) created.`);
         return true;
     } catch (error) {

@@ -36,6 +36,8 @@ const
     settingItems = AutoScaleCore.settingItems;
 
 let logger = new AutoScaleCore.DefaultLogger();
+// this variable is to store the anticipated script execution expire time (milliseconds)
+let scriptExecutionExpireTime;
 /**
  * Implements the CloudPlatform abstraction for the AWS api.
  */
@@ -153,6 +155,23 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /**
+     * remove one life cycle action item hooked with an instance.
+     * Abstract class method.
+     * @param {LifecycleItem} item Item used by the platform to complete
+     *  a lifecycleAction.
+     */
+    async removeLifecycleItem(item) {
+        logger.info('calling removeLifecycleItem');
+        return await docClient.delete({
+            TableName: DB.LIFECYCLEITEM.TableName,
+            Key: {
+                instanceId: item.instanceId,
+                actionName: item.actionName
+            }
+        }).promise();
+    }
+
+    /**
      * @override
      */
     async cleanUpDbLifeCycleActions(items = []) {
@@ -175,15 +194,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 let itemToRemove = [],
                     awaitAll = [];
                 let remove = async item => {
-                    logger.info('cleaning up old entry: ' +
-                        `${item.instanceId} (${(Date.now() - item.timestamp) / 1000}s) ago`);
-                    await docClient.delete({
-                        TableName: tableName,
-                        Key: {
-                            instanceId: item.instanceId,
-                            actionName: item.actionName
-                        }
-                    }).promise();
+                    return await this.removeLifecycleItem(item);
                 };
                 items.forEach(item => {
                     if (Date.now() - item.timestamp > EXPIRE_LIFECYCLE_ENTRY) {
@@ -215,6 +226,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             if (!process.env.DEBUG_MODE) {
                 await autoScaling.completeLifecycleAction(params).promise();
             }
+            // TODO: remove lifecycle Item here
+            await this.removeLifecycleItem(lifecycleItem);
             logger.info(
                 `[${params.LifecycleActionResult}] applied to hook[${params.LifecycleHookName}] with
             token[${params.LifecycleActionToken}] in auto-scaling group
@@ -227,10 +240,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /**
-     * Get the ip address which won the master election
+     * Get the master record from db
      * @returns {Object} Master record of the FortiGate which should be the auto-sync master
      */
-    async getElectedMaster() {
+    async getMasterRecord() {
         const
             params = {
                 TableName: DB.ELECTION.TableName,
@@ -252,10 +265,33 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         return items[0];
     }
 
+    /**
+     * Remove the current master record from db.
+     * Abstract class method.
+     */
+    async removeMasterRecord() {
+        // only purge the master with a done votestate to avoid a
+        // race condition
+        const params = {
+            TableName: DB.ELECTION.TableName,
+            Key: { asgName: process.env.AUTO_SCALING_GROUP_NAME },
+            ConditionExpression: '#AsgName = :asgName AND #voteState = :voteState',
+            ExpressionAttributeNames: {
+                '#AsgName': 'asgName',
+                '#voteState': 'voteState'
+            },
+            ExpressionAttributeValues: {
+                ':asgName': process.env.AUTO_SCALING_GROUP_NAME,
+                ':voteState': 'done'
+            }
+        };
+        return await docClient.delete(params).promise();
+    }
+
     async finalizeMasterElection() {
         try {
             logger.info('calling finalizeMasterElection');
-            let electedMaster = await this.getElectedMaster();
+            let electedMaster = await this.getMasterRecord();
             electedMaster.voteState = 'done';
             const params = {
                 TableName: DB.ELECTION.TableName,
@@ -313,7 +349,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     healthy: healthy,
                     heartBeatLossCount: heartBeatLossCount,
                     nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
-                    syncState: data.Item.syncState
+                    masterIp: data.Item.masterIp,
+                    syncState: data.Item.syncState,
+                    inSync: data.Item.syncState === 'in-sync'
                 };
             } else {
                 logger.info('called getInstanceHealthCheck: no record found');
@@ -331,10 +369,13 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
      * getInstanceHealthCheck
      * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
+     * @param {String} masterIp the current master ip in auto-scaling group
      * @param {Number} checkPointTime the check point time of when the health check is performed.
+     * @param {bool} forceOutOfSync whether force to update this record as 'out-of-sync'
      * @returns {bool} resul: true or false
      */
-    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, checkPointTime) {
+    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, masterIp, checkPointTime,
+        forceOutOfSync = false) {
         if (!(healthCheckObject && healthCheckObject.instanceId)) {
             logger.error('updateInstanceHealthCheck > error: no instanceId property found' +
                 ` on healthCheckObject: ${JSON.stringify(healthCheckObject)}`);
@@ -347,14 +388,19 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 TableName: DB.AUTOSCALE.TableName,
                 UpdateExpression: 'set heartBeatLossCount = :HeartBeatLossCount, ' +
                     'nextHeartBeatTime = :NextHeartBeatTime, ' +
-                    'syncState = :SyncState',
+                    'masterIp = :MasterIp, syncState = :SyncState',
                 ExpressionAttributeValues: {
                     ':HeartBeatLossCount': healthCheckObject.heartBeatLossCount,
                     ':NextHeartBeatTime': checkPointTime + heartBeatInterval * 1000,
-                    ':SyncState': healthCheckObject.healthy ? 'in-sync' : 'out-of-sync'
+                    ':MasterIp': masterIp,
+                    ':SyncState': healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' :
+                        'out-of-sync'
                 },
                 ConditionExpression: 'attribute_exists(instanceId)'
             };
+            if (!forceOutOfSync) {
+                params.ConditionExpression += ' AND syncState = :SyncState';
+            }
             let result = await docClient.update(params).promise();
             logger.info('called updateInstanceHealthCheck');
             return !!result;
@@ -375,11 +421,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         try {
             let params = {
                 TableName: DB.AUTOSCALE.TableName,
-                Key: { instanceId: instanceId },
-                ConditionExpression: 'syncState = :State',
-                ExpressionAttributeValues: {
-                    ':State': 'out-of-sync'
-                }
+                Key: { instanceId: instanceId }
             };
             let result = await docClient.delete(params).promise();
             return !!result;
@@ -555,12 +597,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         NetworkInterfaceIds: [nic.NetworkInterfaceId]
                     }).promise();
                 },
-                comparer = result => {
+                validator = result => {
                     return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
                         result.NetworkInterfaces[0].Attachment &&
                         result.NetworkInterfaces[0].Attachment.Status === 'attached';
                 };
-            let result = await AutoScaleCore.waitFor(promiseEmitter, comparer);
+            let result = await AutoScaleCore.waitFor(promiseEmitter, validator);
             logger.info('called attachNetworkInterface. ' +
                 `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`);
             return result.NetworkInterfaces[0].Attachment.AttachmentId;
@@ -598,12 +640,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         NetworkInterfaceIds: [nic.NetworkInterfaceId]
                     }).promise();
                 },
-                comparer = result => {
+                validator = result => {
                     return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
                     result.NetworkInterfaces[0] &&
                     result.NetworkInterfaces[0].Status === 'available';
                 };
-            let result = await AutoScaleCore.waitFor(promiseEmitter, comparer);
+            let result = await AutoScaleCore.waitFor(promiseEmitter, validator);
             logger.info('called detachNetworkInterface. ' +
                 `done.(nic status: ${result.NetworkInterfaces[0].Status})`);
             return result.NetworkInterfaces[0].Status === 'available';
@@ -698,6 +740,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         super(platform, baseConfig);
         this._step = '';
         this._selfInstance = null;
+        this._masterRecord = null;
     }
 
     async init() {
@@ -782,6 +825,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      */
     async putMasterElectionVote(candidateInstance, purgeMasterRecord = null) {
         try {
+            // TODO: call platform.saveElectionRecord
             const params = {
                 TableName: DB.ELECTION.TableName,
                 Item: {
@@ -797,7 +841,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             logger.log('masterElectionVote, purge master?', JSON.stringify(purgeMasterRecord));
             if (purgeMasterRecord) {
                 try {
-                    const purged = await this.purgeMaster(process.env.AUTO_SCALING_GROUP_NAME);
+                    const purged = await this.purgeMaster();
                     logger.log('purged: ', purged);
                 } catch (error) {
                     logger.log('no master purge');
@@ -813,9 +857,70 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    async holdMasterElection(instance) {
-        // do not need to do anything for master election
-        return await instance;
+    async checkMasterElection() {
+        let masterInfo,
+            masterHealthCheck,
+            needElection = false,
+            purgeMaster = false,
+            electionLock = false,
+            electionComplete = false;
+
+        // is there a master election done?
+        // check the master record and its voteState
+        //
+        this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+        // if there's a complete election, get master health check
+        if (this._masterRecord && this._masterRecord.voteState === 'done') {
+        // get the current master info
+            masterInfo = await this.getMasterInfo();
+            // get current master heart beat record
+            if (masterInfo) {
+                masterHealthCheck =
+                await this.platform.getInstanceHealthCheck({
+                    instanceId: masterInfo.InstanceId
+                });
+            }
+            // if master is unhealthy, we need a new election
+            if (!masterHealthCheck || !masterHealthCheck.healthy || !masterHealthCheck.inSync) {
+                purgeMaster = needElection = true;
+            } else {
+                purgeMaster = needElection = false;
+            }
+        } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+        // if there's a pending master election, and if this election is incomplete by the end-time,
+        // purge this election and starta new master election. otherwise, wait until it's finished
+            needElection = purgeMaster = Date.now() > this._masterRecord.voteEndTime;
+        } else {
+        // if no master, try to hold a master election
+            needElection = true;
+            purgeMaster = false;
+        }
+        // if we need a new master, let's hold a master election!
+        if (needElection) {
+        // can I run the election? (diagram: anyone's holding master election?)
+        // try to put myself as the master candidate
+            electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);
+            if (electionLock) {
+            // yes, you run it!
+                logger.info(`This instance (id: ${this._selfInstance.InstanceId})` +
+                ' is running an election.');
+                try {
+                // (diagram: elect new master from queue (existing instances))
+                    electionComplete = await this.electMaster();
+                    logger.info(`Election completed: ${electionComplete}`);
+                    // (diagram: master exists?)
+                    masterInfo = electionComplete && await this.getMasterInfo();
+                } catch (error) {
+                    logger.error('Something went wrong in the master election.');
+                }
+            }
+        }
+        return Promise.resolve(masterInfo);
+    }
+
+    async electMaster() {
+        // return the current master record
+        return !!await this.platform.getMasterRecord();
     }
 
     async getConfigSetFromS3(configName) {
@@ -914,14 +1019,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async getMasterInfo() {
         logger.info('calling getMasterInfo');
-        let masterRecord, masterIp;
+        let masterIp;
         try {
-            masterRecord = await this.platform.getElectedMaster();
-            masterIp = masterRecord && masterRecord.ip;
+            this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+            masterIp = this._masterRecord && this._masterRecord.ip;
         } catch (ex) {
             logger.error(ex);
         }
-        return masterRecord && await this.platform.describeInstance({ privateIp: masterIp });
+        return this._masterRecord && await this.platform.describeInstance({ privateIp: masterIp });
     }
 
     /* ==== Sub-Handlers ==== */
@@ -979,28 +1084,91 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             statusSuccess = status && status === 'success' || false;
         // if fortigate is sending callback in response to obtaining config, this is a state
         // message
-        let parameters = {}, selfHealthCheck;
+        let parameters = {}, selfHealthCheck, masterHealthCheck, result;
 
         parameters.instanceId = instanceId;
+        // get selfinstance
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
         // handle hb monitor
         // get master instance monitoring
         let masterInfo = await this.getMasterInfo();
-        // TODO: master health check
-
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
-        // if it is a response from fgt for getting its config
-        if (status) {
-            // handle get config callback
-            return await this.handleGetConfigCallback(
-                this._selfInstance.InstanceId === masterInfo.InstanceId, statusSuccess);
+        if (masterInfo) {
+            masterHealthCheck = await this.platform.getInstanceHealthCheck({
+                instanceId: masterInfo.InstanceId
+            }, interval);
         }
-        // is myself under health check monitoring?
-        // do self health check
-        selfHealthCheck = await this.platform.getInstanceHealthCheck({
+        // if this instance is the unhealthy master, don't hold a master election
+        if (masterInfo && this._selfInstance.InstanceId === masterInfo.InstanceId &&
+            !masterHealthCheck.healthy) {
+            // use master health check result as self health check result
+            selfHealthCheck = masterHealthCheck;
+        } else if (!(masterInfo && masterHealthCheck && masterHealthCheck.healthy)) {
+            // if no master or master is unhealthy
+            // TODO: hold a master election
+            let promiseEmitter = this.checkMasterElection(),
+                validator = result => {
+                    // if i am the new master, don't wait, continue, if not, wait
+                    if (result &&
+                        result.PrivateIpAddress === this._selfInstance.PrivateIpAddress) {
+                        return true;
+                    } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+                        this._masterRecord = null;
+                    }
+                    return false;
+                },
+                counter = () => {
+                    if (Date.now() < scriptExecutionExpireTime - 3000) {
+                        return false;
+                    }
+                    logger.warn('script execution is about to expire');
+                    return true;
+                };
+
+            try {
+                masterInfo = AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+            } catch (error) {
+                // if error occurs, check who is holding a master election, if it is this instance,
+                // terminates this election. then continue
+                this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+                if (this._masterRecord.instanceId === this._selfInstance.InstanceId) {
+                    await this.platform.removeMasterRecord();
+                }
+                await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+                throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
+                    ' seconds. This instance is unable to bootstrap. Please report this to' +
+                    ' administrators.');
+            }
+        }
+
+        // check if myself is under health check monitoring
+        // (master instance itself may have got its healthcheck result previously)
+        selfHealthCheck = selfHealthCheck || await this.platform.getInstanceHealthCheck({
             instanceId: this._selfInstance.InstanceId
         }, interval);
         // if no record found, this instance not under monitor. should make sure its all
-        // lifecycle actions are complete before starting to monitor it
+        // lifecycle actions are complete before starting to monitor it.
+        // the success status indicates that the instance acknowledge its config and start to
+        // send heart beat regularly
+        // for those instance cannot send heart beat correctly, termination will be triggered by
+        // default when their lifecycle action expired.
+        if (statusSuccess) {
+            // for master instance, if it comes up correctly, it will finalize the master election.
+            if (this._selfInstance.InstanceId === masterInfo.InstanceId) {
+                let electionFinalized = await this.platform.finalizeMasterElection();
+                // if election couldn't be finalized, remove the current election so someone else
+                // could start another election
+                if (!electionFinalized) {
+                    await this.platform.removeMasterRecord();
+                }
+                // if election could not be finalized, this master instance is abandonned too.
+                await this.completeGetConfigLifecycleAction(this._selfInstance.InstanceId,
+                    statusSuccess && electionFinalized);
+            } else {
+                // for slave instance, complete its lifecycle action
+                await this.completeGetConfigLifecycleAction(this._selfInstance.InstanceId,
+                    statusSuccess);
+            }
+        }
         if (!selfHealthCheck) {
             await this.addInstanceToMonitor(this._selfInstance,
                 Date.now() + interval * 1000);
@@ -1010,43 +1178,32 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } else {
             // if instance is health
             if (selfHealthCheck.healthy) {
-                await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval, Date.now());
+                await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
+                    masterInfo.InstanceId, Date.now());
                 logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
                 `ip: ${this._selfInstance.PrivateIpAddress}) health check ` +
                 `(${selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
                 `heartBeatLossCount: ${selfHealthCheck.heartBeatLossCount}, ` +
-                `nextHeartBeatTime: ${selfHealthCheck.nextHeartBeatTime}).`);
+                `nextHeartBeatTime: ${selfHealthCheck.nextHeartBeatTime}).` +
+                `syncState: ${selfHealthCheck.syncState}`);
                 return '';
             } else {
-                // deregister unhealth instance
-                return this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+                // for unhealthy instance
+                // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script is
+                // not going to keep it in sync any more.
+                if (selfHealthCheck.inSync) {
+                    // change its sync state to 'out of sync' by updating it state one last time
+                    await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
+                        masterInfo.InstanceId, Date.now(), true);
+                    // terminate it from auto-scaling group
+                    await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+                }
+                // if instance is out of sync, respond with action 'shutdown'
+                return {
+                    action: 'shutdown'
+                };
             }
         }
-    }
-
-    async handleGetConfigCallback(isMaster, statusSuccess) {
-        let lifecycleItem, instanceProtected = false;
-        lifecycleItem = await this.completeGetConfigLifecycleAction(
-            this._selfInstance.InstanceId, statusSuccess) ||
-            new AutoScaleCore.LifecycleItem(this._selfInstance.InstanceId, {},
-                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG);
-        // is it master?
-        if (isMaster) {
-            try {
-                // then protect it from scaling in
-                // instanceProtected =
-                //         await this.platform.protectInstanceFromScaleIn(
-                //             process.env.AUTO_SCALING_GROUP_NAME, lifecycleItem);
-                logger.info(`Instance (id: ${lifecycleItem.instanceId}) scaling-in` +
-                    ` protection is on: ${instanceProtected}`);
-            } catch (ex) {
-                logger.warn('Unable to protect instance from scale in:', ex);
-            }
-            // update master election from 'pending' to 'done'
-            await this.platform.finalizeMasterElection();
-        }
-        logger.info('called handleGetConfigCallback');
-        return '';
     }
 
     async completeGetConfigLifecycleAction(instanceId, success) {
@@ -1091,7 +1248,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
                 AutoScaleCore.LifecycleItem.ACTION_NAME_TERMINATING_INSTANCE, false);
             // check if master
-            let masterInfo = this.getMasterInfo();
+            let masterInfo = await this.getMasterInfo();
             logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
             logger.log(`lifecycle item: ${JSON.stringify(item)}`);
             if (masterInfo && masterInfo.InstanceId === item.instanceId) {
@@ -1128,28 +1285,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await this.platform.deleteInstanceHealthCheck(instanceId);
     }
 
-    async purgeMaster(asgName) {
-        // only purge the master with a done votestate to avoid a
-        // race condition
-        const params = {
-            TableName: DB.ELECTION.TableName,
-            Key: { asgName: asgName },
-            ConditionExpression: '#AsgName = :asgName AND #voteState = :voteState',
-            ExpressionAttributeNames: {
-                '#AsgName': 'asgName',
-                '#voteState': 'voteState'
-            },
-            ExpressionAttributeValues: {
-                ':asgName': asgName,
-                ':voteState': 'done'
-            }
-        };
-        return await docClient.delete(params).promise();
+    async purgeMaster() {
+        let result = await this.platform.removeMasterRecord();
+        return !!result;
     }
 
     async deregisterMasterInstance(instance) {
         logger.info('calling deregisterMasterInstance', JSON.stringify(instance));
-        return await this.purgeMaster(process.env.AUTO_SCALING_GROUP_NAME);
+        return await this.purgeMaster();
     }
 
     async terminateInstanceInAutoScalingGroup(instance) {
@@ -1178,14 +1321,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleGetConfig(event) {
         logger.info('calling handleGetConfig');
         let
-            electionLock = null,
-            masterIsHealthy = false,
             config,
-            getConfigTimeout,
-            nextTime,
             masterInfo,
-            masterHealthCheck,
-            masterRecord,
             callingInstanceId = this.getCallingInstanceId(event);
 
         // get instance object from platform
@@ -1197,71 +1334,35 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 'Instance not found in VPC.');
         }
 
-        nextTime = Date.now();
-        getConfigTimeout = nextTime + SCRIPT_TIMEOUT * 1000; // unit ms
-
-        // (diagram: master exists?)
-        while (!masterIsHealthy && (nextTime < getConfigTimeout)) {
-            // is there a master election still holding?
-            masterRecord = await this.platform.getElectedMaster();
-            if (!(masterRecord && masterRecord.voteState === 'done')) {
-                masterIsHealthy = false;
-            } else {
-                // get the current master
-                masterInfo = await this.getMasterInfo();
-                // is current master healthy?
-                if (masterInfo) {
-                    masterHealthCheck =
-                        await this.platform.getInstanceHealthCheck({
-                            instanceId: masterInfo.InstanceId
-                        });
-                    masterIsHealthy = !!masterHealthCheck && masterHealthCheck.healthy;
+        let promiseEmitter = this.checkMasterElection(),
+            validator = result => {
+                // if i am the master, don't wait, continue, if not, wait
+                if (result &&
+                    result.PrivateIpAddress === this._selfInstance.PrivateIpAddress) {
+                    return true;
+                } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+                    this._masterRecord = null;
                 }
-            }
-
-            // we need a new master! let's hold a master election!
-            if (!masterIsHealthy) {
-                // but can I run the election? (diagram: anyone's holding master election?)
-                // try to put myself as the master candidate
-                electionLock = !masterRecord &&
-                    await this.putMasterElectionVote(this._selfInstance,
-                        // even if master record exists, this master is unhealthy so need to purge it.
-                        masterRecord && masterRecord.voteState === 'done');
-
-                if (electionLock) {
-                    // yes, you run it!
-                    logger.info(`This instance (id: ${this._selfInstance.InstanceId})` +
-                        ' is running an election.');
-                    try {
-                        // (diagram: elect new master from queue (existing instances))
-                        await this.holdMasterElection(this._selfInstance);
-                        logger.info('Election completed.');
-                    } catch (error) {
-                        logger.error('Something went wrong in the master election.');
-                    } finally {
-                        electionLock = null;
-                    }
-                    // (diagram: master exists?)
-                    masterInfo = await this.getMasterInfo();
-                    // if i am the master, don't wait, continue
-                    masterIsHealthy = masterInfo &&
-                        masterInfo.PrivateIpAddress === this._selfInstance.PrivateIpAddress;
+                return false;
+            },
+            counter = () => {
+                if (Date.now() < scriptExecutionExpireTime - 3000) {
+                    return false;
                 }
-            }
-            nextTime = Date.now();
-            // masterIsHealthy = !!masterInfo;
-            if (!masterIsHealthy) {
-                await AutoScaleCore.sleep(5000); // (diagram: wait for a moment (interval))
-            }
-        }
+                logger.warn('script execution is about to expire');
+                return true;
+            };
 
-        // exit with error if script can't get election done within script timeout
-        if (nextTime >= getConfigTimeout) {
-            // cannot bootstrap due to master election failure.
-            // (diagram: remove instance)
-            await this.removeInstance({
-                vmId: this._selfInstance.properties.vmId
-            });
+        try {
+            masterInfo = AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+        } catch (error) {
+            // if error occurs, check who is holding a master election, if it is this instance,
+            // terminates this election. then tear down this instance whether it's master or not.
+            this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+            if (this._masterRecord.instanceId === this._selfInstance.InstanceId) {
+                await this.platform.removeMasterRecord();
+            }
+            await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
             throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
                 ' seconds. This instance is unable to bootstrap. Please report this to' +
                 ' administrators.');
@@ -1502,6 +1603,7 @@ function initModule() {
  * @param {Function} callback a callback function been triggered by AWS Lambda mechanism
  */
 exports.handler = async (event, context, callback) => {
+    scriptExecutionExpireTime = Date.now() + context.getRemainingTimeInMillis();
     initModule();
     const handler = new AwsAutoscaleHandler();
     await handler.handle(event, context, callback);

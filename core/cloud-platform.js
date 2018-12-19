@@ -28,12 +28,31 @@ module.exports = class CloudPlatform {
     async putMasterElectionVote(ip, purgeMasterIp) {
         await this.throwNotImplementedException();
     }
+
     /**
-     * Get the ip address which won the master election.
+     * Submit an master record for election with a vote state.
+     * Abstract class method.
+     * @param {String} instanceId the instanceId of master candidate
+     * @param {String} voteState vote state of 'pending' or 'done'
+     * @returns {boolean} result. true or false
+     */
+    async putMasterRecord(instanceId, voteState) {
+        return await this.throwNotImplementedException() || instanceId || voteState;
+    }
+    /**
+     * Get the master record from db.
      * Abstract class method.
      * @returns {String} Ip of the FortiGate which should be the auto-sync master
      */
-    async getElectedMaster() {
+    async getMasterRecord() {
+        await this.throwNotImplementedException();
+    }
+
+    /**
+     * Remove the current master record from db.
+     * Abstract class method.
+     */
+    async removeMasterRecord() {
         await this.throwNotImplementedException();
     }
     /**
@@ -52,6 +71,15 @@ module.exports = class CloudPlatform {
      *  a lifecycleAction.
      */
     async updateLifecycleItem(item) {
+        await this.throwNotImplementedException();
+    }
+    /**
+     * remove one life cycle action item hooked with an instance.
+     * Abstract class method.
+     * @param {LifecycleItem} item Item used by the platform to complete
+     *  a lifecycleAction.
+     */
+    async removeLifecycleItem(item) {
         await this.throwNotImplementedException();
     }
     /**
@@ -139,10 +167,13 @@ module.exports = class CloudPlatform {
      * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
      * getInstanceHealthCheck
      * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
+     * @param {String} masterIp the current master ip in auto-scaling group
      * @param {Number} checkPointTime the check point time of when the health check is performed.
+     * @param {bool} forceOutOfSync whether force to update this record as 'out-of-sync'
      * @returns {bool} resul: true or false
      */
-    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, checkPointTime) {
+    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, masterIp, checkPointTime,
+        forceOutOfSync = false) {
         await this.throwNotImplementedException();
     }
 

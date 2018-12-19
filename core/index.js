@@ -54,20 +54,41 @@ const sleep = ms => {
         setTimeout(resolve, ms);
     });
 };
-const waitFor = async (promiseEmitter, comparer, interval = 5000, count = 12) => {
-    let currentCount = 0, result;
+
+/**
+ * A wait-for function that periodically awaits an async promise, and does a custom validation on
+ * the result and end the waiting on a certain condition.
+ * This function will return a Promise resolved with the last result of promiseEmitter.
+ * It will also end immediately if any error occurs during, and return a Promise rejected with the
+ * error object.
+ * @param {Function} promiseEmitter a function that returns a promise for async/await
+ * @param {Function} validator compare the result given by promiseEmitter and a certain condition
+ * for validation. Should return true if a curtain condition is met so this end the waiting
+ * @param {Number} interval a period of time between each waiting
+ * @param {Function | Number} counter a counter function or a number of counting to end the waiting.
+ * If giving a counter function, it should return true to indicate that waiting should end. If a
+ * number is provided, waiting will end at the giving number of attempts to wait. Default is 12.
+ */
+const waitFor = async (promiseEmitter, validator, interval = 5000, counter = null) => {
+    let currentCount = 0, result, maxCount;
+    if (typeof counter !== 'function') {
+        maxCount = isNaN(counter) ? 12 : counter;
+        counter = count => {
+            if (count >= maxCount) {
+                throw new Error(`failed to wait for a result within ${maxCount} attempts.`);
+            }
+            return true; // return count < maxCount
+        };
+    }
     try {
         result = await promiseEmitter();
-        while (currentCount < count && !comparer(result)) {
+        while (counter(currentCount) && !validator(result)) {
             await sleep(interval);
             result = await promiseEmitter();
-            count ++;
+            currentCount ++;
         }
     } catch (error) {
         return Promise.reject(`failed to wait due to error: ${JSON.stringify(error)}`);
-    }
-    if (count === currentCount) {
-        return Promise.reject(`failed to wait for a result within ${count} attempts.`);
     }
     return Promise.resolve(result);
 };

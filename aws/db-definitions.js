@@ -92,6 +92,10 @@ const DB = {
                 AttributeType: 'S'
             },
             {
+                AttributeName: 'voteEndTime',
+                AttributeType: 'N'
+            },
+            {
                 AttributeName: 'voteState',
                 AttributeType: 'S'
             }

@@ -74,11 +74,11 @@
         },
         "ExpireLifecycleEntry": {
             "Type": "Number",
-            "Default": 300,
+            "Default": 400,
             "MinValue": 60,
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
-            "Description": "FortiGate instance lifecycle expiry entry (in seconds). Minimum is 60. Maximum is 3600."
+            "Description": "FortiGate instance lifecycle expiry entry (in seconds). Minimum is 60. Maximum is 3600. This is the time between the FortiGate instance is launched and it starts to send the first request to the callback endpoint."
         },
         "FortiGateAsgCooldown": {
             "Type": "Number",

@@ -106,7 +106,11 @@ module.exports = class AutoscaleHandler {
         return config;
     }
 
-    async holdMasterElection(ip) {
+    async checkMasterElection() {
+        return await this.throwNotImplementedException();
+    }
+
+    async completeMasterElection(ip) {
         await this.throwNotImplementedException();
         return ip;
     }
@@ -169,7 +173,7 @@ module.exports = class AutoscaleHandler {
         return await this.throwNotImplementedException() || instance;
     }
 
-    async purgeMaster(asgName) {
+    async purgeMaster() {
         return await this.throwNotImplementedException() || asgName;
     }
 
