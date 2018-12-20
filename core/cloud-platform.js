@@ -32,12 +32,14 @@ module.exports = class CloudPlatform {
     /**
      * Submit an master record for election with a vote state.
      * Abstract class method.
-     * @param {String} instanceId the instanceId of master candidate
+     * @param {String} candidateInstance the master candidate instance
      * @param {String} voteState vote state of 'pending' or 'done'
+     * @param {String} method 'new' for inserting when no record exists, 'replace' for replacing
+     * the existing record or the same as 'new', otherwise.
      * @returns {boolean} result. true or false
      */
-    async putMasterRecord(instanceId, voteState) {
-        return await this.throwNotImplementedException() || instanceId || voteState;
+    async putMasterRecord(candidateInstance, voteState, method = 'new') {
+        return await this.throwNotImplementedException();
     }
     /**
      * Get the master record from db.
@@ -208,11 +210,19 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    async listNetworkInterfaces(parameters) {
+        await this.throwNotImplementedException();
+    }
+
     async attachNetworkInterface(instance, nic) {
         await this.throwNotImplementedException();
     }
 
     async detachNetworkInterface(instance, nic) {
+        await this.throwNotImplementedException();
+    }
+
+    async listNicAttachmentRecord() {
         await this.throwNotImplementedException();
     }
 

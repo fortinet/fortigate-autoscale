@@ -11,6 +11,12 @@ config system auto-scale
     set psksecret {PSK_SECRET}
 end
 
+config sys interface
+edit {INTERNAL_INTERFACE}
+set mode dhcp
+next
+end
+
 config system global
     set admin-sport {ADMIN_PORT}
 end

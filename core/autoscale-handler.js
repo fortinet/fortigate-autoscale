@@ -143,6 +143,14 @@ module.exports = class AutoscaleHandler {
         return null || event;
     }
 
+    async loadSubnetPairs() {
+        return await this.platform.getSettingItem('subnets-pairs');
+    }
+
+    async saveSubnetPairs(subnetPairs) {
+        return await this.platform.setSettingItem('subnets-pairs', subnetPairs);
+    }
+
     async loadSettings() {
         return await this.platform.getSettingItem('auto-scaling-group');
     }
@@ -161,12 +169,17 @@ module.exports = class AutoscaleHandler {
         return null || desiredCapacity && minSize && maxSize;
     }
 
+    async checkAutoScalingGroupState() {
+        await this.throwNotImplementedException();
+    }
+
     async resetMasterElection() {
         await this.throwNotImplementedException();
     }
 
-    async addInstanceToMonitor(instance, nextHeartBeatTime) {
-        return await this.throwNotImplementedException() || instance && nextHeartBeatTime;
+    async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp) {
+        return await this.throwNotImplementedException() ||
+            instance && nextHeartBeatTime && masterIp;
     }
 
     async removeInstanceFromMonitor(instance) {
@@ -174,7 +187,7 @@ module.exports = class AutoscaleHandler {
     }
 
     async purgeMaster() {
-        return await this.throwNotImplementedException() || asgName;
+        return await this.throwNotImplementedException();
     }
 
     async deregisterMasterInstance(instance) {

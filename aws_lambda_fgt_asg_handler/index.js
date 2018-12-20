@@ -20,6 +20,11 @@ exports.AutoscaleHandler = async (event, context, callback) => {
     await ftgtAutoscaleAws.handler(event, context, callback);
 };
 
+async function initiate(desiredCapacity, minSize, maxSize, subnetPairs) {
+    await autoscaleHandler.saveSubnetPairs(subnetPairs);
+    await autoscaleHandler.saveSettings(desiredCapacity, minSize, maxSize);
+}
+
 async function saveSettings(desiredCapacity, minSize, maxSize) {
     await autoscaleHandler.saveSettings(desiredCapacity, minSize, maxSize);
 }
@@ -46,18 +51,12 @@ async function updateCapacity(desiredCapacity, minSize, maxSize) {
         minSize, maxSize);
 }
 
-/**
- * restart the auto scaling group with its preset capacity
- */
-async function restartAutoScalingGroup() {
-
+async function checkAutoScalingGroupState() {
+    return await autoscaleHandler.checkAutoScalingGroupState();
 }
 
-/**
- * set the auto scaling group to its initial state
- */
-async function initiateAutoScalingGroup() {
-    // set its min size to 0, desired capacity to 0, max size unchanged
+async function cleanUp() {
+    return await autoscaleHandler.cleanUpAdditionalNics();
 }
 
 exports.getLogger = () => {
@@ -67,4 +66,8 @@ exports.getLogger = () => {
 exports.saveSettings = saveSettings;
 exports.restart = restart;
 exports.updateCapacity = updateCapacity;
+exports.initiate = initiate;
 exports.stop = stop;
+exports.checkAutoScalingGroupState = checkAutoScalingGroupState;
+exports.cleanUp = cleanUp;
+exports.AutoScaleCore = ftgtAutoscaleAws.AutoScaleCore;

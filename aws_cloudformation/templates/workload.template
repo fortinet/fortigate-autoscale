@@ -822,7 +822,8 @@
                 "ElbV2TargetGroupFgtAsg",
                 "LambdaFunctionFgtAsg",
                 "LpAsgLifecyclePermission",
-                "StartNicAttachmentService"
+                "StartNicAttachmentService",
+                "StopFortiGateAutoScalingGroupService"
             ]
         },
         "AsgScaleInPolicy": {
@@ -1147,7 +1148,7 @@
                         "FORTIGATE_TRAFFIC_PORT": {
                             "Ref": "BalanceWebTrafficOverPort"
                         },
-                        "FORTIGATE_SYNC_INTERFACE": "port2"
+                        "FORTIGATE_SYNC_INTERFACE": "port1"
                     }
                 }
             },
@@ -1392,7 +1393,7 @@
                         "FORTIGATE_TRAFFIC_PORT": {
                             "Ref": "BalanceWebTrafficOverPort"
                         },
-                        "FORTIGATE_SYNC_INTERFACE": "port2"
+                        "FORTIGATE_SYNC_INTERFACE": "port1"
                     }
                 }
             },
@@ -1833,7 +1834,9 @@
                                         "autoscaling:DescribeLifecycleHooks",
                                         "ec2:CreateNetworkInterface",
                                         "ec2:DescribeVpcs",
-                                        "ec2:AttachNetworkInterface"
+                                        "ec2:AttachNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:CreateTags"
                                     ],
                                     "Resource": "*"
                                 },
@@ -2005,7 +2008,6 @@
             }
         },
         "AsgLifeCycleHookTerminating": {
-            "DependsOn": "LambdaFunctionFgtAsg",
             "Type": "AWS::AutoScaling::LifecycleHook",
             "Properties": {
                 "AutoScalingGroupName": {
@@ -2017,7 +2019,11 @@
                     "Ref": "ExpireLifecycleEntry"
                 },
                 "DefaultResult": "CONTINUE"
-            }
+            },
+            "DependsOn": [
+                "LambdaFunctionFgtAsg",
+                "StopFortiGateAutoScalingGroupService"
+            ]
         },
         "ElbV2TargetGroupFgtAsg": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
@@ -2365,7 +2371,7 @@
                         "Arn"
                     ]
                 },
-                "ServiceType": "saveSettingsAndRestart",
+                "ServiceType": "initiate",
                 "DesiredCapacity":{
                     "Ref": "FortiGateAsgDesiredCapacity"
                 },
@@ -2374,6 +2380,18 @@
                 },
                 "MaxSize":{
                     "Ref": "FortiGateAsgMaxSize"
+                },
+                "Subnet1": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Subnet1Pair": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "Subnet2": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Subnet2Pair": {
+                    "Ref": "PrivateSubnet2"
                 }
             },
             "Type": "AWS::CloudFormation::CustomResource",
@@ -2400,11 +2418,7 @@
                     "Ref": "FortiGateAsgMaxSize"
                 }
             },
-            "Type": "AWS::CloudFormation::CustomResource",
-            "DependsOn": [
-                "AsgLifeCycleHookTerminating",
-                "FortiGateScalingGroup"
-            ]
+            "Type": "AWS::CloudFormation::CustomResource"
         }
     },
     "Metadata": {
@@ -2559,83 +2573,6 @@
                 "FortiGatePskSecret": {
                     "default": "FortiGate PSK secret"
                 }
-            }
-        }
-    },
-    "Outputs": {
-        "VpcId": {
-            "Description": "The FortiGate Auto Scale VPC",
-            "Value": {
-                "Fn::Sub": [
-                    "<a href='#vpcs:search=${vpcId};sort=VpcId'>${vpcId}</a>",
-                    {
-                        "vpcId": {
-                            "Ref": "VpcId"
-                        }
-                    }
-                ]
-            }
-        },
-        "FortiGateAutoScalingGroup": {
-            "Description": "The FortiGate Auto Scaling Group",
-            "Value": {
-                "Fn::Sub": [
-                    "<a href='#AutoScalingGroups:id=${asgName};filter=${asgName}'>${asgName}</a>",
-                    {
-                        "asgName": {
-                            "Ref": "FortiGateScalingGroup"
-                        }
-                    }
-                ]
-            }
-        },
-        "FortiGateAutoScaleMasterElectionDynamoDbTable": {
-            "Description": "The FortiGate Auto Scale - Master FortiGate record in DB.",
-            "Value": {
-                "Fn::Sub": [
-                    "<a href='#tables:selected=${customIdentifier}-FortiGateMasterElection-${uniqueId};tab=items'>Master Election Record in DB</a>",
-                    {
-                        "customIdentifier": {
-                            "Ref": "CustomIdentifier"
-                        },
-                        "uniqueId": {
-                            "Fn::Select": [
-                                0,
-                                {
-                                    "Fn::Split": [
-                                        "-",
-                                        {
-                                            "Fn::Select": [
-                                                2,
-                                                {
-                                                    "Fn::Split": [
-                                                        "/",
-                                                        {
-                                                            "Ref": "AWS::StackId"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "FortiGateAutoScaleHandlerLambdaFunction": {
-            "Description": "The FortiGate Auto Scale hander function",
-            "Value": {
-                "Fn::Sub": [
-                    "<a href='#/functions/{lambdaFunctionName}'>{lambdaFunctionName}</a>",
-                    {
-                        "lambdaFunctionName": {
-                            "Ref": "LambdaFunctionFgtAsg"
-                        }
-                    }
-                ]
             }
         }
     }

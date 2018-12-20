@@ -5,7 +5,7 @@ FortiGate Autoscale AWS Lambda Function - FortiGate Auto-Scaling Group handler (
 Author: Fortinet
 */
 
-/* eslint-disable no-inner-declarations */
+/* eslint-disable no-unused-vars */
 exports = module.exports;
 const AWS = require('aws-sdk');
 const ftgtAutoscaleAws = require('fortigate-autoscale-aws');
@@ -84,10 +84,6 @@ async function deleteTable(schema) {
         logger.warn(`cannot delete table (${schema.TableName}) due to error:`, ex);
     }
 }
-
-exports.handler = async (event, context, callback) => {
-
-};
 
 /**
  * This function handles CloudFormation custom resource creation

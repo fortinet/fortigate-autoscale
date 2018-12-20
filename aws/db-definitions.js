@@ -191,13 +191,15 @@ const DB = {
 };
 
 exports.getTables = (custom_id, unique_id) => {
-    let tables = {};
+    let tables = {},
+        prefix = () => { return custom_id ? `${custom_id}-` : '' },
+        suffix = () => { return unique_id ? `-${custom_id}` : '' };
     Object.keys(DB).forEach(itemName => {
         let table = {};
         table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
         table.KeySchema = DB[itemName].KeySchema;
         table.ProvisionedThroughput = DB[itemName].ProvisionedThroughput;
-        table.TableName = `${custom_id}-${DB[itemName].TableName}-${unique_id}`;
+        table.TableName = prefix() + DB[itemName].TableName + suffix();
         table.AdditionalAttributeDefinitions = DB[itemName].AdditionalAttributeDefinitions;
         tables[itemName] = table;
     });

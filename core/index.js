@@ -61,28 +61,35 @@ const sleep = ms => {
  * This function will return a Promise resolved with the last result of promiseEmitter.
  * It will also end immediately if any error occurs during, and return a Promise rejected with the
  * error object.
- * @param {Function} promiseEmitter a function that returns a promise for async/await
- * @param {Function} validator compare the result given by promiseEmitter and a certain condition
- * for validation. Should return true if a curtain condition is met so this end the waiting
- * @param {Number} interval a period of time between each waiting
- * @param {Function | Number} counter a counter function or a number of counting to end the waiting.
- * If giving a counter function, it should return true to indicate that waiting should end. If a
- * number is provided, waiting will end at the giving number of attempts to wait. Default is 12.
+ * @param {Function} promiseEmitter Function(result):Promise, A function returns a promise with a
+ * result of actions which you wish to wait for.
+ * @param {Function} validator Function(result):boolean, a result-based condition function that
+ * takes the result of the promiseEmitter, decides whether it should end the waiting or not based on
+ *  the result. The validator function should return true to end the waiting, or false to continue.
+ * @param {Number} interval a period of time in milliseconds between each wait. Default is 5000.
+ * @param {Function | Number} counter Function(currentCount:number):boolean | Number, an additonal
+ * time-based condition that could end the waiting. This parameter accepts either a counter
+ * function or the number of attempts where each attempt does one set of the following actions:
+ * 1. awaits the return of one promise from the promiseEmitter;
+ * 2. does one validation provided by the validator function.
+ * If giving a counter function, the function takes the count of attempts been taken as parameter,
+ * and should return true to end the waiting or false to continue. If giving a number, waiting
+ * will end at the given number of attempts. Default is 12.
  */
 const waitFor = async (promiseEmitter, validator, interval = 5000, counter = null) => {
     let currentCount = 0, result, maxCount;
     if (typeof counter !== 'function') {
-        maxCount = isNaN(counter) ? 12 : counter;
+        maxCount = !counter || isNaN(counter) ? 12 : counter;
         counter = count => {
             if (count >= maxCount) {
                 throw new Error(`failed to wait for a result within ${maxCount} attempts.`);
             }
-            return true; // return count < maxCount
+            return false;
         };
     }
     try {
         result = await promiseEmitter();
-        while (counter(currentCount) && !validator(result)) {
+        while (!(await validator(result) || await counter(currentCount))) {
             await sleep(interval);
             result = await promiseEmitter();
             currentCount ++;

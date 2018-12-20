@@ -234,7 +234,31 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             [${params.AutoScalingGroupName}]`);
             return true;
         } catch (error) {
-            logger.error(`called completeLifecycleAction. error:${error.message}`);
+            logger.warn(`called completeLifecycleAction. warning:${error.message}`);
+            return false;
+        }
+    }
+
+    /** @override */
+    async putMasterRecord(candidateInstance, voteState, method = 'new') {
+        try {
+            let params = {
+                TableName: DB.ELECTION.TableName,
+                Item: {
+                    asgName: process.env.AUTO_SCALING_GROUP_NAME,
+                    ip: candidateInstance.PrivateIpAddress,
+                    instanceId: candidateInstance.InstanceId,
+                    vpcId: candidateInstance.VpcId,
+                    subnetId: candidateInstance.SubnetId,
+                    voteState: voteState
+                }
+            };
+            if (method !== 'replace') {
+                params.ConditionExpression = 'attribute_not_exists(asgName)';
+            }
+            return !!await docClient.put(params).promise();
+        } catch (error) {
+            console.warn('error occurs in putMasterRecord:', JSON.stringify(error));
             return false;
         }
     }
@@ -275,14 +299,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         const params = {
             TableName: DB.ELECTION.TableName,
             Key: { asgName: process.env.AUTO_SCALING_GROUP_NAME },
-            ConditionExpression: '#AsgName = :asgName AND #voteState = :voteState',
+            ConditionExpression: '#AsgName = :asgName',
             ExpressionAttributeNames: {
-                '#AsgName': 'asgName',
-                '#voteState': 'voteState'
+                '#AsgName': 'asgName'
             },
             ExpressionAttributeValues: {
-                ':asgName': process.env.AUTO_SCALING_GROUP_NAME,
-                ':voteState': 'done'
+                ':asgName': process.env.AUTO_SCALING_GROUP_NAME
             }
         };
         return await docClient.delete(params).promise();
@@ -291,7 +313,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async finalizeMasterElection() {
         try {
             logger.info('calling finalizeMasterElection');
-            let electedMaster = await this.getMasterRecord();
+            let electedMaster = this._masterRecord || await this.getMasterRecord();
             electedMaster.voteState = 'done';
             const params = {
                 TableName: DB.ELECTION.TableName,
@@ -299,7 +321,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             };
             let result = await docClient.put(params).promise();
             logger.info(`called finalizeMasterElection, result: ${JSON.stringify(result)}`);
-            return result;
+            return !!result;
         } catch (ex) {
             logger.warn('called finalizeMasterElection, error:', ex.stack);
             return false;
@@ -392,7 +414,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 ExpressionAttributeValues: {
                     ':HeartBeatLossCount': healthCheckObject.heartBeatLossCount,
                     ':NextHeartBeatTime': checkPointTime + heartBeatInterval * 1000,
-                    ':MasterIp': masterIp,
+                    ':MasterIp': masterIp ? masterIp : 'null',
                     ':SyncState': healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' :
                         'out-of-sync'
                 },
@@ -429,6 +451,26 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.warn('called deleteInstanceHealthCheck. error:', error);
             return false;
         }
+    }
+
+    async describeAutoScalingGroups(groupName) {
+        try {
+            let params = {
+                AutoScalingGroupNames: [groupName]
+            };
+            let data = await autoScaling.describeAutoScalingGroups(params).promise();
+            if (data && data.AutoScalingGroups && data.AutoScalingGroups.length > 0) {
+                logger.info('called describeAutoScalingGroups. group found.');
+                let groups = data.AutoScalingGroups.filter(group => {
+                    return group.AutoScalingGroupName === groupName;
+                });
+                return groups && groups.length && groups[0];
+            }
+        } catch (error) {
+            logger.warn('called describeAutoScalingGroups, error:', error);
+        }
+        logger.info('called describeAutoScalingGroups, no matching group found.');
+        return null;
     }
 
 
@@ -485,7 +527,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      */
     extractRequestInfo(request) {
         let instanceId = null,
-            interval = null,
+            interval = 3600,
             status = null;
 
         if (request && request.headers && request.headers['Fos-instance-id']) {
@@ -494,7 +536,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             try {
                 let jsonBodyObject = JSON.parse(request.body);
                 instanceId = jsonBodyObject.instance;
-                interval = jsonBodyObject.interval;
+                if (jsonBodyObject.interval) {
+                    interval = jsonBodyObject.interval;
+                }
                 status = jsonBodyObject.status;
             } catch (ex) {
                 logger.info('calling extractRequestInfo: unexpected body content format ' +
@@ -547,6 +591,21 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         try {
             logger.info('called createNetworkInterface');
             let result = await ec2.createNetworkInterface(parameters).promise();
+            // create a tag
+            if (result && result.NetworkInterface) {
+                let params = {
+                    Resources: [
+                        result.NetworkInterface.NetworkInterfaceId
+                    ],
+                    Tags: [
+                        {
+                            Key: 'FortiGateAutoScaleNicAttachment',
+                            Value: `${custom_id}-NicAttachment-${unique_id}`
+                        }
+                    ]
+                };
+                await ec2.createTags(params).promise();
+            }
             return result && result.NetworkInterface;
         } catch (error) {
             logger.warn(`called createNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
@@ -571,6 +630,18 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             return result && result.NetworkInterfaces && result.NetworkInterfaces[0];
         } catch (error) {
             logger.warn('called describeNetworkInterface. ' +
+            `failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async listNetworkInterfaces(parameters) {
+        try {
+            logger.info('called listNetworkInterfaces');
+            let result = await ec2.describeNetworkInterfaces(parameters).promise();
+            return result && result.NetworkInterfaces;
+        } catch (error) {
+            logger.warn('called listNetworkInterfaces. ' +
             `failed.(error: ${JSON.stringify(error)})`);
             return false;
         }
@@ -652,6 +723,25 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         } catch (error) {
             logger.warn(`called detachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
             return false;
+        }
+    }
+
+    async listNicAttachmentRecord() {
+        try {
+            const
+                response = await docClient.scan({
+                    TableName: DB.NICATTACHMENT.TableName
+                }).promise();
+            let recordCount = 0, records = [];
+            if (response && response.Items) {
+                recordCount = response.Items.length;
+                records = response.Items;
+            }
+            logger.info(`called listNicAttachmentRecord: found ${recordCount} records.`);
+            return records;
+        } catch (error) {
+            logger.info('called listNicAttachmentRecord: error:', error);
+            return null;
         }
     }
 
@@ -807,6 +897,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
         function proxyResponse(statusCode, res) {
+            logger.log(`(${statusCode}) response body:`, res);
             const response = {
                 statusCode,
                 headers: {},
@@ -825,19 +916,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      */
     async putMasterElectionVote(candidateInstance, purgeMasterRecord = null) {
         try {
-            // TODO: call platform.saveElectionRecord
-            const params = {
-                TableName: DB.ELECTION.TableName,
-                Item: {
-                    asgName: process.env.AUTO_SCALING_GROUP_NAME,
-                    ip: candidateInstance.PrivateIpAddress,
-                    instanceId: candidateInstance.InstanceId,
-                    vpcId: candidateInstance.VpcId,
-                    subnetId: candidateInstance.SubnetId,
-                    voteState: 'pending'
-                },
-                ConditionExpression: 'attribute_not_exists(asgName)'
-            };
             logger.log('masterElectionVote, purge master?', JSON.stringify(purgeMasterRecord));
             if (purgeMasterRecord) {
                 try {
@@ -849,7 +927,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             } else {
                 logger.log('no master purge');
             }
-            return !!await docClient.put(params).promise();
+            return await this.platform.putMasterRecord(candidateInstance, 'pending', 'new');
         } catch (ex) {
             console.warn('exception while putMasterElectionVote',
                 JSON.stringify(candidateInstance), JSON.stringify(purgeMasterRecord), ex.stack);
@@ -996,9 +1074,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 .replace(new RegExp('{SYNC_INTERFACE}', 'gm'),
                     process.env.FORTIGATE_SYNC_INTERFACE ?
                         process.env.FORTIGATE_SYNC_INTERFACE : 'port1')
-                .replace(new RegExp('{ASSOCIATED_INTERFACE}', 'gm'),
-                    process.env.FORTIGATE_SYNC_INTERFACE ?
-                        process.env.FORTIGATE_SYNC_INTERFACE : 'port1')
+                .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')
+                .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
                 .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
                 .replace(new RegExp('{TRAFFIC_PORT}', 'gm'),
                     process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
@@ -1019,14 +1096,15 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async getMasterInfo() {
         logger.info('calling getMasterInfo');
-        let masterIp;
+        let instanceId;
         try {
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            masterIp = this._masterRecord && this._masterRecord.ip;
+            instanceId = this._masterRecord && this._masterRecord.instanceId;
         } catch (ex) {
             logger.error(ex);
         }
-        return this._masterRecord && await this.platform.describeInstance({ privateIp: masterIp });
+        return this._masterRecord && await this.platform.describeInstance(
+            { instanceId: instanceId });
     }
 
     /* ==== Sub-Handlers ==== */
@@ -1061,8 +1139,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 result = await this.handleNicAttachment(event);
                 break;
             case 'EC2 Instance Terminate Successful':
-                // detach nic2
+                // attach nic2
                 result = await this.handleNicDetachment(event);
+                // remove monitor record
+                await this.removeInstanceFromMonitor(event.detail.EC2InstanceId);
                 break;
             default:
                 logger.warn(`Ignore autoscaling event type: ${event['detail-type']}`);
@@ -1084,12 +1164,20 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             statusSuccess = status && status === 'success' || false;
         // if fortigate is sending callback in response to obtaining config, this is a state
         // message
-        let parameters = {}, selfHealthCheck, masterHealthCheck, result;
+        let parameters = {}, selfHealthCheck, masterHealthCheck, lifecycleShouldAbandon = false;
 
         parameters.instanceId = instanceId;
         // get selfinstance
         this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
         // handle hb monitor
+        // get self health check
+        selfHealthCheck = selfHealthCheck || await this.platform.getInstanceHealthCheck({
+            instanceId: this._selfInstance.InstanceId
+        }, interval);
+        // if self is already out-of-sync, skip the monitoring logics
+        if (selfHealthCheck && !selfHealthCheck.inSync) {
+            return {};
+        }
         // get master instance monitoring
         let masterInfo = await this.getMasterInfo();
         if (masterInfo) {
@@ -1097,27 +1185,47 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 instanceId: masterInfo.InstanceId
             }, interval);
         }
-        // if this instance is the unhealthy master, don't hold a master election
-        if (masterInfo && this._selfInstance.InstanceId === masterInfo.InstanceId &&
-            !masterHealthCheck.healthy) {
+        // if this instance is the master, skip checking master election
+        if (masterInfo && this._selfInstance.InstanceId === masterInfo.InstanceId) {
             // use master health check result as self health check result
             selfHealthCheck = masterHealthCheck;
+        } else if (!(selfHealthCheck && selfHealthCheck.healthy)) {
+            // if this instance is unhealth, skip master election check
+
         } else if (!(masterInfo && masterHealthCheck && masterHealthCheck.healthy)) {
-            // if no master or master is unhealthy
-            // TODO: hold a master election
-            let promiseEmitter = this.checkMasterElection(),
+            // if no master or master is unhealthy, try to run a master election or check if a
+            // master election is running then wait for it to end
+            // promiseEmitter to handle the master election process by periodically check:
+            // 1. if there is a running election, then waits for its final
+            // 2. if there isn't a running election, then runs an election and complete it
+            let promiseEmitter = this.checkMasterElection.bind(this),
+                // validator set a condition to determine if the fgt needs to keep waiting or not.
                 validator = result => {
-                    // if i am the new master, don't wait, continue, if not, wait
+                    // if i am the new master, don't wait, continue to finalize the election.
+                    // should return yes to end the waiting.
                     if (result &&
                         result.PrivateIpAddress === this._selfInstance.PrivateIpAddress) {
                         return true;
                     } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-                        this._masterRecord = null;
+                        // if i am not the new master, and the new master hasn't come up to
+                        // finalize the election, I should keep on waiting.
+                        // should return false to continue.
+                        this._masterRecord = null; // clear the master record cache
+                        return false;
+                    } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
+                        // if i am not the new master, and the master election is final, then no
+                        // need to wait.
+                        // should return true to end the waiting.
+                        return true;
                     }
+                    // should return false to wait due to any other conditions
                     return false;
                 },
-                counter = () => {
-                    if (Date.now() < scriptExecutionExpireTime - 3000) {
+                // counter to set a time based condition to end this waiting. If script execution
+                // time is close to its timeout (6 seconds - abount 1 inteval + 1 second), ends the
+                // waiting to allow for the rest of logic to run
+                counter = currentCount => { // eslint-disable-line no-unused-vars
+                    if (Date.now() < scriptExecutionExpireTime - 6000) {
                         return false;
                     }
                     logger.warn('script execution is about to expire');
@@ -1125,7 +1233,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 };
 
             try {
-                masterInfo = AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+                masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+                // after new master is elected, get the new master healthcheck
+                // there are two possible results here:
+                // 1. a new instance comes up and becomes the new master, master healthcheck won't
+                // exist yet because this instance isn't added to monitor.
+                //   1.1. in this case, the instance will be added to monitor.
+                // 2. an existing slave instance becomes the new master, master healthcheck exists
+                // because the instance in under monitoring.
+                //   2.1. in this case, the instance will take actions based on its healthcheck
+                //        result.
+                masterHealthCheck = await this.platform.getInstanceHealthCheck({
+                    instanceId: masterInfo.InstanceId
+                }, interval);
             } catch (error) {
                 // if error occurs, check who is holding a master election, if it is this instance,
                 // terminates this election. then continue
@@ -1141,68 +1261,93 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
         // check if myself is under health check monitoring
-        // (master instance itself may have got its healthcheck result previously)
+        // (master instance itself may have got its healthcheck result in some code blocks above)
         selfHealthCheck = selfHealthCheck || await this.platform.getInstanceHealthCheck({
             instanceId: this._selfInstance.InstanceId
         }, interval);
-        // if no record found, this instance not under monitor. should make sure its all
-        // lifecycle actions are complete before starting to monitor it.
-        // the success status indicates that the instance acknowledge its config and start to
+
+        // if this instance is the master instance and the master record is still pending, finalize
+        // the master election only in these two condition:
+        // 1. this instance is under monitor and is healthy
+        // 2. this instance is new and sending a respond with 'status: success'
+        this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+        if (masterInfo && this._selfInstance.InstanceId === masterInfo.InstanceId &&
+        this._masterRecord && this._masterRecord.voteState === 'pending') {
+            if (selfHealthCheck && selfHealthCheck.healthy || !selfHealthCheck && statusSuccess) {
+                // if election couldn't be finalized, remove the current election so someone else
+                // could start another election
+                if (!await this.platform.finalizeMasterElection()) {
+                    await this.platform.removeMasterRecord();
+                    this._masterRecord = null;
+                    lifecycleShouldAbandon = true;
+                }
+            }
+        }
+
+        // the success status indicates that the instance acknowledges its config and starts to
         // send heart beat regularly
         // for those instance cannot send heart beat correctly, termination will be triggered by
         // default when their lifecycle action expired.
+        // complete its lifecycle action in response to its call with 'status: success'
         if (statusSuccess) {
-            // for master instance, if it comes up correctly, it will finalize the master election.
-            if (this._selfInstance.InstanceId === masterInfo.InstanceId) {
-                let electionFinalized = await this.platform.finalizeMasterElection();
-                // if election couldn't be finalized, remove the current election so someone else
-                // could start another election
-                if (!electionFinalized) {
-                    await this.platform.removeMasterRecord();
-                }
-                // if election could not be finalized, this master instance is abandonned too.
-                await this.completeGetConfigLifecycleAction(this._selfInstance.InstanceId,
-                    statusSuccess && electionFinalized);
-            } else {
-                // for slave instance, complete its lifecycle action
-                await this.completeGetConfigLifecycleAction(this._selfInstance.InstanceId,
-                    statusSuccess);
-            }
+            await this.completeGetConfigLifecycleAction(this._selfInstance.InstanceId,
+                    statusSuccess && !lifecycleShouldAbandon);
         }
-        if (!selfHealthCheck) {
+
+        // if no self healthcheck record found, this instance not under monitor. should make sure
+        // its all lifecycle actions are complete before starting to monitor it.
+        // for instance not yet in monitor and there's a master instance (regarless its health
+        // status), add this instance to monitor
+        if (!selfHealthCheck && masterInfo) {
             await this.addInstanceToMonitor(this._selfInstance,
-                Date.now() + interval * 1000);
+                Date.now() + interval * 1000, masterInfo.PrivateIpAddress);
             logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
                 `ip: ${this._selfInstance.PrivateIpAddress}) is added to monitor.`);
-            return '';
-        } else {
-            // if instance is health
-            if (selfHealthCheck.healthy) {
-                await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
-                    masterInfo.InstanceId, Date.now());
-                logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
-                `ip: ${this._selfInstance.PrivateIpAddress}) health check ` +
-                `(${selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
-                `heartBeatLossCount: ${selfHealthCheck.heartBeatLossCount}, ` +
-                `nextHeartBeatTime: ${selfHealthCheck.nextHeartBeatTime}).` +
-                `syncState: ${selfHealthCheck.syncState}`);
-                return '';
-            } else {
-                // for unhealthy instance
-                // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script is
-                // not going to keep it in sync any more.
-                if (selfHealthCheck.inSync) {
-                    // change its sync state to 'out of sync' by updating it state one last time
-                    await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
-                        masterInfo.InstanceId, Date.now(), true);
-                    // terminate it from auto-scaling group
-                    await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
-                }
-                // if instance is out of sync, respond with action 'shutdown'
-                return {
-                    action: 'shutdown'
-                };
+            // if this newly come-up instance is the new master, save its instance id as the
+            // default password into settings because all other instance will sync password from
+            // the master there's a case if users never changed the master's password, when the
+            // master was torn-down, there will be no way to retrieve this original password.
+            // so in this case, should keep track of the update of default password.
+            if (this._selfInstance.InstanceId === masterInfo.InstanceId) {
+                await this.platform.setSettingItem('fortigate-default-password', {
+                    value: this._selfInstance.InstanceId,
+                    description: 'default password comes from the new elected master.'
+                });
             }
+            return '';
+        } else if (selfHealthCheck && selfHealthCheck.healthy && masterInfo) {
+            // for those already in monitor, if there's a healthy master instance, keep track of
+            // the master ip and notify the instanc with any change of the master ip.
+            // if no master present (due to errors in master election), keep what ever master ip
+            // it has, keep it in-sync without any notification for change in master ip.
+            let masterIp = masterInfo && masterHealthCheck && masterHealthCheck.healthy ?
+                masterInfo.PrivateIpAddress : selfHealthCheck.masterIp;
+            await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval, masterIp,
+                Date.now());
+            logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
+            `ip: ${this._selfInstance.PrivateIpAddress}) health check ` +
+            `(${selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
+            `heartBeatLossCount: ${selfHealthCheck.heartBeatLossCount}, ` +
+            `nextHeartBeatTime: ${selfHealthCheck.nextHeartBeatTime}` +
+            `syncState: ${selfHealthCheck.syncState}).`);
+            return selfHealthCheck.masterIp !== masterIp ? {
+                'master-ip': masterInfo.PrivateIpAddress
+            } : '';
+        } else {
+            // for unhealthy instances
+            // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script will stop
+            // keeping it in sync and stop doing any other logics for it any longer.
+            if (selfHealthCheck.inSync) {
+                // change its sync state to 'out of sync' by updating it state one last time
+                await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
+                    masterInfo ? masterInfo.PrivateIpAddress : null, Date.now(), true);
+                // terminate it from auto-scaling group
+                await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+            }
+            // for unhealthy instances, keep responding with action 'shutdown'
+            return {
+                action: 'shutdown'
+            };
         }
     }
 
@@ -1240,31 +1385,40 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async handleTerminatingInstanceHook(event) {
         logger.info('calling handleTerminatingInstanceHook');
-        let result;
+        let result, instanceId = event.detail.EC2InstanceId;
         // detach addtional nic
         result = await this.handleNicDetachment(event);
         if (result) {
-            let instanceId = event.detail.EC2InstanceId,
-                item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                AutoScaleCore.LifecycleItem.ACTION_NAME_TERMINATING_INSTANCE, false);
+            // force updating this instance sync state to 'out-of-sync' so the script can treat
+            // it as an unhealthy instance
+            let instance = this._selfInstance ||
+                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId }),
+                selfHealthCheck = await this.platform.getInstanceHealthCheck({
+                    instanceId: instance.InstanceId
+                }, 0);
+            await this.platform.updateInstanceHealthCheck(selfHealthCheck,
+                0, selfHealthCheck ? selfHealthCheck.masterIp : null, Date.now(), true);
             // check if master
             let masterInfo = await this.getMasterInfo();
             logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
-            logger.log(`lifecycle item: ${JSON.stringify(item)}`);
-            if (masterInfo && masterInfo.InstanceId === item.instanceId) {
+            if (masterInfo && masterInfo.InstanceId === instance.InstanceId) {
                 await this.deregisterMasterInstance(masterInfo);
             }
-            await this.platform.completeLifecycleAction(item, true);
-            await this.platform.cleanUpDbLifeCycleActions([item]);
-            // remove monitoring record
-            await this.removeInstanceFromMonitor(instanceId);
+            // complete its lifecycle
+            let lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_TERMINATING_INSTANCE, false);
+            logger.log(`lifecycle item: ${JSON.stringify(lifecycleItem)}`);
+            await this.platform.completeLifecycleAction(lifecycleItem, true);
+            await this.platform.cleanUpDbLifeCycleActions([lifecycleItem]);
             logger.info(`ForgiGate (instance id: ${instanceId}) is terminating, lifecyclehook(${
                 event.detail.LifecycleActionToken})`);
+        } else {
+            logger.warn(`cannot handle nic detachment for instance (id: ${instanceId})`);
         }
         return result;
     }
 
-    async addInstanceToMonitor(instance, nextHeartBeatTime) {
+    async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp = 'null') {
         logger.info('calling addInstanceToMonitor');
         var params = {
             Item: {
@@ -1273,7 +1427,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 autoScalingGroupName: process.env.AUTO_SCALING_GROUP_NAME,
                 nextHeartBeatTime: nextHeartBeatTime,
                 heartBeatLossCount: 0,
-                syncState: 'in-sync'
+                syncState: 'in-sync',
+                masterIp: masterIp
             },
             TableName: DB.AUTOSCALE.TableName
         };
@@ -1334,14 +1489,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 'Instance not found in VPC.');
         }
 
-        let promiseEmitter = this.checkMasterElection(),
+        let promiseEmitter = this.checkMasterElection.bind(this),
             validator = result => {
                 // if i am the master, don't wait, continue, if not, wait
                 if (result &&
                     result.PrivateIpAddress === this._selfInstance.PrivateIpAddress) {
                     return true;
                 } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+                    // master election not done, wait for a moment
+                    // clear the current master record cache and get a new one in the next call
                     this._masterRecord = null;
+                } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
+                    // master election done
+                    return true;
                 }
                 return false;
             },
@@ -1354,7 +1514,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             };
 
         try {
-            masterInfo = AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+            masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
         } catch (error) {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
@@ -1434,12 +1594,23 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 securityGroups.push(sgItem.GroupId);
             });
             let attachmentRecord =
-                await this.platform.getNicAttachmentRecord(this._selfInstance.InstanceId);
+                await this.platform.getNicAttachmentRecord(this._selfInstance.InstanceId),
+                subnetPairs = await this.loadSubnetPairs();
+            let subnetId = this._selfInstance.SubnetId; // set subnet by default
+            // find a paired subnet Id if there is one.
+            if (Array.isArray(subnetPairs) && subnetPairs.length > 0) {
+                let subnetPair = subnetPairs.filter(element => {
+                    return element.subnetId === subnetId;
+                });
+                if (subnetPair && subnetPair.length >= 0) {
+                    subnetId = subnetPair[0].pairId;
+                }
+            }
             if (!attachmentRecord) {
                 params = {
                     Description: description,
                     Groups: securityGroups,
-                    SubnetId: this._selfInstance.SubnetId
+                    SubnetId: subnetId
                 };
                 nic = await this.platform.createNetworkInterface(params);
                 if (!nic) {
@@ -1559,6 +1730,78 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
+    async checkAutoScalingGroupState() {
+        try {
+            logger.info('calling checkAutoScalingGroupState');
+            let state = 'in-service',
+                noScale = false,
+                instanceInService = false,
+                instanceTerminated = false,
+                instanceStateInTransition = false,
+                noInstance = false,
+                noNic = false;
+            let groupCheck = await this.platform.describeAutoScalingGroups(
+                process.env.AUTO_SCALING_GROUP_NAME
+            );
+            if (!groupCheck) {
+                throw new Error(`auto scaling group (${process.env.AUTO_SCALING_GROUP_NAME})` +
+                'not exist.');
+            }
+            // check if capacity set to (desired:0, minSize: 0, maxSize: any number)
+            if (groupCheck.DesiredCapacity === 0 && groupCheck.MinSize === 0) {
+                noScale = true;
+            }
+            instanceInService = true;
+            if (groupCheck.Instances && groupCheck.Instances.length === 0) {
+                instanceInService = false;
+                noInstance = true;
+            }
+            groupCheck.Instances.some(instance => {
+                if (instance.LifecycleState !== 'InService') {
+                    instanceInService = false;
+                }
+                if (instance.LifecycleState === 'Pending' ||
+                    instance.LifecycleState === 'Pending:Wait' ||
+                    instance.LifecycleState === 'Pending:Proceed' ||
+                    instance.LifecycleState === 'Terminating' ||
+                    instance.LifecycleState === 'Terminating:Wait' ||
+                    instance.LifecycleState === 'Terminating:Proceed' ||
+                    instance.LifecycleState === 'Detaching' ||
+                    instance.LifecycleState === 'EnteringStandby') {
+                    instanceStateInTransition = true;
+                }
+                if (instance.LifecycleState === 'Terminated') {
+                    instanceTerminated = true;
+                }
+            });
+            // check if all additional nics are detached and removed
+            let nicAttachmentCheck = await this.platform.listNicAttachmentRecord();
+            noNic = !nicAttachmentCheck || nicAttachmentCheck.length === 0;
+
+            // if any instance is in service, the group is in-service
+            if (instanceInService) {
+                state = 'in-service';
+            }
+            // if any instance is in transition, the group is in-transition
+            if (instanceStateInTransition) {
+                state = 'in-transition';
+            }
+            // if the group is not-scaled and all instances are terminated, the group is stopped
+            if (noScale && instanceTerminated) {
+                state = 'stopped';
+            }
+            // this is the fully stopped case
+            if (noScale && !instanceInService && noInstance && noNic) {
+                state = 'stopped';
+            }
+            logger.info(`called checkAutoScalingGroupState: state: ${state} `);
+            return state;
+        } catch (error) {
+            logger.error(error);
+            return null;
+        }
+    }
+
     async resetMasterElection() {
         logger.info('calling resetMasterElection');
         const params = {
@@ -1572,6 +1815,38 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } catch (error) {
             logger.info('called resetMasterElection. failed.', error);
             return false;
+        }
+    }
+
+    async cleanUpAdditionalNics() {
+        logger.info('calling cleanUpAdditionalNics');
+        // list all nics with tag: {key: 'FortiGateAutoScaleNicAttachment', value:
+        // `${custom_id}-NicAttachment-${unique_id}`}
+        let nics = await this.platform.listNetworkInterfaces({
+            Filters: [
+                {
+                    Name: 'tag:FortiGateAutoScaleNicAttachment',
+                    Values: [`${custom_id}-NicAttachment-${unique_id}`]
+                }
+            ]});
+        let tasks = [];
+        // delete them
+        if (Array.isArray(nics) && nics.length > 0) {
+            nics.forEach(element => {
+                tasks.push(this.platform.deleteNetworkInterface(
+                    {
+                        NetworkInterfaceId: element.NetworkInterfaceId
+                    }
+                ));
+            });
+            try {
+                await Promise.all(tasks);
+                logger.info('called cleanUpAdditionalNics. no error.');
+                return true;
+            } catch (error) {
+                logger.error('calling cleanUpAdditionalNics. error > ', error);
+                return false;
+            }
         }
     }
 

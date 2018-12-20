@@ -79,7 +79,7 @@
         },
         "ExpireLifecycleEntry": {
             "Type": "Number",
-            "Default": 300,
+            "Default": 400,
             "MinValue": 60,
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 60 and 3600.",

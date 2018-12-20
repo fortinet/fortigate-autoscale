@@ -557,6 +557,8 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     console.info('Making distribution zip package for: AWS Cloud Formation');
     // create the aws lambda pacakge (directory)
     let lambdaTempDir = await makeDistAWSLambdaFgtAsgHandler({saveToDist: 'none', keepTemp: true}),
+        nicAttachmentTempDir = await makeDistAWSLambdaNicAttachment(
+            {saveToDist: 'none', keepTemp: true}),
         rTempDir = await makeTempDir(), // create temp folder
         rTempDirCloudFormation = path.resolve(rTempDir, 'aws_cloudformation'),
         rTempDirFunctionPackages = path.resolve(rTempDirCloudFormation, 'functions', 'packages'),
@@ -582,13 +584,24 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     // create /functions/packages & source folder
     await makeDir(rTempDirFunctionPackages);
     await makeDir(rTempDirFunctionSources);
+
     // remove aws-quickstart unwanted files
     await remove(excludeList, lambdaTempDir);
     // zip the aws lambda
     zipFilePath = await zipSafe('asg-handler.zip', lambdaTempDir);
-    // move the lambda.zip to  into functions/packages/lambda.zip
+    // move the zip to functions/packages/
     await moveSafe(zipFilePath, rTempDirFunctionPackages);
-    // move the aws lambda source into functions/source
+    // move the source into functions/source/
+    await moveSafe(lambdaTempDir, rTempDirFunctionSources, {moveSourceFiles: true});
+
+    // nic attachment
+    // remove aws-quickstart unwanted files
+    await remove(excludeList, nicAttachmentTempDir);
+    // zip the aws lambda
+    zipFilePath = await zipSafe('nic-attachment.zip', nicAttachmentTempDir);
+    // move the zip to functions/packages/
+    await moveSafe(zipFilePath, rTempDirFunctionPackages);
+    // move the source into functions/source/
     await moveSafe(lambdaTempDir, rTempDirFunctionSources, {moveSourceFiles: true});
 
     if (options.fazhandler) {
