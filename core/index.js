@@ -9,6 +9,9 @@ const Logger = require('./logger');
 exports.LifecycleItem = require('./lifecycle-item');
 exports.CloudPlatform = require('./cloud-platform');
 exports.AutoscaleHandler = require('./autoscale-handler');
+const {VirtualMachine, NetworkInterface} = require('./virtual-machine');
+exports.VirtualMachine = VirtualMachine;
+exports.NetworkInterface = NetworkInterface;
 exports.settingItems = require('./setting-items');
 
 const uuidGenerator = inStr => uuidv5(inStr, uuidv5.URL);

@@ -246,6 +246,10 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    async getBlobFromStorage(parameters) {
+        await this.throwNotImplementedException();
+    }
+
     /**
      * return a platform-specific logger class
      */

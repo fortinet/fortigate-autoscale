@@ -91,9 +91,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    // unfortunately we can't link up the api gateway id during CFT stack creation as it
-    // would create a cycle. Grab it by looking up the rest api name passed as a parameter
-    async getCallbackEndpointUrl() {
+    /** @override */
+    async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
         let position,
             page;
         const
@@ -246,10 +245,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 TableName: DB.ELECTION.TableName,
                 Item: {
                     asgName: process.env.AUTO_SCALING_GROUP_NAME,
-                    ip: candidateInstance.PrivateIpAddress,
-                    instanceId: candidateInstance.InstanceId,
-                    vpcId: candidateInstance.VpcId,
-                    subnetId: candidateInstance.SubnetId,
+                    ip: candidateInstance.primaryPrivateIpAddress,
+                    instanceId: candidateInstance.instanceId,
+                    vpcId: candidateInstance.virtualNetworkId,
+                    subnetId: candidateInstance.subnetId,
                     voteState: voteState
                 }
             };
@@ -258,15 +257,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             }
             return !!await docClient.put(params).promise();
         } catch (error) {
-            console.warn('error occurs in putMasterRecord:', JSON.stringify(error));
+            logger.warn('error occurs in putMasterRecord:', JSON.stringify(error));
             return false;
         }
     }
 
-    /**
-     * Get the master record from db
-     * @returns {Object} Master record of the FortiGate which should be the auto-sync master
-     */
+    /** @override */
     async getMasterRecord() {
         const
             params = {
@@ -289,10 +285,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         return items[0];
     }
 
-    /**
-     * Remove the current master record from db.
-     * Abstract class method.
-     */
+    /** @override */
     async removeMasterRecord() {
         // only purge the master with a done votestate to avoid a
         // race condition
@@ -386,16 +379,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    /**
-     * update the instance health check result to DB.
-     * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
-     * getInstanceHealthCheck
-     * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
-     * @param {String} masterIp the current master ip in auto-scaling group
-     * @param {Number} checkPointTime the check point time of when the health check is performed.
-     * @param {bool} forceOutOfSync whether force to update this record as 'out-of-sync'
-     * @returns {bool} resul: true or false
-     */
+    /** @override */
     async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, masterIp, checkPointTime,
         forceOutOfSync = false) {
         if (!(healthCheckObject && healthCheckObject.instanceId)) {
@@ -433,12 +417,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    /**
-     * delete the instance health check monitoring record from DB.
-     * Abstract class method.
-     * @param {Object} instanceId the instanceId of instance
-     * @returns {bool} resul: true or false
-     */
+    /** @override */
     async deleteInstanceHealthCheck(instanceId) {
         try {
             let params = {
@@ -501,23 +480,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
         const result = await ec2.describeInstances(params).promise();
         logger.info(`called describeInstance, result: ${JSON.stringify(result)}`);
-        return result.Reservations[0] && result.Reservations[0].Instances[0];
-    }
-
-    async findInstanceIdByIp(localIp) {
-        if (!localIp) {
-            throw new Error('Cannot find instance by Ip because ip is invalid: ', localIp);
-        }
-        const params = {
-            Filters: [{
-                Name: 'private-ip-address',
-                Values: [localIp]
-            }]
-        };
-        const result = await ec2.describeInstances(params).promise();
-        logger.log(localIp, 'DescribeInstances', result);
-        const instance = result.Reservations[0] && result.Reservations[0].Instances[0];
-        return instance && instance.InstanceId;
+        return result.Reservations[0] && result.Reservations[0].Instances[0] &&
+            AutoScaleCore.VirtualMachine.fromAwsEc2(
+                result.Reservations[0] && result.Reservations[0].Instances[0]
+            );
     }
 
     /**
@@ -550,41 +516,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
             `interval(${interval}), status(${status})`);
         return { instanceId, interval, status };
-    }
-
-    async protectInstanceFromScaleIn(asgName, item, protect = true) {
-        const
-            MAX_TRIES = 10,
-            // Delay the attempt to setInstanceProtection because it takes around a second
-            // for autoscale to switch the instance to `InService` status.
-            PROTECT_DELAY = 2000;
-        let count = 0;
-        while (true) { // eslint-disable-line no-constant-condition
-            try {
-                await runAfter(PROTECT_DELAY, () => autoScaling.setInstanceProtection({
-                    AutoScalingGroupName: asgName,
-                    InstanceIds: [item.instanceId],
-                    ProtectedFromScaleIn: protect !== false
-                }).promise());
-                return true;
-            } catch (ex) {
-                if (/\bnot in InService\b/.test(ex.message) && count < MAX_TRIES) {
-                    ++count;
-                    logger.log(`${ex.message} while protecting ${item.instanceId}:
-                        (trying again ${count}/${MAX_TRIES})`);
-                } else {
-                    throw ex;
-                }
-            }
-        }
-
-        function runAfter(interval, callback) {
-            const precision = Math.max(0, 3 - Math.log10(interval / 100));
-            logger.log(`Delaying for ${(interval / 1000).toFixed(precision)}s > `,
-                callback.toString()
-                    .replace(/.*(?:function|=>)\s*(.*?)(?:[(\n]|$)(?:\n|.)*/, '$1'));
-            return new Promise(resolve => setTimeout(() => resolve(callback()), interval));
-        }
     }
 
     async createNetworkInterface(parameters) {
@@ -659,7 +590,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         try {
             let params = {
                 DeviceIndex: instance.NetworkInterfaces.length,
-                InstanceId: instance.InstanceId,
+                InstanceId: instance.instanceId,
                 NetworkInterfaceId: nic.NetworkInterfaceId
             };
             await ec2.attachNetworkInterface(params).promise();
@@ -678,7 +609,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`);
             return result.NetworkInterfaces[0].Attachment.AttachmentId;
         } catch (error) {
-            await this.deleteNicAttachmentRecord(instance.InstanceId, 'pending_attach');
+            await this.deleteNicAttachmentRecord(instance.instanceId, 'pending_attach');
             logger.warn(`called attachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
             return false;
         }
@@ -698,7 +629,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         });
         if (!attachedNic) {
             logger.warn(`nic(id: ${nic.NetworkInterfaceId}) is not attached to ` +
-                `instance(id: ${instance.InstanceId})`);
+                `instance(id: ${instance.instanceId})`);
             return false;
         }
         try {
@@ -822,12 +753,23 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         };
         return !!await docClient.put(params).promise();
     }
+
+    /** @override */
+    async getBlobFromStorage(parameters) {
+        let data = await s3.getObject({
+            Bucket: process.env.STACK_ASSETS_S3_BUCKET_NAME,
+            Key: path.join(process.env.STACK_ASSETS_S3_KEY_PREFIX, parameters.path,
+                parameters.configName)
+        }).promise();
+
+        return data && data.Body && data.Body.toString('ascii');
+    }
     // end of awsPlatform class
 }
 
 class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
-    constructor(platform = new AwsPlatform(), baseConfig = '') {
-        super(platform, baseConfig);
+    constructor() {
+        super(new AwsPlatform(), '');
         this._step = '';
         this._selfInstance = null;
         this._masterRecord = null;
@@ -840,6 +782,13 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return success;
     }
 
+    /**
+     *
+     * @param {AWS.ProxyIntegrationEvent} event Event from the api-gateway.
+     * @param {*} context
+     * @param {*} callback
+     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
+     */
     async handle(event, context, callback) {
         this._step = 'initializing';
         let proxyMethod = 'httpMethod' in event && event.httpMethod, result;
@@ -896,6 +845,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
         }
 
+        /**
+         *
+         * @param {*} statusCode
+         * @param {*} res
+         * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
+         */
         function proxyResponse(statusCode, res) {
             logger.log(`(${statusCode}) response body:`, res);
             const response = {
@@ -908,108 +863,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
     }
-
-    /**
-     * Submit an election vote for this ip address to become the master.
-     * @param {Object} candidateInstance instance of the FortiGate which wants to become the master
-     * @param {Object} purgeMasterRecord master record of the old master, if it's dead.
-     */
-    async putMasterElectionVote(candidateInstance, purgeMasterRecord = null) {
-        try {
-            logger.log('masterElectionVote, purge master?', JSON.stringify(purgeMasterRecord));
-            if (purgeMasterRecord) {
-                try {
-                    const purged = await this.purgeMaster();
-                    logger.log('purged: ', purged);
-                } catch (error) {
-                    logger.log('no master purge');
-                }
-            } else {
-                logger.log('no master purge');
-            }
-            return await this.platform.putMasterRecord(candidateInstance, 'pending', 'new');
-        } catch (ex) {
-            console.warn('exception while putMasterElectionVote',
-                JSON.stringify(candidateInstance), JSON.stringify(purgeMasterRecord), ex.stack);
-            return false;
-        }
-    }
-
-    async checkMasterElection() {
-        let masterInfo,
-            masterHealthCheck,
-            needElection = false,
-            purgeMaster = false,
-            electionLock = false,
-            electionComplete = false;
-
-        // is there a master election done?
-        // check the master record and its voteState
-        //
-        this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-        // if there's a complete election, get master health check
-        if (this._masterRecord && this._masterRecord.voteState === 'done') {
-        // get the current master info
-            masterInfo = await this.getMasterInfo();
-            // get current master heart beat record
-            if (masterInfo) {
-                masterHealthCheck =
-                await this.platform.getInstanceHealthCheck({
-                    instanceId: masterInfo.InstanceId
-                });
-            }
-            // if master is unhealthy, we need a new election
-            if (!masterHealthCheck || !masterHealthCheck.healthy || !masterHealthCheck.inSync) {
-                purgeMaster = needElection = true;
-            } else {
-                purgeMaster = needElection = false;
-            }
-        } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-        // if there's a pending master election, and if this election is incomplete by the end-time,
-        // purge this election and starta new master election. otherwise, wait until it's finished
-            needElection = purgeMaster = Date.now() > this._masterRecord.voteEndTime;
-        } else {
-        // if no master, try to hold a master election
-            needElection = true;
-            purgeMaster = false;
-        }
-        // if we need a new master, let's hold a master election!
-        if (needElection) {
-        // can I run the election? (diagram: anyone's holding master election?)
-        // try to put myself as the master candidate
-            electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);
-            if (electionLock) {
-            // yes, you run it!
-                logger.info(`This instance (id: ${this._selfInstance.InstanceId})` +
-                ' is running an election.');
-                try {
-                // (diagram: elect new master from queue (existing instances))
-                    electionComplete = await this.electMaster();
-                    logger.info(`Election completed: ${electionComplete}`);
-                    // (diagram: master exists?)
-                    masterInfo = electionComplete && await this.getMasterInfo();
-                } catch (error) {
-                    logger.error('Something went wrong in the master election.');
-                }
-            }
-        }
-        return Promise.resolve(masterInfo);
-    }
-
-    async electMaster() {
-        // return the current master record
-        return !!await this.platform.getMasterRecord();
-    }
-
-    async getConfigSetFromS3(configName) {
-        let data = await s3.getObject({
-            Bucket: process.env.STACK_ASSETS_S3_BUCKET_NAME,
-            Key: path.join(process.env.STACK_ASSETS_S3_KEY_PREFIX, 'configset', configName)
-        }).promise();
-
-        return data && data.Body && data.Body.toString('ascii');
-    }
-
     async getFazIp() {
         try {
             let keyValue = settingItems.FortiAnalyzerSettingItem.SETTING_KEY;
@@ -1035,11 +888,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
     }
+
     /**
      * @override
      */
     async getBaseConfig() {
-        let baseConfig = await this.getConfigSetFromS3('baseconfig');
+        let baseConfig = await this.getConfigSet('baseconfig');
         let psksecret = process.env.FORTIGATE_PSKSECRET,
             fazConfig = '',
             fazIp;
@@ -1053,12 +907,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     switch (name) {
                         // handle https routing policy
                         case 'httpsroutingpolicy':
-                            configContent += await this.getConfigSetFromS3('internalelbweb');
-                            configContent += await this.getConfigSetFromS3(name);
+                            configContent += await this.getConfigSet('internalelbweb');
+                            configContent += await this.getConfigSet(name);
                             break;
                         // handle fortianalyzer logging config
                         case 'storelogtofaz':
-                            fazConfig = await this.getConfigSetFromS3(name);
+                            fazConfig = await this.getConfigSet(name);
                             fazIp = await this.getFazIp();
                             configContent += fazConfig.replace(
                                 new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
@@ -1086,25 +940,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
         }
         return baseConfig;
-    }
-
-    // override
-    async getMasterConfig(callbackUrl) {
-        // no dollar sign in place holders
-        return await this._baseConfig.replace(/\{CALLBACK_URL}/, callbackUrl);
-    }
-
-    async getMasterInfo() {
-        logger.info('calling getMasterInfo');
-        let instanceId;
-        try {
-            this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            instanceId = this._masterRecord && this._masterRecord.instanceId;
-        } catch (ex) {
-            logger.error(ex);
-        }
-        return this._masterRecord && await this.platform.describeInstance(
-            { instanceId: instanceId });
     }
 
     /* ==== Sub-Handlers ==== */
@@ -1151,206 +986,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return result;
     }
 
-    /* eslint-disable max-len */
-    /**
-     * Handle the 'auto-scale synced' callback from the FortiGate.
-     * @param {AWS.ProxyIntegrationEvent} event Event from the api-gateway.
-     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
-     */
-    /* eslint-enable max-len */
-    async handleSyncedCallback(event) {
-        const { instanceId, interval, status } =
-            this.platform.extractRequestInfo(event),
-            statusSuccess = status && status === 'success' || false;
-        // if fortigate is sending callback in response to obtaining config, this is a state
-        // message
-        let parameters = {}, selfHealthCheck, masterHealthCheck, lifecycleShouldAbandon = false;
-
-        parameters.instanceId = instanceId;
-        // get selfinstance
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
-        // handle hb monitor
-        // get self health check
-        selfHealthCheck = selfHealthCheck || await this.platform.getInstanceHealthCheck({
-            instanceId: this._selfInstance.InstanceId
-        }, interval);
-        // if self is already out-of-sync, skip the monitoring logics
-        if (selfHealthCheck && !selfHealthCheck.inSync) {
-            return {};
-        }
-        // get master instance monitoring
-        let masterInfo = await this.getMasterInfo();
-        if (masterInfo) {
-            masterHealthCheck = await this.platform.getInstanceHealthCheck({
-                instanceId: masterInfo.InstanceId
-            }, interval);
-        }
-        // if this instance is the master, skip checking master election
-        if (masterInfo && this._selfInstance.InstanceId === masterInfo.InstanceId) {
-            // use master health check result as self health check result
-            selfHealthCheck = masterHealthCheck;
-        } else if (!(selfHealthCheck && selfHealthCheck.healthy)) {
-            // if this instance is unhealth, skip master election check
-
-        } else if (!(masterInfo && masterHealthCheck && masterHealthCheck.healthy)) {
-            // if no master or master is unhealthy, try to run a master election or check if a
-            // master election is running then wait for it to end
-            // promiseEmitter to handle the master election process by periodically check:
-            // 1. if there is a running election, then waits for its final
-            // 2. if there isn't a running election, then runs an election and complete it
-            let promiseEmitter = this.checkMasterElection.bind(this),
-                // validator set a condition to determine if the fgt needs to keep waiting or not.
-                validator = result => {
-                    // if i am the new master, don't wait, continue to finalize the election.
-                    // should return yes to end the waiting.
-                    if (result &&
-                        result.PrivateIpAddress === this._selfInstance.PrivateIpAddress) {
-                        return true;
-                    } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-                        // if i am not the new master, and the new master hasn't come up to
-                        // finalize the election, I should keep on waiting.
-                        // should return false to continue.
-                        this._masterRecord = null; // clear the master record cache
-                        return false;
-                    } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
-                        // if i am not the new master, and the master election is final, then no
-                        // need to wait.
-                        // should return true to end the waiting.
-                        return true;
-                    }
-                    // should return false to wait due to any other conditions
-                    return false;
-                },
-                // counter to set a time based condition to end this waiting. If script execution
-                // time is close to its timeout (6 seconds - abount 1 inteval + 1 second), ends the
-                // waiting to allow for the rest of logic to run
-                counter = currentCount => { // eslint-disable-line no-unused-vars
-                    if (Date.now() < scriptExecutionExpireTime - 6000) {
-                        return false;
-                    }
-                    logger.warn('script execution is about to expire');
-                    return true;
-                };
-
-            try {
-                masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
-                // after new master is elected, get the new master healthcheck
-                // there are two possible results here:
-                // 1. a new instance comes up and becomes the new master, master healthcheck won't
-                // exist yet because this instance isn't added to monitor.
-                //   1.1. in this case, the instance will be added to monitor.
-                // 2. an existing slave instance becomes the new master, master healthcheck exists
-                // because the instance in under monitoring.
-                //   2.1. in this case, the instance will take actions based on its healthcheck
-                //        result.
-                masterHealthCheck = await this.platform.getInstanceHealthCheck({
-                    instanceId: masterInfo.InstanceId
-                }, interval);
-            } catch (error) {
-                // if error occurs, check who is holding a master election, if it is this instance,
-                // terminates this election. then continue
-                this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-                if (this._masterRecord.instanceId === this._selfInstance.InstanceId) {
-                    await this.platform.removeMasterRecord();
-                }
-                await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
-                throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
-                    ' seconds. This instance is unable to bootstrap. Please report this to' +
-                    ' administrators.');
-            }
-        }
-
-        // check if myself is under health check monitoring
-        // (master instance itself may have got its healthcheck result in some code blocks above)
-        selfHealthCheck = selfHealthCheck || await this.platform.getInstanceHealthCheck({
-            instanceId: this._selfInstance.InstanceId
-        }, interval);
-
-        // if this instance is the master instance and the master record is still pending, finalize
-        // the master election only in these two condition:
-        // 1. this instance is under monitor and is healthy
-        // 2. this instance is new and sending a respond with 'status: success'
-        this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-        if (masterInfo && this._selfInstance.InstanceId === masterInfo.InstanceId &&
-        this._masterRecord && this._masterRecord.voteState === 'pending') {
-            if (selfHealthCheck && selfHealthCheck.healthy || !selfHealthCheck && statusSuccess) {
-                // if election couldn't be finalized, remove the current election so someone else
-                // could start another election
-                if (!await this.platform.finalizeMasterElection()) {
-                    await this.platform.removeMasterRecord();
-                    this._masterRecord = null;
-                    lifecycleShouldAbandon = true;
-                }
-            }
-        }
-
-        // the success status indicates that the instance acknowledges its config and starts to
-        // send heart beat regularly
-        // for those instance cannot send heart beat correctly, termination will be triggered by
-        // default when their lifecycle action expired.
-        // complete its lifecycle action in response to its call with 'status: success'
-        if (statusSuccess) {
-            await this.completeGetConfigLifecycleAction(this._selfInstance.InstanceId,
-                    statusSuccess && !lifecycleShouldAbandon);
-        }
-
-        // if no self healthcheck record found, this instance not under monitor. should make sure
-        // its all lifecycle actions are complete before starting to monitor it.
-        // for instance not yet in monitor and there's a master instance (regarless its health
-        // status), add this instance to monitor
-        if (!selfHealthCheck && masterInfo) {
-            await this.addInstanceToMonitor(this._selfInstance,
-                Date.now() + interval * 1000, masterInfo.PrivateIpAddress);
-            logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
-                `ip: ${this._selfInstance.PrivateIpAddress}) is added to monitor.`);
-            // if this newly come-up instance is the new master, save its instance id as the
-            // default password into settings because all other instance will sync password from
-            // the master there's a case if users never changed the master's password, when the
-            // master was torn-down, there will be no way to retrieve this original password.
-            // so in this case, should keep track of the update of default password.
-            if (this._selfInstance.InstanceId === masterInfo.InstanceId) {
-                await this.platform.setSettingItem('fortigate-default-password', {
-                    value: this._selfInstance.InstanceId,
-                    description: 'default password comes from the new elected master.'
-                });
-            }
-            return '';
-        } else if (selfHealthCheck && selfHealthCheck.healthy && masterInfo) {
-            // for those already in monitor, if there's a healthy master instance, keep track of
-            // the master ip and notify the instanc with any change of the master ip.
-            // if no master present (due to errors in master election), keep what ever master ip
-            // it has, keep it in-sync without any notification for change in master ip.
-            let masterIp = masterInfo && masterHealthCheck && masterHealthCheck.healthy ?
-                masterInfo.PrivateIpAddress : selfHealthCheck.masterIp;
-            await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval, masterIp,
-                Date.now());
-            logger.info(`instance (id:${this._selfInstance.InstanceId}, ` +
-            `ip: ${this._selfInstance.PrivateIpAddress}) health check ` +
-            `(${selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
-            `heartBeatLossCount: ${selfHealthCheck.heartBeatLossCount}, ` +
-            `nextHeartBeatTime: ${selfHealthCheck.nextHeartBeatTime}` +
-            `syncState: ${selfHealthCheck.syncState}).`);
-            return selfHealthCheck.masterIp !== masterIp ? {
-                'master-ip': masterInfo.PrivateIpAddress
-            } : '';
-        } else {
-            // for unhealthy instances
-            // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script will stop
-            // keeping it in sync and stop doing any other logics for it any longer.
-            if (selfHealthCheck.inSync) {
-                // change its sync state to 'out of sync' by updating it state one last time
-                await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
-                    masterInfo ? masterInfo.PrivateIpAddress : null, Date.now(), true);
-                // terminate it from auto-scaling group
-                await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
-            }
-            // for unhealthy instances, keep responding with action 'shutdown'
-            return {
-                action: 'shutdown'
-            };
-        }
-    }
-
     async completeGetConfigLifecycleAction(instanceId, success) {
         logger.info('calling completeGetConfigLifecycleAction');
         let items = await this.platform.getLifecycleItems(instanceId);
@@ -1394,14 +1029,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             let instance = this._selfInstance ||
                 await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId }),
                 selfHealthCheck = await this.platform.getInstanceHealthCheck({
-                    instanceId: instance.InstanceId
+                    instanceId: instance.instanceId
                 }, 0);
             await this.platform.updateInstanceHealthCheck(selfHealthCheck,
                 0, selfHealthCheck ? selfHealthCheck.masterIp : null, Date.now(), true);
             // check if master
             let masterInfo = await this.getMasterInfo();
             logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
-            if (masterInfo && masterInfo.InstanceId === instance.InstanceId) {
+            if (masterInfo && masterInfo.instanceId === instance.instanceId) {
                 await this.deregisterMasterInstance(masterInfo);
             }
             // complete its lifecycle
@@ -1422,8 +1057,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling addInstanceToMonitor');
         var params = {
             Item: {
-                instanceId: instance.InstanceId,
-                ip: instance.PrivateIpAddress,
+                instanceId: instance.instanceId,
+                ip: instance.primaryPrivateIpAddress,
                 autoScalingGroupName: process.env.AUTO_SCALING_GROUP_NAME,
                 nextHeartBeatTime: nextHeartBeatTime,
                 heartBeatLossCount: 0,
@@ -1453,7 +1088,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async terminateInstanceInAutoScalingGroup(instance) {
         logger.info('calling terminateInstanceInAutoScalingGroup');
         let params = {
-            InstanceId: instance.InstanceId,
+            InstanceId: instance.instanceId,
             ShouldDecrementDesiredCapacity: false
         };
         try {
@@ -1483,7 +1118,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // get instance object from platform
         this._selfInstance = this._selfInstance ||
             await this.platform.describeInstance({ instanceId: callingInstanceId });
-        if (!this._selfInstance || this._selfInstance.VpcId !== process.env.VPC_ID) {
+        if (!this._selfInstance || this._selfInstance.virtualNetworkId !== process.env.VPC_ID) {
             // not trusted
             throw new Error(`Unauthorized calling instance (instanceId: ${callingInstanceId}).` +
                 'Instance not found in VPC.');
@@ -1493,7 +1128,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             validator = result => {
                 // if i am the master, don't wait, continue, if not, wait
                 if (result &&
-                    result.PrivateIpAddress === this._selfInstance.PrivateIpAddress) {
+                    result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
                     return true;
                 } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
                     // master election not done, wait for a moment
@@ -1519,7 +1154,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            if (this._masterRecord.instanceId === this._selfInstance.InstanceId) {
+            if (this._masterRecord.instanceId === this._selfInstance.instanceId) {
                 await this.platform.removeMasterRecord();
             }
             await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
@@ -1529,51 +1164,27 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
         // the master ip same as mine? (diagram: master IP same as mine?)
-        if (masterInfo.PrivateIpAddress === this._selfInstance.PrivateIpAddress) {
+        if (masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
             config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl());
             logger.info('called handleGetConfig: returning master config' +
-                `(master-ip: ${masterInfo.PrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
 
             this._step = 'handler:getConfig:getSlaveConfig';
-            config = await this.getSlaveConfig(masterInfo.PrivateIpAddress,
+            config = await this.getSlaveConfig(masterInfo.primaryPrivateIpAddress,
                 await this.platform.getCallbackEndpointUrl());
             logger.info('called handleGetConfig: returning slave config' +
-                `(master-ip: ${masterInfo.PrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         }
     }
 
     /* ==== Utilities ==== */
 
-    findCallingInstanceIp(request) {
-        if (request.headers && request.headers['X-Forwarded-For']) {
-            logger.info(`called findCallingInstanceIp: Ip (${request.headers['X-Forwarded-For']})`);
-            return request.headers['X-Forwarded-For'];
-        } else if (request.requestContext && request.requestContext.identity &&
-            request.requestContext.identity.sourceIp) {
-            logger.info('called findCallingInstanceIp: ' +
-                `Ip (${request.requestContext.identity.sourceIp})`);
-            return request.requestContext.identity.sourceIp;
-        } else {
-            logger.error('called findCallingInstanceIp: instance Ip not found' +
-                `. original request: ${JSON.stringify(request)}`);
-            return null;
-        }
-    }
-
     getCallingInstanceId(request) {
         return this.platform.extractRequestInfo(request).instanceId;
-    }
-
-    async findCallingInstance(request) {
-        const localIp = this.findCallingInstanceIp(request);
-        if (!localIp) {
-            throw Error('X-Forwarded-For and requestContext do not contain the instance local ip');
-        }
-        return await this.platform.findInstanceIdByIp(localIp);
     }
 
     async handleNicAttachment(event) {
@@ -1587,16 +1198,16 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             this._selfInstance = this._selfInstance ||
                 await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
             // create a nic
-            let description = `Addtional nic for instance(id:${this._selfInstance.InstanceId}) ` +
+            let description = `Addtional nic for instance(id:${this._selfInstance.instanceId}) ` +
                 `in auto-scaling group: ${process.env.AUTO_SCALING_GROUP_NAME}`;
             let securityGroups = [];
             this._selfInstance.SecurityGroups.forEach(sgItem => {
                 securityGroups.push(sgItem.GroupId);
             });
             let attachmentRecord =
-                await this.platform.getNicAttachmentRecord(this._selfInstance.InstanceId),
+                await this.platform.getNicAttachmentRecord(this._selfInstance.instanceId),
                 subnetPairs = await this.loadSubnetPairs();
-            let subnetId = this._selfInstance.SubnetId; // set subnet by default
+            let subnetId = this._selfInstance.subnetId; // set subnet by default
             // find a paired subnet Id if there is one.
             if (Array.isArray(subnetPairs) && subnetPairs.length > 0) {
                 let subnetPair = subnetPairs.filter(element => {
@@ -1616,7 +1227,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 if (!nic) {
                     throw new Error('create network interface unsuccessfully.');
                 }
-                await this.platform.updateNicAttachmentRecord(this._selfInstance.InstanceId,
+                await this.platform.updateNicAttachmentRecord(this._selfInstance.instanceId,
                     nic.NetworkInterfaceId, 'pending_attach');
                 result = await this.platform.attachNetworkInterface(this._selfInstance, nic);
                 if (!result) {
@@ -1626,7 +1237,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     await this.platform.deleteNetworkInterface(params);
                     throw new Error('attach network interface unsuccessfully.');
                 }
-                await this.platform.updateNicAttachmentRecord(this._selfInstance.InstanceId,
+                await this.platform.updateNicAttachmentRecord(this._selfInstance.instanceId,
                     nic.NetworkInterfaceId, 'attached', 'pending_attach');
                 // reload the instance info
                 this._selfInstance =
@@ -1656,7 +1267,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             this._selfInstance = this._selfInstance ||
                 await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
             attachmentRecord =
-                await this.platform.getNicAttachmentRecord(this._selfInstance.InstanceId);
+                await this.platform.getNicAttachmentRecord(this._selfInstance.instanceId);
             if (attachmentRecord && attachmentRecord.attachmentState === 'attached') {
                 // get nic
                 nic = await this.platform.describeNetworkInterface({NetworkInterfaceIds: [
@@ -1680,7 +1291,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         { instanceId: event.detail.EC2InstanceId });
             } else if (!attachmentRecord) {
                 logger.info('no tracking record of network interface attached to instance ' +
-                `(id: ${this._selfInstance.InstanceId})`);
+                `(id: ${this._selfInstance.instanceId})`);
             } else {
                 logger.info(`instance (id: ${attachmentRecord.instanceId}) with nic ` +
                 `(id: ${attachmentRecord.nicId}) is not in in the 'attached' state ` +
@@ -1865,7 +1476,6 @@ function initModule() {
         region: process.env.AWS_REGION
     });
 
-    logger = new AutoScaleCore.DefaultLogger(console);
     exports.logger = logger;
 
     return exports;
@@ -1879,8 +1489,10 @@ function initModule() {
  */
 exports.handler = async (event, context, callback) => {
     scriptExecutionExpireTime = Date.now() + context.getRemainingTimeInMillis();
-    initModule();
+    logger = new AutoScaleCore.DefaultLogger(console);
     const handler = new AwsAutoscaleHandler();
+    handler.useLogger(logger);
+    initModule();
     await handler.handle(event, context, callback);
 };
 
