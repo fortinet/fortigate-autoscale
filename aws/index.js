@@ -36,8 +36,6 @@ const
     settingItems = AutoScaleCore.settingItems;
 
 let logger = new AutoScaleCore.DefaultLogger();
-// this variable is to store the anticipated script execution expire time (milliseconds)
-let scriptExecutionExpireTime;
 /**
  * Implements the CloudPlatform abstraction for the AWS api.
  */
@@ -244,7 +242,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let params = {
                 TableName: DB.ELECTION.TableName,
                 Item: {
-                    asgName: process.env.AUTO_SCALING_GROUP_NAME,
+                    asgName: this.masterScalingGroupName,
                     ip: candidateInstance.primaryPrivateIpAddress,
                     instanceId: candidateInstance.instanceId,
                     vpcId: candidateInstance.virtualNetworkId,
@@ -272,7 +270,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     '#PrimaryKeyName': 'asgName'
                 },
                 ExpressionAttributeValues: {
-                    ':primaryKeyValue': process.env.AUTO_SCALING_GROUP_NAME
+                    ':primaryKeyValue': this.masterScalingGroupName
                 }
             },
             response = await docClient.scan(params).promise(),
@@ -291,13 +289,13 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // race condition
         const params = {
             TableName: DB.ELECTION.TableName,
-            Key: { asgName: process.env.AUTO_SCALING_GROUP_NAME },
+            Key: { asgName: this.masterScalingGroupName },
             ConditionExpression: '#AsgName = :asgName',
             ExpressionAttributeNames: {
                 '#AsgName': 'asgName'
             },
             ExpressionAttributeValues: {
-                ':asgName': process.env.AUTO_SCALING_GROUP_NAME
+                ':asgName': this.masterScalingGroupName
             }
         };
         return await docClient.delete(params).promise();
@@ -764,6 +762,22 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
         return data && data.Body && data.Body.toString('ascii');
     }
+
+    async terminateInstanceInAutoScalingGroup(instance) {
+        logger.info('calling terminateInstanceInAutoScalingGroup');
+        let params = {
+            InstanceId: instance.instanceId,
+            ShouldDecrementDesiredCapacity: false
+        };
+        try {
+            let result = await autoScaling.terminateInstanceInAutoScalingGroup(params).promise();
+            logger.info('called terminateInstanceInAutoScalingGroup. done.', result);
+            return true;
+        } catch (error) {
+            logger.warn('called terminateInstanceInAutoScalingGroup. failed.', error);
+            return false;
+        }
+    }
     // end of awsPlatform class
 }
 
@@ -794,6 +808,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         let proxyMethod = 'httpMethod' in event && event.httpMethod, result;
         try {
             const platformInitSuccess = await this.init();
+            this.scalingGroupName = process.env.AUTO_SCALING_GROUP_NAME;
+            this.masterScalingGroupName = process.env.AUTO_SCALING_GROUP_NAME;
+            this.platform.setMasterScalingGroup(this.masterScalingGroupName);
+            this.platform.setScalingGroup(this.scalingGroupName);
             // enter instance termination process if cannot init for any reason
             if (!platformInitSuccess) {
                 result = 'fatal error, cannot initialize.';
@@ -1053,13 +1071,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return result;
     }
 
+    /** @override */
     async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp = 'null') {
         logger.info('calling addInstanceToMonitor');
         var params = {
             Item: {
                 instanceId: instance.instanceId,
                 ip: instance.primaryPrivateIpAddress,
-                autoScalingGroupName: process.env.AUTO_SCALING_GROUP_NAME,
+                autoScalingGroupName: this.masterScalingGroupName,
                 nextHeartBeatTime: nextHeartBeatTime,
                 heartBeatLossCount: 0,
                 syncState: 'in-sync',
@@ -1070,11 +1089,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await docClient.put(params).promise();
     }
 
-    async removeInstanceFromMonitor(instanceId) {
-        logger.info('calling removeInstanceFromMonitor');
-        return await this.platform.deleteInstanceHealthCheck(instanceId);
-    }
-
+    /** @override */
     async purgeMaster() {
         let result = await this.platform.removeMasterRecord();
         return !!result;
@@ -1083,22 +1098,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async deregisterMasterInstance(instance) {
         logger.info('calling deregisterMasterInstance', JSON.stringify(instance));
         return await this.purgeMaster();
-    }
-
-    async terminateInstanceInAutoScalingGroup(instance) {
-        logger.info('calling terminateInstanceInAutoScalingGroup');
-        let params = {
-            InstanceId: instance.instanceId,
-            ShouldDecrementDesiredCapacity: false
-        };
-        try {
-            let result = await autoScaling.terminateInstanceInAutoScalingGroup(params).promise();
-            logger.info('called terminateInstanceInAutoScalingGroup. done.', result);
-            return true;
-        } catch (error) {
-            logger.warn('called terminateInstanceInAutoScalingGroup. failed.', error);
-            return false;
-        }
     }
 
     /* eslint-disable max-len */
@@ -1141,7 +1140,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 return false;
             },
             counter = () => {
-                if (Date.now() < scriptExecutionExpireTime - 3000) {
+                if (Date.now() < process.env.SCRIPT_EXECUTION_EXPIRE_TIME - 3000) {
                     return false;
                 }
                 logger.warn('script execution is about to expire');
@@ -1157,7 +1156,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             if (this._masterRecord.instanceId === this._selfInstance.instanceId) {
                 await this.platform.removeMasterRecord();
             }
-            await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+            await this.removeInstance(this._selfInstance);
             throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
                 ' seconds. This instance is unable to bootstrap. Please report this to' +
                 ' administrators.');
@@ -1199,7 +1198,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
             // create a nic
             let description = `Addtional nic for instance(id:${this._selfInstance.instanceId}) ` +
-                `in auto-scaling group: ${process.env.AUTO_SCALING_GROUP_NAME}`;
+                `in auto-scaling group: ${this.masterScalingGroupName}`;
             let securityGroups = [];
             this._selfInstance.SecurityGroups.forEach(sgItem => {
                 securityGroups.push(sgItem.GroupId);
@@ -1320,7 +1319,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async updateCapacity(desiredCapacity, minSize, maxSize) {
         logger.info('calling updateCapacity');
         let params = {
-            AutoScalingGroupName: process.env.AUTO_SCALING_GROUP_NAME
+            AutoScalingGroupName: this.masterScalingGroupName
         };
         if (desiredCapacity !== null && !isNaN(desiredCapacity)) {
             params.DesiredCapacity = parseInt(desiredCapacity);
@@ -1352,10 +1351,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 noInstance = false,
                 noNic = false;
             let groupCheck = await this.platform.describeAutoScalingGroups(
-                process.env.AUTO_SCALING_GROUP_NAME
+                this.masterScalingGroupName
             );
             if (!groupCheck) {
-                throw new Error(`auto scaling group (${process.env.AUTO_SCALING_GROUP_NAME})` +
+                throw new Error(`auto scaling group (${this.masterScalingGroupName})` +
                 'not exist.');
             }
             // check if capacity set to (desired:0, minSize: 0, maxSize: any number)
@@ -1413,22 +1412,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    async resetMasterElection() {
-        logger.info('calling resetMasterElection');
-        const params = {
-            TableName: DB.ELECTION.TableName,
-            Key: { asgName: process.env.AUTO_SCALING_GROUP_NAME }
-        };
-        try {
-            await docClient.delete(params).promise();
-            logger.info('called resetMasterElection. done.');
-            return true;
-        } catch (error) {
-            logger.info('called resetMasterElection. failed.', error);
-            return false;
-        }
-    }
-
     async cleanUpAdditionalNics() {
         logger.info('calling cleanUpAdditionalNics');
         // list all nics with tag: {key: 'FortiGateAutoScaleNicAttachment', value:
@@ -1461,6 +1444,11 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
+    /** @override */
+    async removeInstance(instance) {
+        return await this.platform.terminateInstanceInAutoScalingGroup(instance);
+    }
+
     // end of AwsAutoscaleHandler class
 
 }
@@ -1488,7 +1476,7 @@ function initModule() {
  * @param {Function} callback a callback function been triggered by AWS Lambda mechanism
  */
 exports.handler = async (event, context, callback) => {
-    scriptExecutionExpireTime = Date.now() + context.getRemainingTimeInMillis();
+    process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + context.getRemainingTimeInMillis();
     logger = new AutoScaleCore.DefaultLogger(console);
     const handler = new AwsAutoscaleHandler();
     handler.useLogger(logger);

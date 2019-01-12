@@ -19,6 +19,14 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    setMasterScalingGroup(scalingGroupName) {
+        this.masterScalingGroupName = scalingGroupName;
+    }
+
+    setScalingGroup(scalingGroupName) {
+        this.scalingGroupName = scalingGroupName;
+    }
+
     /**
      * Submit an election vote for this ip address to become the master.
      * Abstract class method.
@@ -247,6 +255,10 @@ module.exports = class CloudPlatform {
     }
 
     async getBlobFromStorage(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    async terminateInstanceInAutoScalingGroup(instance) {
         await this.throwNotImplementedException();
     }
 
