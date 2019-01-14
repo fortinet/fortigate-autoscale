@@ -5,7 +5,8 @@ FortiGate Autoscale Azure Function (1.0.0-beta)
 Author: Fortinet
 */
 
-const FtgtAutoScaleAzure = require('fortigate-autoscale-azure');
+const ftgtAutoscaleAzure = require('fortigate-autoscale-azure');
+ftgtAutoscaleAzure.initModule();
 /**
  * Azure Function App Entry.
  * @param {Object} context Azure Function App runtime context
@@ -13,6 +14,5 @@ const FtgtAutoScaleAzure = require('fortigate-autoscale-azure');
  */
 module.exports = async function(context, req) {
     context.log(`Incoming request: ${JSON.stringify(req)}`);
-    await FtgtAutoScaleAzure.initModule();
-    await FtgtAutoScaleAzure.handle(context, req);
+    await ftgtAutoscaleAzure.handle(context, req);
 };

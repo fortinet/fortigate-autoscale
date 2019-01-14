@@ -14,7 +14,7 @@
     "url": "git+https://github.com/fortinet/fortigate-autoscale"
   },
   "dependencies": {
-    "fortigate-autoscale-azure": "file:lib/azure"
+    "fortigate-autoscale-azure": "file:../azure"
   },
   "devDependencies": {
     "eslint": "^5.4.0",

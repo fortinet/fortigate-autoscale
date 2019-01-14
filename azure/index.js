@@ -6,17 +6,27 @@ Author: Fortinet
 */
 
 exports = module.exports;
+const url = require('url');
 const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./azure-arm-client');
-const DATABASE_NAME = 'fortigateInstances';
-const DB_COLLECTION_MONITORED = 'instances';
-const DB_COLLECTION_MASTER = 'masterPool';
-const DB_COLLECTION_MUTEX = 'mutex';
-const ELECTION_WAITING_PERIOD = 60;// how many seconds to wait for an election before purging it?
-const SCRIPT_TIMEOUT = 300;// Azure script default timeout
-
+const azureStorage = require('azure-storage');
+const dbDefinitions = require('./db-definitions');
+const UNIQUE_ID = process.env.UNIQUE_ID.replace(/.*\//, '');
+const CUSTOM_ID = process.env.CUSTOM_ID.replace(/.*\//, '');
+const SUBSCRIPTION_ID = process.env.SUBSCRIPTION_ID;
+const RESOURCE_GROUP = process.env.RESOURCE_GROUP;
+const DATABASE_NAME = `${CUSTOM_ID ? `${CUSTOM_ID}-` : ''}` +
+    `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
+const SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT.replace(/.*\//, '') || 300;// Azure default
+const DB = dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
+const settingItems = AutoScaleCore.settingItems;
+
 var logger = new AutoScaleCore.DefaultLogger();
+var dbClient, computeClient;
+
+// this variable is to store the anticipated script execution expire time (milliseconds)
+let scriptExecutionExpireTime;
 
 class AzureLogger extends AutoScaleCore.DefaultLogger {
     constructor(loggerObject) {
@@ -31,32 +41,130 @@ class AzureLogger extends AutoScaleCore.DefaultLogger {
 
 class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async init() {
-        let _initDB = async function() {
-            return await armClient.CosmosDB.createDB(process.env.SCALESET_DB_ACCOUNT,
-                DATABASE_NAME, process.env.REST_API_MASTER_KEY)
-                .then(status => {
-                    if (status === true) {
-                        return Promise.all([
-                            // create instances
-                            armClient.CosmosDB.createCollection(
-                                process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
-                                DB_COLLECTION_MONITORED, process.env.REST_API_MASTER_KEY),
-                            armClient.CosmosDB.createCollection(
-                                process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
-                                DB_COLLECTION_MASTER, process.env.REST_API_MASTER_KEY),
-                            armClient.CosmosDB.createCollection(
-                                process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
-                                DB_COLLECTION_MUTEX, process.env.REST_API_MASTER_KEY)
-                        ]);
-                    } else {
-                        logger.info('DB exists. Skip creating collections.');
-                        return true;
+        let checkDatabaseAvailability = async function() {
+                try {
+                    let result = await dbClient.listDataBases();
+                    if (result && result.body && result.body.Databases &&
+                        Array.isArray(result.body.Databases)) {
+                        let arr = result.body.Databases.filter(element => {
+                            return element.id === DATABASE_NAME;
+                        });
+                        if (arr.length === 1) {
+                            logger.info('called checkDatabaseAvailability. DB ' +
+                            `(${DATABASE_NAME}) found.`);
+                            return true;
+                        } else {
+                            logger.info('called checkDatabaseAvailability. DB ' +
+                            `(${DATABASE_NAME}) not found.`);
+                            return false;
+                        }
                     }
+                } catch (error) {
+                    if (error.statusCode && error.statusCode === 404) {
+                        logger.info('called checkDatabaseAvailability. DB ' +
+                    `(${DATABASE_NAME}) not found.`);
+                        return false;
+                    } else {
+                        throw error;
+                    }
+                }
+
+            },
+            createDatabase = async function() {
+                // any error here is intended to be thrown but not caught in this function
+                let result = await dbClient.createDatabase(DATABASE_NAME);
+                if (result.statusCode === 201) {
+                    logger.info(`called provisionDatabase > DB ${DATABASE_NAME} created.`);
+                    return true;
+                } else if (result.statusCode === 409) {
+                    logger.info(`called provisionDatabase > DB ${DATABASE_NAME} already exists.`);
+                    return true;
+                } else {
+                    throw new Error('called provisionDatabase > ' +
+                    `unknown error:${JSON.stringify(result)}`);
+                }
+            },
+            checkCollectionsAvailability = async function(collections = []) {
+                if (!Array.isArray(collections) || collections.length === 0) {
+                    return [];
+                }
+                let result = await dbClient.listCollections(DATABASE_NAME);
+                let missingCollections = [];
+                if (result.body && result.body.DocumentCollections &&
+                    result.body.DocumentCollections.length >= 0) {
+                    let existingCollections = result.body.DocumentCollections.map(element => {
+                        return element.id;
+                    }
+                    );
+                    missingCollections = collections.filter(collectionName => {
+                        return !existingCollections.includes(collectionName);
+                    });
+                }
+                logger.info('called checkCollectionsAvailability.' +
+                `${missingCollections.length} collections missing.`);
+                return missingCollections;
+            },
+            createCollections = async function(collections) {
+                let collectionCreationPromises = [];
+                if (!Array.isArray(collections) || collections.length === 0) {
+                    return Promise.resolve(true);
+                }
+                var createCollection = async function(collectionName) {
+                    let result = await dbClient.createCollection(DATABASE_NAME, collectionName);
+                    if (result.statusCode === 201) {
+                        logger.info(`Collection (${collectionName}) created.`);
+                        return true;
+                    } else if (result.statusCode === 409) {
+                        logger.info(`Collection (${collectionName}) already exists.`);
+                        return true;
+                    } else {
+                        logger.info('Unknown response from API:', JSON.stringify(result));
+                        return false;
+                    }
+                };
+                collections.forEach(collectionName => {
+                    collectionCreationPromises.push(createCollection(collectionName));
                 });
-        };
+                try {
+                    await Promise.all(collectionCreationPromises);
+                    logger.info('called createCollections > successful.');
+                    return true;
+                } catch (error) {
+                    logger.info('called createCollections > error:', error);
+                    throw error;
+                }
+            },
+            initDB = async function() {
+                try {
+                    let available = await checkDatabaseAvailability();
+                    if (!available) {
+                        await createDatabase();
+                    }
+                    let collectionNames = Object.keys(DB).map(element => {
+                        return DB[element].TableName;
+                    });
+                    let missingCollections = await checkCollectionsAvailability(collectionNames);
+                    if (missingCollections.length > 0) {
+                        await createCollections(missingCollections);
+                    }
+                    return true;
+                } catch (error) {
+                    logger.error(error);
+                    logger.warn('some tables are missing, ' +
+                    'script enters instance termination process');
+                    return false;
+                }
+            },
+            initBlobStorage = async function() {
+                if (!(process.env.AZURE_STORAGE_ACCOUNT && process.env.AZURE_STORAGE_ACCESS_KEY)) {
+                    throw new Error('missing storage account and access key.');
+                }
+                return await Promise.resolve(true);
+            };
 
         await Promise.all([
-            _initDB(),
+            initBlobStorage(),
+            initDB(),
             armClient.authWithServicePrincipal(process.env.REST_APP_ID,
                 process.env.REST_APP_SECRET, process.env.TENANT_ID)]).catch(error => {
             throw error;
@@ -68,20 +176,6 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         return await fromContext ? fromContext.originalUrl : null;
     }
 
-    async getInstanceById(vmId) {
-        let parameters = {
-            resourceGroup: process.env.RESOURCE_GROUP,
-            scaleSetName: process.env.SCALESET_NAME
-        };
-        let virtualMachines = await this.listAllInstances(parameters);
-        for (let virtualMachine of virtualMachines) {
-            if (virtualMachine.properties.vmId === vmId) {
-                return virtualMachine;
-            }
-        }
-        return null;
-    }
-
     /**
      * Extract useful info from request event.
      * @param {Object} request the request event
@@ -90,8 +184,17 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     extractRequestInfo(request) {
         let instanceId = null,
             interval = 120,
-            status = null;
+            status = null,
+            scaleSetName = null;
         try {
+            // try to extract scale set name from api resource in url
+            // see https://nodejs.org/docs/latest/api/url.html#url_the_whatwg_url_api
+            scaleSetName = new url.URL(request.url).pathname.match('(?<=api/).*(?=/)?');
+            if (Array.isArray(scaleSetName) && scaleSetName.length > 0) {
+                scaleSetName = scaleSetName[0];
+            } else {
+                throw new Error(`unable to find a scaleset name from url:${request.url}`);
+            }
             // try to get instance id from headers
             if (request && request.headers && request.headers['fos-instance-id']) {
                 instanceId = request.headers['fos-instance-id'];
@@ -116,47 +219,73 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
         logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
         `interval(${interval}), status(${status})`);
-        return {instanceId, interval, status};
+        return {instanceId, interval, status, scaleSetName};
     }
 
-    async protectInstanceFromScaleIn(item, protect = true) {
-        return await Promise.reject(false && protect);
-    }
-
-    async listAllInstances(parameters) {
-        logger.info('calling listAllInstances');
-        let virtualMachines =
-            await armClient.Compute.VirtualMachineScaleSets.listVirtualMachines(
-                parameters.resourceGroup, parameters.scaleSetName);
-        logger.info('called listAllInstances');
-        return virtualMachines;
-    }
-
-    async describeInstance(parameters) {
-        logger.info('calling describeInstance');
-        let virtualMachine =
-            await armClient.Compute.VirtualMachineScaleSets.getVirtualMachine(
-                parameters.resourceGroup, parameters.scaleSetName,
-                parameters.virtualMachineId);
-        logger.info('called describeInstance');
-
-        return (function(vm) {
-            vm.getPrimaryPrivateIp = () => {
-                /* eslint-disable max-len */
-                for (let networkInterface of vm.properties.networkProfile.networkInterfaces) {
-                    if (networkInterface.properties.primary) {
-                        for (let ipConfiguration of networkInterface.properties.ipConfigurations) {
-                            if (ipConfiguration.properties.primary) {
-                                return ipConfiguration.properties.privateIPAddress;
-                            }
-                        }
-                    }
-                }
-                return null;
-                /* eslint-enable max-len */
+    /** @override */
+    async putMasterRecord(candidateInstance, voteState, method = 'new') {
+        try {
+            let document = {
+                id: this.masterScalingGroupName,
+                asgName: this.masterScalingGroupName,
+                ip: candidateInstance.primaryPrivateIpAddress,
+                instanceId: candidateInstance.instanceId,
+                vpcId: candidateInstance.virtualNetworkId,
+                subnetId: candidateInstance.subnetId,
+                voteState: voteState
             };
-            return vm;
-        })(virtualMachine);
+            return !!await dbClient.createDocument(DATABASE_NAME, DB.ELECTION.TableName,
+                document, method === 'replace');
+        } catch (error) {
+            logger.warn('error occurs in putMasterRecord:', JSON.stringify(error));
+            return false;
+        }
+    }
+
+    /**
+     * Get the master record from db
+     * @returns {Object} Master record of the FortiGate which should be the auto-sync master
+     */
+    async getMasterRecord() {
+        const keyExpression = {
+            name: 'asgName',
+            value: this.masterScalingGroupName
+        };
+        let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.ELECTION.TableName,
+            keyExpression);
+        if (!Array.isArray(items) || items.length === 0) {
+            logger.info('No elected master was found in the db!');
+            return null;
+        }
+        logger.info(`Elected master found: ${JSON.stringify(items[0])}`, JSON.stringify(items));
+        return items[0];
+    }
+
+    /** @override */
+    async removeMasterRecord() {
+        try {
+            return await dbClient.deleteDocument(DATABASE_NAME, DB.ELECTION.TableName,
+                this.masterScalingGroupName);
+        } catch (error) {
+            if (error.statusCode && error.statusCode === 404) {
+                return true; // ignore if the file to delete not exists.
+            }
+        }
+    }
+
+    async finalizeMasterElection() {
+        try {
+            logger.info('calling finalizeMasterElection');
+            let electedMaster = this._masterRecord || await this.getMasterRecord();
+            electedMaster.voteState = 'done';
+            let result = await dbClient.replaceDocument(DATABASE_NAME, DB.ELECTION.TableName,
+                electedMaster);
+            logger.info(`called finalizeMasterElection, result: ${JSON.stringify(result)}`);
+            return !!result;
+        } catch (error) {
+            logger.warn('called finalizeMasterElection, error:', error);
+            return false;
+        }
     }
 
     /**
@@ -166,543 +295,445 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
      */
     async getInstanceHealthCheck(instance, heartBeatInterval) {
         // TODO: not fully implemented in V3
-        if (!(instance && instance.vmId)) {
-            logger.error(`getInstanceHealthCheck > error: no vmId property found on instance: ${JSON.stringify(instance)}`); // eslint-disable-line max-len
+        if (!(instance && instance.instanceId)) {
+            logger.error('getInstanceHealthCheck > error: no instance id property found on ' +
+            `instance: ${JSON.stringify(instance)}`);
             return Promise.reject(`invalid instance: ${JSON.stringify(instance)}`);
         }
-        const queryObject = {
-            query: `SELECT * FROM ${DB_COLLECTION_MONITORED} c WHERE c.scaleSetName = @scaleSetName AND c.vmId = @vmId`, // eslint-disable-line max-len
-            parameters: [
-                {
-                    name: '@scaleSetName',
-                    value: `${process.env.SCALESET_NAME}`
-                },
-                {
-                    name: '@vmId',
-                    value: `${instance.vmId}`
-                }
-            ]
-        };
 
+        const keyExpression = {
+                name: 'asgName',
+                value: instance.asgName
+            }, filterExpression = [
+                {
+                    name: 'instanceId',
+                    value: instance.instanceId
+                }
+            ];
         try {
-            let docs = await armClient.CosmosDB.query(process.env.SCALESET_DB_ACCOUNT, {
-                dbName: DATABASE_NAME,
-                collectionName: DB_COLLECTION_MONITORED,
-                partitioned: true,
-                queryObject: queryObject
-            }, process.env.REST_API_MASTER_KEY);
-            if (Array.isArray(docs) && docs.length > 0) {
-                // always return healthy state (v3 implementation)
-                logger.info('called getInstanceHealthCheck');
-                return {
-                    healthy: !!heartBeatInterval, // TODO: need to implement logic here
-                    heartBeatLossCount: docs[0].heartBeatLossCount,
-                    nextHeartBeatTime: docs[0].nextHeartBeatTime
-                };
-            } else {
+            let compensatedScriptTime,
+                healthy,
+                heartBeatLossCount,
+                items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
+                keyExpression, filterExpression);
+            if (!Array.isArray(items) || items.length === 0) {
                 logger.info('called getInstanceHealthCheck: no record found');
                 return null;
             }
+            // to get a more accurate heart beat elapsed time, the script execution time so far
+            // is compensated.
+            compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
+            healthy = compensatedScriptTime < items[0].nextHeartBeatTime;
+            if (compensatedScriptTime < items[0].nextHeartBeatTime) {
+                // reset hb loss cound if instance sends hb within its interval
+                healthy = true;
+                heartBeatLossCount = 0;
+            } else {
+                // consider instance as health if hb loss < 3
+                healthy = items[0].heartBeatLossCount < 3;
+                heartBeatLossCount = items[0].heartBeatLossCount + 1;
+            }
+            logger.info('called getInstanceHealthCheck');
+            return {
+                instanceId: instance.instanceId,
+                healthy: healthy,
+                heartBeatLossCount: heartBeatLossCount,
+                nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
+                masterIp: items[0].masterIp,
+                syncState: items[0].syncState,
+                inSync: items[0].syncState === 'in-sync'
+            };
         } catch (error) {
-            logger.error(error);
-            logger.info('called getInstanceHealthCheck with error.');
+            logger.info('called getInstanceHealthCheck with error. ' +
+                `error: ${JSON.stringify(error)}`);
             return null;
         }
     }
+
+    /** @override */
+    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, masterIp, checkPointTime,
+        forceOutOfSync = false) {
+        if (!(healthCheckObject && healthCheckObject.instanceId)) {
+            logger.error('updateInstanceHealthCheck > error: no instanceId property found' +
+                ` on healthCheckObject: ${JSON.stringify(healthCheckObject)}`);
+            return Promise.reject('invalid healthCheckObject: ' +
+            `${JSON.stringify(healthCheckObject)}`);
+        }
+        try {
+            let result, document = {
+                id: `${this.scalingGroupName}-${healthCheckObject.instanceId}`,
+                asgName: this.scalingGroupName,
+                heartBeatLossCount: healthCheckObject.heartBeatLossCount,
+                nextHeartBeatTime: checkPointTime + heartBeatInterval * 1000,
+                masterIp: masterIp ? masterIp : 'null',
+                syncState: healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync'
+            };
+            if (!forceOutOfSync && healthCheckObject.syncState === 'out-of-sync') {
+                logger.info(`instance already out of sync: healthcheck info: ${healthCheckObject}`);
+                result = true;
+            } else {
+                result = await dbClient.replaceDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
+                    document);
+            }
+            logger.info('called updateInstanceHealthCheck');
+            return !!result;
+        } catch (error) {
+            logger.info('called updateInstanceHealthCheck with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    /** @override */
+    async deleteInstanceHealthCheck(instanceId) {
+        logger.warn('calling deleteInstanceHealthCheck');
+        try {
+            return !!await dbClient.deleteDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
+                `${this.scalingGroupName}-${instanceId}`);
+        } catch (error) {
+            logger.warn('called deleteInstanceHealthCheck. error:', error);
+            return false;
+        }
+    }
+
+    async describeInstance(parameters) {
+        logger.info('calling describeInstance');
+        let virtualMachine;
+        if (parameters.scaleSetName) {
+            // describe instance in vmss
+            virtualMachine = await computeClient.refVirtualMachineScaleSet(parameters.scaleSetName)
+            .getVirtualMachine(parameters.instanceId);
+        } else {
+            virtualMachine =
+            await computeClient.getVirtualMachine(
+                parameters.resourceGroup, parameters.scaleSetName,
+                parameters.virtualMachineId);
+        }
+        logger.info('called describeInstance');
+
+        return virtualMachine && AutoScaleCore.VirtualMachine.fromAzureVm(virtualMachine);
+    }
+
+    /** @override */
+    async getBlobFromStorage(parameters) {
+        // the blob service requires two process env variables:
+        // process.env.AZURE_STORAGE_ACCOUNT
+        // process.env.AZURE_STORAGE_ACCESS_KEY
+        let blobService = azureStorage.createBlobService();
+        return await new Promise((resolve, reject) => {
+            blobService.getBlobToText(parameters.path, parameters.fileName,
+            (error, text, result, response) => {
+                if (error) {
+                    reject(error);
+                } else if (response && response.statusCode === 200 || response.isSuccessful) {
+                    resolve(response.body);
+                } else {
+                    reject(response);
+                }
+            });
+        });
+    }
+
+    /** @override */
+    async getSettingItem(key) {
+        try {
+            const keyExpression = {
+                name: 'settingKey',
+                value: key
+            };
+            let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.SETTINGS.TableName,
+                keyExpression);
+            if (!Array.isArray(items) || items.length === 0) {
+                return null;
+            }
+            return JSON.parse(items[0].settingValue);
+        } catch (error) {
+            logger.warn(`called getSettingItem (key: ${key}) > error: `, error);
+            return null;
+        }
+    }
+
+    async setSettingItem(key, jsonValue) {
+        let document = {
+            id: key,
+            settingKey: key,
+            settingValue: JSON.stringify(jsonValue)
+        };
+        try {
+            return !!await dbClient.createDocument(DATABASE_NAME, DB.SETTINGS.TableName,
+                document, true);// create new or replace existing
+        } catch (error) {
+            logger.warn('called setSettingItem > error: ', error, 'setSettingItem:', document);
+            return false;
+        }
+    }
+
+    async terminateInstanceInAutoScalingGroup(instance) {
+        logger.info('calling terminateInstanceInAutoScalingGroup');
+        try {
+            let result = await computeClient.refVirtualMachineScaleSet(this.scalingGroupName)
+            .deleteInstances([instance.instanceId]);
+            logger.info('called terminateInstanceInAutoScalingGroup. done.', result);
+            return true;
+        } catch (error) {
+            logger.warn('called terminateInstanceInAutoScalingGroup. failed.', error);
+            return false;
+        }
+    }
+
+    // end of azurePlatform class
 }
 
 class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
-    constructor() {
-        const baseConfig = process.env.FTGT_BASE_CONFIG.replace(/\\n/g, '\n');
-        super(new AzurePlatform(), baseConfig);
+    constructor(myLogger = null) {
+        super(new AzurePlatform(), '', myLogger);
         this._electionLock = null;
         this._selfInstance = null;
     }
 
-    async handle(context, req) {
+    async handle(context, event) {
         // let x = require(require.resolve(`${process.cwd()}/azure-arm-client`));
         logger.info('start to handle autoscale');
-        let response;
+        let proxyMethod = 'method' in event && event.method,
+            result;
         try {
             await this.init();
-            // handle get config
-            response = await this._handleGetConfig(req);
-            logger.info(response);
-
-        } catch (error) {
-            if (error instanceof Error) {
-                response = error.message;
-            } else { response = JSON.stringify(error) }
-            context.log.error(response);
-        }
-        context.res = {
-            // status: 200, /* Defaults to 200 */
-            headers: {
-                'Content-Type': 'text/plain'
-            },
-            body: response
-        };
-    }
-
-    async _handleGetConfig(_request) {
-        logger.info('calling handleGetConfig');
-        let parameters,
-            masterInfo,
-            masterIsHealthy = false,
-            isNewInstance = false,
-            selfHealthCheck,
-            masterHealthCheck,
-            counter = 0,
-            nextTime,
-            getConfigTimeout,
-            virtualMachine;
-
-        let {instanceId, interval} = this.platform.extractRequestInfo(_request);
-
-        // verify the caller (diagram: trusted source?)
-        virtualMachine = await this.platform.getInstanceById(instanceId);
-        if (!virtualMachine) {
-            // not trusted
-            throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). Instance not found in scale set.`); // eslint-disable-line max-len
-        }
-
-        // describe self
-        parameters = {
-            resourceGroup: process.env.RESOURCE_GROUP,
-            scaleSetName: process.env.SCALESET_NAME,
-            virtualMachineId: virtualMachine.instanceId
-        };
-        this._selfInstance = await this.platform.describeInstance(parameters);
-
-        // is myself under health check monitoring?
-        // do self health check
-        selfHealthCheck = await this.platform.getInstanceHealthCheck({
-            vmId: this._selfInstance.properties.vmId
-        }, interval);
-        // not monitored instance?
-        if (!selfHealthCheck) {
-            isNewInstance = true;
-            // save self to monitored instances db (diagram: add instance to monitor)
-            await this.addInstanceToMonitor(this._selfInstance,
-                interval);
-        }
-
-        nextTime = Date.now();
-        getConfigTimeout = nextTime + SCRIPT_TIMEOUT * 1000; // unit ms
-
-        // (diagram: master exists?)
-        while (!masterIsHealthy && (nextTime < getConfigTimeout)) {
-            // get the current master
-            masterInfo = await this.getMasterInfo();
-
-            // is master healthy?
-            if (masterInfo) {
-                // self is master?
-                if (masterInfo.ip === this._selfInstance.getPrimaryPrivateIp()) {
-                    masterHealthCheck = selfHealthCheck;
-                } else {
-                    masterHealthCheck =
-                        await this.platform.getInstanceHealthCheck(masterInfo,
-                            interval);
+            this.scalingGroupName = await this.platform.extractRequestInfo(event).scaleSetName;
+            this.masterScalingGroupName = process.env.MASTER_SCALING_GROUP_NAME;
+            this.platform.setMasterScalingGroup(this.masterScalingGroupName);
+            this.platform.setScalingGroup(this.scalingGroupName);
+            if (proxyMethod === 'GET') {
+                // authenticate the calling instance
+                const instanceId = this.getCallingInstanceId(event);
+                if (!instanceId) {
+                    context.res = proxyResponse(403, 'Instance id not provided.');
+                    return;
                 }
-                masterIsHealthy = !!masterHealthCheck && masterHealthCheck.healthy;
-            }
-
-            // we need a new master! let's hold a master election!
-            if (!masterIsHealthy) {
-                // but can I run the election? (diagram: anyone's holding master election?)
-                this._electionLock = await this.AcquireMutex(DB_COLLECTION_MASTER);
-                if (this._electionLock) {
-                    // yes, you run it!
-                    logger.info('This thread is running an election.');
-                    try {
-                        // (diagram: elect new master from queue (existing instances))
-                        await this.completeMasterElection(
-                            this._selfInstance.getPrimaryPrivateIp());
-                        logger.info('Election completed.');
-                    } catch (error) {
-                        logger.error('Something went wrong in the master election.');
-                    } finally {
-                        // release the lock, let someone else run the election.
-                        await this.releaseMutex(DB_COLLECTION_MASTER, this._electionLock);
-                        this._electionLock = null;
-                    }
-                    // (diagram: master exists?)
-                    masterInfo = await this.getMasterInfo();
-                } else {
-                    logger.info(`Wait for master election (counter: ${++counter}, time:${Date.now()})`); // eslint-disable-line max-len
+                // handle get config
+                result = await this.handleGetConfig(event);
+                context.res = proxyResponse(200, result);
+            } else if (proxyMethod === 'POST') {
+                // authenticate the calling instance
+                const instanceId = this.getCallingInstanceId(event);
+                if (!instanceId) {
+                    context.res = proxyResponse(403, 'Instance id not provided.');
+                    return;
                 }
-            }
-            nextTime = Date.now();
-            masterIsHealthy = !!masterInfo;
-            if (!masterIsHealthy) {
-                await AutoScaleCore.sleep(5000); // (diagram: wait for a moment (interval))
-            }
-        }
-
-        // exit with error if script can't get election done within script timeout
-        if (nextTime >= getConfigTimeout) {
-            // cannot bootstrap due to master election failure.
-            // (diagram: remove instance)
-            await this.removeInstance({
-                vmId: this._selfInstance.properties.vmId
-            });
-            throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
-            ' seconds. This instance is unable to bootstrap. Please report this to' +
-            ' administrators.');
-        }
-
-        // (diagram: am I a new instance?)
-        // I am under monitor, please verify my periodic health check!
-        if (!isNewInstance) {
-            // if still healthy or unhealthy records are less than
-            // process.env.HEARTBEAT_LOSS_COUNT, can claim healthy again
-            // (diagram: heartbeats lost previously? & diagram: loss acceptable?)
-            if (selfHealthCheck.healthy ||
-                (!selfHealthCheck.healthy &&
-                    selfHealthCheck.heartBeatLossCount <
-                    process.env.HEART_BEAT_LOSS_COUNT)) {
-                // may long live! (diagram: Mark instance healthy)
-                await this.updateInstanceToMonitor({
-                    vmId: this._selfInstance.properties.vmId
-                });
-            } else { // cannot claim healthy any more, start a new life in heaven.
-                // (diagram: remove instance)
-                await this.removeInstance({
-                    vmId: this._selfInstance.properties.vmId
-                });
-            }
-        }
-        // the master ip same as mine? (diagram: master IP same as mine?)
-        if (masterInfo.ip === this._selfInstance.getPrimaryPrivateIp()) {
-            // am I a new instance? (diagram: am I new instance?)
-            if (isNewInstance) {
-                logger.info(`called handleGetConfig: returning master config(master-ip: ${masterInfo.ip})`); // eslint-disable-line max-len
-                return await this.getMasterConfig(
-                    await this.platform.getCallbackEndpointUrl(_request));
-            } else {
-                logger.info(`called handleGetConfig: respond to master heartbeat(master-ip: ${masterInfo.ip})`); // eslint-disable-line max-len
-                return this.responseToHeartBeat(masterInfo.ip);
-            }
-        } else {
-            // am I a new instance? (diagram: am I new instance?)
-            if (isNewInstance) {
-                logger.info(`called handleGetConfig: returning slave config(master-ip: ${masterInfo.ip})`); // eslint-disable-line max-len
-                return await this.getSlaveConfig(masterInfo.ip,
-                    await this.platform.getCallbackEndpointUrl(_request));
-            } else {
-                logger.info(`called handleGetConfig: respond to slave heartbeat(master-ip: ${masterInfo.ip})`); // eslint-disable-line max-len
-                return this.responseToHeartBeat(masterInfo.ip);
-            }
-        }
-    }
-
-    async completeMasterElection(ip) { // eslint-disable-line no-unused-vars
-        // list all election candidates
-        let parameters = {
-            resourceGroup: process.env.RESOURCE_GROUP,
-            scaleSetName: process.env.SCALESET_NAME
-        };
-        let virtualMachine, candidate, candidates = [];
-        let [virtualMachines, moniteredInstances] = await Promise.all([
-            this.platform.listAllInstances(parameters),
-            this.listMonitoredInstances()
-        ]);
-        for (virtualMachine of virtualMachines) {
-            // if candidate is monitored, and it is in the healthy state
-            // put in in the candidate pool
-            if (moniteredInstances[virtualMachine.instanceId] !== undefined) {
-                let healthCheck = await this.platform.getInstanceHealthCheck(
-                    moniteredInstances[virtualMachine.instanceId], -1
-                );
-                if (healthCheck.healthy &&
-                    virtualMachine.properties.provisioningState === 'Succeeded') {
-                    candidates.push(virtualMachine);
-                }
-            }
-        }
-
-        let instanceId = 0,
-            master = null;
-        let promiseAllArray = [],
-            candidateDescribingFunc = async _candidate => {
-                let _parameters = {
-                    resourceGroup: process.env.RESOURCE_GROUP,
-                    scaleSetName: process.env.SCALESET_NAME,
-                    virtualMachineId: _candidate.instanceId
-                };
-                return await this.platform.describeInstance(_parameters);
-            };
-        if (candidates.length > 0) {
-            // choose the one with smaller instanceId
-            for (candidate of candidates) {
-                if (instanceId === 0 || candidate.instanceId < instanceId) {
-                    instanceId = candidate.instanceId;
-                    master = candidate;
-                }
-                promiseAllArray.push((candidateDescribingFunc)(candidate));
-            }
-
-            if (promiseAllArray.length > 0) {
-                candidates = await Promise.all(promiseAllArray);
-            }
-            // monitor all candidates
-            promiseAllArray = [];
-            for (candidate of candidates) {
-                promiseAllArray.push((this.addInstanceToMonitor)(candidate));
-            }
-            await Promise.all(promiseAllArray);
-        }
-
-        if (master) {
-            parameters = {
-                resourceGroup: process.env.RESOURCE_GROUP,
-                scaleSetName: process.env.SCALESET_NAME,
-                virtualMachineId: instanceId
-            };
-            virtualMachine = await this.platform.describeInstance(parameters);
-            return await this.updateMaster(virtualMachine);
-        } else {
-            return Promise.reject('No instance available for master.');
-        }
-    }
-
-    async updateMaster(instance) {
-        logger.info('calling updateMaster');
-        let documentContent = {
-            master: 'master',
-            ip: instance.getPrimaryPrivateIp(),
-            instanceId: instance.instanceId,
-            vmId: instance.properties.vmId
-        };
-
-        let documentId = `${process.env.SCALESET_NAME}-master`,
-            replaced = true;
-        try {
-            let doc = await armClient.CosmosDB.createDocument(process.env.SCALESET_DB_ACCOUNT,
-                DATABASE_NAME, DB_COLLECTION_MASTER, documentId, documentContent, replaced,
-                process.env.REST_API_MASTER_KEY);
-            if (doc) {
-                logger.info(`called updateMaster: master(id:${documentContent.instanceId}, ip: ${documentContent.ip}) updated.`); // eslint-disable-line max-len
-                return true;
-            } else {
-                logger.error(`called updateMaster: master(id:${documentContent.instanceId}, ip: ${documentContent.ip}) not updated.`); // eslint-disable-line max-len
-                return false;
-            }
-        } catch (error) {
-            logger.error(`updateMaster > error: ${error}`);
-            return false;
-        }
-    }
-
-    async addInstanceToMonitor(instance, nextHeartBeatTime) {
-        logger.info('calling addInstanceToMonitor');
-        let documentContent = {
-            ip: instance.getPrimaryPrivateIp(),
-            instanceId: instance.instanceId,
-            vmId: instance.properties.vmId,
-            scaleSetName: process.env.SCALESET_NAME,
-            nextHeartBeatTime: nextHeartBeatTime,
-            heartBeatLossCount: 0
-        };
-
-        let documentId = instance.properties.vmId,
-            replaced = true;
-        try {
-            let doc = await armClient.CosmosDB.createDocument(process.env.SCALESET_DB_ACCOUNT,
-                DATABASE_NAME, DB_COLLECTION_MONITORED, documentId, documentContent, replaced,
-                process.env.REST_API_MASTER_KEY);
-            if (doc) {
-                logger.info(`called addInstanceToMonitor: ${documentId} monitored.`);
-                return true;
-            } else {
-                logger.error(`called addInstanceToMonitor: ${documentId} not monitored.`);
-                return false;
-            }
-        } catch (error) {
-            logger.error(`addInstanceToMonitor > error: ${error}`);
-            return false;
-        }
-    }
-
-    async listMonitoredInstances() {
-        const queryObject = {
-            query: `SELECT * FROM ${DB_COLLECTION_MONITORED} c WHERE c.scaleSetName = @scaleSetName`, // eslint-disable-line max-len
-            parameters: [
-                {
-                    name: '@scaleSetName',
-                    value: `${process.env.SCALESET_NAME}`
-                }
-            ]
-        };
-
-        try {
-            let instances = {},
-                docs = await armClient.CosmosDB.query(
-                    process.env.SCALESET_DB_ACCOUNT, {
-                        dbName: DATABASE_NAME,
-                        collectionName: DB_COLLECTION_MONITORED,
-                        partitioned: true,
-                        queryObject: queryObject
-                    }, process.env.REST_API_MASTER_KEY);
-            if (Array.isArray(docs)) {
-                docs.forEach(doc => {
-                    instances[doc.instanceId] = doc;
-                });
-            }
-            return instances;
-        } catch (error) {
-            logger.error(error);
-        }
-        return null;
-    }
-
-    async getMasterInfo() {
-        const queryObject = {
-            query: `SELECT * FROM ${DB_COLLECTION_MASTER} c WHERE c.id = @id`,
-            parameters: [
-                {
-                    name: '@id',
-                    value: `${process.env.SCALESET_NAME}-master`
-                }
-            ]
-        };
-
-        try {
-            let docs = await armClient.CosmosDB.query(process.env.SCALESET_DB_ACCOUNT, {
-                dbName: DATABASE_NAME,
-                collectionName: DB_COLLECTION_MASTER,
-                partitioned: true,
-                queryObject: queryObject
-            }, process.env.REST_API_MASTER_KEY);
-            if (docs.length > 0) {
-                return docs[0];
-            } else {
-                return null;
+                result = await this.handleSyncedCallback(event);
+                context.res = proxyResponse(200, result);
             }
         } catch (error) {
             logger.error(error);
+            context.res = proxyResponse(500, error);
         }
-        return null;
-    }
 
-    async AcquireMutex(collectionName) {
-        let _electionLock = null,
-            _purge = false,
-            _now = Math.floor(Date.now() / 1000);
-        let _getMutex = async function() {
-            const queryObject = {
-                query: `SELECT * FROM ${DB_COLLECTION_MUTEX} c WHERE c.collectionName = @collectionName`, // eslint-disable-line max-len
-                parameters: [
-                    {
-                        name: '@collectionName',
-                        value: `${collectionName}`
-                    }
-                ]
+        function proxyResponse(statusCode, res) {
+            logger.log(`(${statusCode}) response body:`, res);
+            return {
+                status: statusCode, /* Defaults to 200 */
+                headers: {
+                    'Content-Type': 'text/plain'
+                },
+                body: JSON.stringify(res)
             };
-
-            try {
-                let docs = await armClient.CosmosDB.query(process.env.SCALESET_DB_ACCOUNT, {
-                    dbName: DATABASE_NAME,
-                    collectionName: DB_COLLECTION_MUTEX,
-                    partitioned: true,
-                    queryObject: queryObject
-                }, process.env.REST_API_MASTER_KEY);
-                _electionLock = docs[0];
-            } catch (error) {
-                _electionLock = null;
-                logger.error(error);
-            }
-            return _electionLock;
-        };
-
-        let _createMutex = async function(purge) {
-            logger.info('calling _createMutex');
-            let documentContent = {
-                servingStatus: 'activated',
-                collectionName: collectionName,
-                acquireLocalTime: _now
-            };
-
-            let documentId =
-                AutoScaleCore.uuidGenerator(JSON.stringify(documentContent) +
-                    AutoScaleCore.moduleRuntimeId()),
-                replaced = false;
-            try {
-                if (purge && _electionLock) {
-                    await armClient.CosmosDB.deleteDocument(process.env.SCALESET_DB_ACCOUNT,
-                        DATABASE_NAME, DB_COLLECTION_MUTEX, _electionLock.id,
-                        process.env.REST_API_MASTER_KEY);
-                    logger.info(`mutex(id: ${_electionLock.id}) was purged.`);
-                }
-                let doc = await armClient.CosmosDB.createDocument(
-                    process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME,
-                    DB_COLLECTION_MUTEX, documentId, documentContent, replaced,
-                    process.env.REST_API_MASTER_KEY);
-                if (doc) {
-                    _electionLock = doc;
-                    logger.info(`called _createMutex: mutex(${collectionName}) created.`);
-                    return true;
-                } else {
-                    logger.warn(`called _createMutex: mutex(${collectionName}) not created.`);
-                    return true;
-                }
-            } catch (error) {
-                logger.error(`_createMutex > error: ${error}`);
-                return false;
-            }
-        };
-
-        await _getMutex();
-        // mutex should last no more than a certain waiting period
-        // (Azure function default timeout is 5 minutes)
-        if (_electionLock && _now - _electionLock.acquireLocalTime > ELECTION_WAITING_PERIOD) {
-            // purge the dead mutex
-            _purge = true;
-        }
-        // no mutex?
-        if (!_electionLock || _purge) {
-            // create one
-            let created = await _createMutex(_purge);
-            if (!created) {
-                throw new Error(`Error in acquiring mutex(${collectionName})`);
-            }
-            return _electionLock;
-        } else {
-            return null;
-        }
-    }
-
-    async releaseMutex(collectionName, mutex) {
-        logger.info(`calling releaseMutex: mutex(${collectionName}, ${mutex.id}).`);
-        let documentId = mutex.id;
-        try {
-            let deleted =
-                await armClient.CosmosDB.deleteDocument(
-                    process.env.SCALESET_DB_ACCOUNT, DATABASE_NAME, DB_COLLECTION_MUTEX,
-                    documentId, process.env.REST_API_MASTER_KEY);
-            if (deleted) {
-                logger.info(`called releaseMutex: mutex(${collectionName}) released.`);
-                return true;
-            } else {
-                logger.warn(`called releaseMutex: mutex(${collectionName}) not found.`);
-                return true;
-            }
-        } catch (error) {
-            logger.info(`releaseMutex > error: ${error}`);
-            return false;
         }
     }
 
     /**
-     *
-     * @param {Ojbect} instance the instance to update. minimum required
-     *      properties {vmId: <string>}
+     * @override
      */
-    async updateInstanceToMonitor(instance) { // eslint-disable-line no-unused-vars
-        // TODO: will not implement instance updating in V3
-        // always return true
+    async getBaseConfig() {
+        let baseConfig = await this.getConfigSet('baseconfig');
+        let psksecret = process.env.FORTIGATE_PSKSECRET,
+            fazConfig = '',
+            fazIp;
+        if (baseConfig) {
+            // check if other config set are required
+            let requiredConfigSet = process.env.REQUIRED_CONFIG_SET.split(',');
+            let configContent = '';
+            for (let configset of requiredConfigSet) {
+                let [name, selected] = configset.trim().split('-');
+                if (selected.toLowerCase() === 'yes') {
+                    switch (name) {
+                        // handle https routing policy
+                        case 'httpsroutingpolicy':
+                            configContent += await this.getConfigSet('internalelbweb');
+                            configContent += await this.getConfigSet(name);
+                            break;
+                        // handle fortianalyzer logging config
+                        case 'storelogtofaz':
+                            fazConfig = await this.getConfigSet(name);
+                            fazIp = await this.getFazIp();
+                            configContent += fazConfig.replace(
+                                new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+            baseConfig += configContent;
+
+            baseConfig = baseConfig
+                .replace(new RegExp('{SYNC_INTERFACE}', 'gm'),
+                    process.env.FORTIGATE_SYNC_INTERFACE ?
+                        process.env.FORTIGATE_SYNC_INTERFACE : 'port1')
+                .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')
+                .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
+                .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
+                .replace(new RegExp('{TRAFFIC_PORT}', 'gm'),
+                    process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
+                .replace(new RegExp('{ADMIN_PORT}', 'gm'),
+                    process.env.FORTIGATE_ADMIN_PORT ? process.env.FORTIGATE_ADMIN_PORT : 8443)
+                .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
+                    process.env.FORTIGATE_INTERNAL_ELB_DNS ?
+                        process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
+        }
+        return baseConfig;
+    }
+
+    /** @override */
+    // eslint-disable-next-line no-unused-vars
+    async completeGetConfigLifecycleAction(instanceId, success) {
+        // this method is required in a core method: handleSyncedCallback()
+        // so need to implement it for any platform. However, life cycle handling not required in
+        // Azure platform so this method simply returns a true
         return await Promise.resolve(true);
+    }
+
+    async handleGetConfig(event) {
+        logger.info('calling handleGetConfig');
+        let config,
+            masterInfo;
+
+        let instanceId = this.platform.extractRequestInfo(event).instanceId;
+
+        // verify the caller (diagram: trusted source?)
+        // get instance object from platform
+        this._selfInstance = this._selfInstance ||
+            await this.platform.describeInstance({
+                instanceId: instanceId,
+                scaleSetName: this.scalingGroupName
+            });
+        if (!this._selfInstance) {
+            // not trusted
+            throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). ` +
+            'Instance not found in scale set.');
+        }
+        // let result = await this.checkMasterElection();
+        let promiseEmitter = this.checkMasterElection.bind(this),
+            validator = result => {
+            // if i am the master, don't wait, continue, if not, wait
+                if (result &&
+                result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
+                    return true;
+                } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+                // master election not done, wait for a moment
+                // clear the current master record cache and get a new one in the next call
+                    this._masterRecord = null;
+                } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
+                // master election done
+                    return true;
+                }
+                return false;
+            },
+            counter = () => {
+                if (Date.now() < scriptExecutionExpireTime - 3000) {
+                    return false;
+                }
+                logger.warn('script execution is about to expire');
+                return true;
+            };
+
+        try {
+            masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+        } catch (error) {
+            // if error occurs, check who is holding a master election, if it is this instance,
+            // terminates this election. then tear down this instance whether it's master or not.
+            this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+            if (this._masterRecord.instanceId === this._selfInstance.InstanceId) {
+                await this.platform.removeMasterRecord();
+            }
+            await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+            throw new Error('Failed to determine the master instance within script timeout. ' +
+            'This instance is unable to bootstrap. Please report this to administrators.');
+        }
+
+        // the master ip same as mine? (diagram: master IP same as mine?)
+        if (masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
+            this._step = 'handler:getConfig:getMasterConfig';
+            // must pass the event to getCallbackEndpointUrl. this is different from the
+            // implementation for AWS
+            config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl(event));
+            logger.info('called handleGetConfig: returning master config' +
+                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
+            return config;
+        } else {
+            this._step = 'handler:getConfig:getSlaveConfig';
+            config = await this.getSlaveConfig(masterInfo.primaryPrivateIpAddress,
+                await this.platform.getCallbackEndpointUrl(event));
+            logger.info('called handleGetConfig: returning slave config' +
+                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
+            return config;
+        }
+    }
+
+    getCallingInstanceId(request) {
+        return this.platform.extractRequestInfo(request).instanceId;
+    }
+
+    /** @override */
+    async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp = 'null') {
+        logger.info('calling addInstanceToMonitor');
+        let document = {
+            id: `${this.scalingGroupName}-${instance.instanceId}`,
+            ip: instance.primaryPrivateIpAddress,
+            instanceId: instance.instanceId,
+            asgName: this.scalingGroupName,
+            nextHeartBeatTime: nextHeartBeatTime,
+            heartBeatLossCount: 0,
+            syncState: 'in-sync',
+            masterIp: masterIp
+        };
+
+        try {
+            let doc = await dbClient.createDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
+                document);
+            if (doc) {
+                logger.info(`called addInstanceToMonitor: ${document.id} monitored.`);
+                return true;
+            } else {
+                logger.error(`called addInstanceToMonitor: ${document.id} not monitored.`);
+                return false;
+            }
+        } catch (error) {
+            logger.error('addInstanceToMonitor > error', error);
+            return false;
+        }
+    }
+
+    /** @override */
+    async purgeMaster() {
+        let result = await this.platform.removeMasterRecord();
+        return !!result;
+    }
+
+    /**
+     * @override
+     */
+    async getMasterInfo() {
+        logger.info('calling getMasterInfo');
+        let instanceId;
+        try {
+            this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+            instanceId = this._masterRecord && this._masterRecord.instanceId;
+        } catch (ex) {
+            logger.error(ex);
+        }
+        return this._masterRecord && await this.platform.describeInstance(
+            { instanceId: instanceId,
+                scaleSetName: this._masterRecord.asgName
+            });
     }
 
     /**
@@ -710,11 +741,18 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      * @param {Object} instance the instance to remove. minimum required
      *      properties{vmId: <string>}
      */
-    async removeInstance(instance) { // eslint-disable-line no-unused-vars
-        // TODO: will not implement instance removal in V3
-        // always return true
-        return await Promise.resolve(true);
+    async removeInstance(instance) {
+        try {
+            await this.platform.terminateInstanceInAutoScalingGroup(instance);
+            await this.removeInstanceFromMonitor(instance.instanceId);
+            return true;
+        } catch (error) {
+            logger.error('called removeInstance > error:', error);
+            return false;
+        }
     }
+
+    // end of AzureAutoscaleHandler class
 }
 
 exports.AutoScaleCore = AutoScaleCore; // get a reference to the core
@@ -724,22 +762,40 @@ exports.AzureAutoscaleHandler = AzureAutoscaleHandler;
 /**
  * Initialize the module to be able to run via the 'handle' function.
  * Otherwise, this module only exposes some classes.
+ * @returns {Object} exports
  */
-exports.initModule = async () => {
-    /**
-     * expose the module runtime id
-     * @returns {String} a unique id.
-     */
-    exports.moduleRuntimeId = () => moduleId;
-    /**
-     * Handle the auto-scaling
-     * @param {Object} context the Azure function app runtime context.
-     * @param {*} req the request object to the Azure function app.
-     */
-    exports.handle = async (context, req) => {
-        logger = new AzureLogger(context.log);
-        const handler = new AzureAutoscaleHandler();
-        return await handler.handle(context, req);
-    };
-    return await exports;
+function initModule() {
+    process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT = Date.now();
+    dbClient = new armClient.CosmosDB.ApiClient(process.env.SCALESET_DB_ACCOUNT,
+        process.env.REST_API_MASTER_KEY);
+    computeClient = new armClient.Compute.ApiClient(SUBSCRIPTION_ID, RESOURCE_GROUP);
+    return exports;
+}
+
+/**
+ * Handle the auto-scaling
+ * @param {Object} context the Azure function app runtime context.
+ * @param {*} req the request object to the Azure function app.
+ */
+exports.handle = async (context, req) => {
+    // no way to get dynamic timeout time from runtime env so have to defined one in process env
+    scriptExecutionExpireTime = Date.now() + SCRIPT_TIMEOUT * 1000;
+    logger = new AzureLogger(context.log);
+    const handler = new AzureAutoscaleHandler();
+    handler.useLogger(logger);
+    initModule();
+    return await handler.handle(context, req);
 };
+
+/**
+ * expose the module runtime id
+ * @returns {String} a unique id.
+ */
+exports.moduleRuntimeId = () => moduleId;
+exports.initModule = initModule;
+exports.AutoScaleCore = AutoScaleCore; // get a reference to the core
+exports.AzurePlatform = AzurePlatform;
+exports.AzureAutoscaleHandler = AzureAutoscaleHandler;
+exports.dbDefinitions = dbDefinitions;
+exports.settingItems = settingItems;
+exports.logger = logger;

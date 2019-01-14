@@ -63,7 +63,7 @@ module.exports = class AutoscaleHandler {
         try {
             const parameters = {
                 path: 'configset',
-                configName: configName
+                fileName: configName
             };
             return await this.platform.getBlobFromStorage(parameters);
         } catch (error) {
@@ -166,7 +166,7 @@ module.exports = class AutoscaleHandler {
             this.scalingGroupName === this.masterScalingGroupName) {
             // use master health check result as self health check result
             selfHealthCheck = masterHealthCheck;
-        } else if (!(selfHealthCheck && selfHealthCheck.healthy)) {
+        } else if (selfHealthCheck && !selfHealthCheck.healthy) {
             // if this instance is unhealth, skip master election check
 
         } else if (!(masterInfo && masterHealthCheck && masterHealthCheck.healthy)) {
@@ -319,7 +319,7 @@ module.exports = class AutoscaleHandler {
             // for unhealthy instances
             // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script will stop
             // keeping it in sync and stop doing any other logics for it any longer.
-            if (selfHealthCheck.inSync) {
+            if (selfHealthCheck && selfHealthCheck.inSync) {
                 // change its sync state to 'out of sync' by updating it state one last time
                 await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
                     masterInfo ? masterInfo.primaryPrivateIpAddress : null, Date.now(), true);
@@ -414,7 +414,10 @@ module.exports = class AutoscaleHandler {
             purgeMaster = false;
         }
         // if we need a new master, let's hold a master election!
-        if (needElection) {
+        // 2019/01/14 add support for cross-scaling groups election
+        // only instance comes from the masterScalingGroup can start an election
+        // all other instances have to wait
+        if (needElection && this.scalingGroupName === this.masterScalingGroupName) {
         // can I run the election? (diagram: anyone's holding master election?)
         // try to put myself as the master candidate
             electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);

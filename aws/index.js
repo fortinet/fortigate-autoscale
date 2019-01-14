@@ -806,13 +806,15 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return success;
     }
 
+    /* eslint-disable max-len */
     /**
      *
      * @param {AWS.ProxyIntegrationEvent} event Event from the api-gateway.
-     * @param {*} context
-     * @param {*} callback
-     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
+     * @param {*} context the runtime context of this function call from AWS Lambda service
+     * @param {*} callback the callback url from AWS Lambda service
+     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      */
+    /* eslint-enable max-len */
     async handle(event, context, callback) {
         this._step = 'initializing';
         let proxyMethod = 'httpMethod' in event && event.httpMethod, result;
@@ -873,12 +875,15 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
         }
 
+        /* eslint-disable max-len */
         /**
-         *
-         * @param {*} statusCode
-         * @param {*} res
-         * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
+         * Proxy the response to AWS API Gateway call
+         * @param {Number} statusCode status code for the HTTP resonse
+         * @param {String | Object} res the response body
+         * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+         * @return {Object} the response to AWS API Gateway call
          */
+        /* eslint-enable max-len */
         function proxyResponse(statusCode, res) {
             logger.log(`(${statusCode}) response body:`, res);
             const response = {
@@ -1115,8 +1120,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 await this.platform.removeMasterRecord();
             }
             await this.removeInstance(this._selfInstance);
-            throw new Error(`Failed to determine the master instance within ${SCRIPT_TIMEOUT}` +
-                ' seconds. This instance is unable to bootstrap. Please report this to' +
+            throw new Error('Failed to determine the master instance. This instance is unable' +
+            ' to bootstrap. Please report this to' +
                 ' administrators.');
         }
 
