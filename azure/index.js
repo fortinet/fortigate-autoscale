@@ -11,13 +11,14 @@ const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./azure-arm-client');
 const azureStorage = require('azure-storage');
 const dbDefinitions = require('./db-definitions');
-const UNIQUE_ID = process.env.UNIQUE_ID.replace(/.*\//, '');
-const CUSTOM_ID = process.env.CUSTOM_ID.replace(/.*\//, '');
+const UNIQUE_ID = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '';
+const CUSTOM_ID = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '';
 const SUBSCRIPTION_ID = process.env.SUBSCRIPTION_ID;
 const RESOURCE_GROUP = process.env.RESOURCE_GROUP;
 const DATABASE_NAME = `${CUSTOM_ID ? `${CUSTOM_ID}-` : ''}` +
     `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
-const SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT.replace(/.*\//, '') || 300;// Azure default
+const SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ?
+    process.env.SCRIPT_TIMEOUT.replace(/.*\//, '') : 300;// Azure function default timeout
 const DB = dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
@@ -189,9 +190,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         try {
             // try to extract scale set name from api resource in url
             // see https://nodejs.org/docs/latest/api/url.html#url_the_whatwg_url_api
-            scaleSetName = new url.URL(request.url).pathname.match('(?<=api/).*(?=/)?');
-            if (Array.isArray(scaleSetName) && scaleSetName.length > 0) {
-                scaleSetName = scaleSetName[0];
+            let endpoint = new url.URL(request.url).pathname.match('(?<=api/).*(?=/)?');
+            if (Array.isArray(endpoint) && endpoint.length > 0) {
+                scaleSetName = endpoint[0] === 'byol-asg-handler' ?
+                process.env.SCALING_GROUP_NAME_BYOL : process.env.SCALING_GROUP_NAME_PAYG;
             } else {
                 throw new Error(`unable to find a scaleset name from url:${request.url}`);
             }
@@ -491,6 +493,17 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         this._selfInstance = null;
     }
 
+    proxyResponse(statusCode, res) {
+        logger.log(`(${statusCode}) response body:`, res);
+        return {
+            status: statusCode, /* Defaults to 200 */
+            headers: {
+                'Content-Type': 'text/plain'
+            },
+            body: JSON.stringify(res)
+        };
+    }
+
     async handle(context, event) {
         // let x = require(require.resolve(`${process.cwd()}/azure-arm-client`));
         logger.info('start to handle autoscale');
@@ -506,36 +519,25 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 // authenticate the calling instance
                 const instanceId = this.getCallingInstanceId(event);
                 if (!instanceId) {
-                    context.res = proxyResponse(403, 'Instance id not provided.');
+                    context.res = this.proxyResponse(403, 'Instance id not provided.');
                     return;
                 }
                 // handle get config
                 result = await this.handleGetConfig(event);
-                context.res = proxyResponse(200, result);
+                context.res = this.proxyResponse(200, result);
             } else if (proxyMethod === 'POST') {
                 // authenticate the calling instance
                 const instanceId = this.getCallingInstanceId(event);
                 if (!instanceId) {
-                    context.res = proxyResponse(403, 'Instance id not provided.');
+                    context.res = this.proxyResponse(403, 'Instance id not provided.');
                     return;
                 }
                 result = await this.handleSyncedCallback(event);
-                context.res = proxyResponse(200, result);
+                context.res = this.proxyResponse(200, result);
             }
         } catch (error) {
             logger.error(error);
-            context.res = proxyResponse(500, error);
-        }
-
-        function proxyResponse(statusCode, res) {
-            logger.log(`(${statusCode}) response body:`, res);
-            return {
-                status: statusCode, /* Defaults to 200 */
-                headers: {
-                    'Content-Type': 'text/plain'
-                },
-                body: JSON.stringify(res)
-            };
+            context.res = this.proxyResponse(500, error);
         }
     }
 
@@ -752,6 +754,15 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
+    async handleGetLicense(context, event) {
+        // TODO: this function is for Poc only for now
+        let licenseFile = await this.platform.getBlobFromStorage({
+            path: 'fgt-asg-license',
+            fileName: 'test-license'
+        });
+        context.res = this.proxyResponse(200, licenseFile);
+    }
+
     // end of AzureAutoscaleHandler class
 }
 
@@ -785,6 +796,16 @@ exports.handle = async (context, req) => {
     handler.useLogger(logger);
     initModule();
     return await handler.handle(context, req);
+};
+
+exports.handleGetLicense = async (context, req) => {
+    // no way to get dynamic timeout time from runtime env so have to defined one in process env
+    scriptExecutionExpireTime = Date.now() + SCRIPT_TIMEOUT * 1000;
+    logger = new AzureLogger(context.log);
+    const handler = new AzureAutoscaleHandler();
+    handler.useLogger(logger);
+    initModule();
+    return await handler.handleGetLicense(context, req);
 };
 
 /**

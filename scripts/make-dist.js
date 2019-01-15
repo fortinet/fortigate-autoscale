@@ -11,7 +11,7 @@ const REAL_PROJECT_DIRNAME = path.parse(path.resolve(__dirname, '../')).base;
 let _tempDir;
 
 function runCmd(cmd, args = [], cwd = process.cwd(), options) {
-    let output = '';
+    let output = '', errout = '';
     return new Promise((resolve, reject) => {
         console.log(`run command:${cmd} ${args.join(' ')} on dir: ${cwd}`);
         let cproc = spawn(cmd, args, { cwd: cwd, shell: process.env.shell});
@@ -24,23 +24,27 @@ function runCmd(cmd, args = [], cwd = process.cwd(), options) {
         });
 
         cproc.stderr.on('data', function(data) {
-            if (options && !options.supressError) {
-                console.log(`stderr: ${data}`);
-            } else {
-                reject(data);
+            data = data.toString();
+            errout += data;
+            if (options && options.supressError) {
+                console.warn(`stderr: ${data.trim()}`);
             }
         });
 
         cproc.on('error', err => {
-            if (options && !options.supressError) {
-                console.log(`error : ${err}`);
+            if (options && options.supressError) {
+                console.error(`error : ${err}`);
             } else {
                 reject(err);
             }
         });
 
         cproc.on('close', function() {
-            resolve(output);
+            if (errout && options && !options.supressError) {
+                reject(errout.trim());
+            } else {
+                resolve(output.trim());
+            }
         });
     }).catch(error => {
         // TODO: npm install can generate warning. how to handle warnings here?
@@ -236,6 +240,64 @@ async function zipSafe(fileName, src, excludeList = [], options = {}) {
     return path.resolve(des, fileName);
 }
 
+async function npmInstallLocal(location, args = [], options = {}, cachePath = null,
+pacache = {}) {
+    let dependencies = [];
+    let packageInfo = readPackageJsonAt(location);
+    if (packageInfo.name) {
+        let pathInfo = path.parse(path.resolve(location)),
+            packPath = path.join(pathInfo.dir, pathInfo.ext ? '' : pathInfo.base);
+        Object.assign(options, {
+            supressError: true
+        });
+        // parse each dependency
+        if (packageInfo && packageInfo.dependencies) {
+            dependencies = Object.keys(packageInfo.dependencies);
+            while (dependencies.length > 0) {
+                let depKey = dependencies.shift();
+                let depPath = packageInfo.dependencies[depKey].match('(?<=file:).*');
+                // should install from a local package
+                // recursively check if the local package depends on any other local package or not
+                if (depPath && Array.isArray(depPath) && depPath.length > 0) {
+                    depPath = depPath[0];
+                    // ignore if it's already in the package cache list
+                    if (pacache.hasOwnProperty(depKey)) {
+                        continue;
+                    }
+                    pacache[depKey] = null;
+                    pacache = await npmInstallLocal(path.resolve(packPath, depPath),
+                        args, options, cachePath, pacache);
+                }
+            }
+        }
+        let pKeys = Object.keys(pacache), packageInfoUpdated = false;
+        if (packageInfo.dependencies) {
+            Object.keys(packageInfo.dependencies).forEach(key => {
+                if (pKeys.includes(key)) {
+                    packageInfo.dependencies[key] = path.relative(location, pacache[key]);
+                    packageInfoUpdated = true;
+                }
+            });
+            if (packageInfoUpdated) {
+                fs.writeFileSync(path.resolve(location, 'package.json'),
+                    JSON.stringify(packageInfo, null, 4));
+            }
+        }
+        options.noSymlink = false;
+        await npmInstallAt(location, args, options);
+        let packageFileName = await runCmd('npm', ['pack'].concat(args), packPath, options);
+        moveSafe(path.resolve(packPath, packageFileName), cachePath);
+        if (pacache.hasOwnProperty(packageInfo.name)) {
+            pacache[packageInfo.name] = path.resolve(cachePath, packageFileName);
+            console.log(pacache[packageInfo.name]);
+        }
+        return pacache;
+
+    } else {
+        return false;
+    }
+}
+
 async function npmInstallAt(location, args = [], options = {}) {
     let packageInfo = readPackageJsonAt(location);
     if (packageInfo.name) {
@@ -244,9 +306,7 @@ async function npmInstallAt(location, args = [], options = {}) {
         Object.assign(options, {
             supressError: true
         });
-        return await runCmd('npm', ['install'].concat(args), packPath, {
-            supressError: true
-        });
+        return await runCmd('npm', ['install'].concat(args), packPath, options);
     } else {
         return false;
     }
@@ -657,7 +717,8 @@ async function makeDistAzureFuncApp() {
     await makeDir(rDirDist);
     // copy funcapp module to temp dir
     await copyAndDelete(rDirSrcFuncapp, rTempDirSrcFuncApp, ['node_modules', 'local', 'test',
-        '.nyc_output', '.vscode', 'host.json', 'local.settings.json', 'package-lock.json']);
+        '.nyc_output', '.vscode', 'bin', 'obj',
+        '*.csproj', 'proxies.json', 'host.json', 'local.settings.json', 'package-lock.json']);
     // create library dir on funcapp
     await makeDir(rTempDirSrcLib);
     // copy core module to temp dir and remove unnecessary files
@@ -667,8 +728,11 @@ async function makeDistAzureFuncApp() {
     await copyAndDelete(rDirSrcAzure, rTempDirSrcAzure,
         ['node_modules', 'local', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
     // install azure as dependency
+
+    // await npmInstallLocal(rTempDirSrcFuncApp,
+    //     [], {noSymlink: true}, rTempDirSrcLib);
     await npmInstallAt(rTempDirSrcFuncApp,
-        ['--save', rTempDirSrcAzure.replace(rTempDirSrcFuncApp, '.')]);
+        ['--save', rTempDirSrcAzure.replace(rTempDirSrcFuncApp, '.')], {noSymlink: true});
     // read package info of module funcapp
     packageInfo = readPackageJsonAt(rTempDirSrcFuncApp);
     zipFileName = `${packageInfo.name}.zip`;
