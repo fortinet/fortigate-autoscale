@@ -30,7 +30,7 @@ const
     s3 = new AWS.S3(),
     unique_id = process.env.UNIQUE_ID.replace(/.*\//, ''),
     custom_id = process.env.CUSTOM_ID.replace(/.*\//, ''),
-    SCRIPT_TIMEOUT = 300,
+    SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
     DB = dbDefinitions.getTables(custom_id, unique_id),
     moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems;
@@ -247,6 +247,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     instanceId: candidateInstance.instanceId,
                     vpcId: candidateInstance.virtualNetworkId,
                     subnetId: candidateInstance.subnetId,
+                    voteEndTime: Date.now() + (SCRIPT_TIMEOUT - 1) * 1000,
                     voteState: voteState
                 }
             };
