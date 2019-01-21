@@ -12,9 +12,11 @@ config system auto-scale
 end
 
 config sys interface
-edit {INTERNAL_INTERFACE}
-set mode dhcp
-next
+    edit "port2"
+        set mode dhcp
+        set defaultgw disable
+        set allowaccess ping https ssh http fgfm
+    next
 end
 
 config system global

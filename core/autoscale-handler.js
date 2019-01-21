@@ -293,31 +293,10 @@ module.exports = class AutoscaleHandler {
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
             matches = [
                 /set\s+sync-interface\s+(.+)/.exec(autoScaleSection),
-                /set\s+psksecret\s+(.+)/.exec(autoScaleSection),
-                /set\s+admin-sport\s+(.+)/.exec(autoScaleSection)
+                /set\s+psksecret\s+(.+)/.exec(autoScaleSection)
             ];
-        const [syncInterface, pskSecret, adminPort] = matches.map(m => m && m[1]),
-            apiEndpoint = callbackUrl,
-            config = `
-                        config system auto-scale
-                            set status enable
-                            set sync-interface ${syncInterface ? syncInterface : 'port1'}
-                            set role slave
-                            set master-ip ${masterIp}
-                            set callback-url ${apiEndpoint}
-                            set psksecret ${pskSecret}
-                        end
-                        config system dns
-                            unset primary
-                            unset secondary
-                        end
-                        config system global
-                            set admin-console-timeout 300
-                        end
-                        config system global
-                            set admin-sport ${adminPort ? adminPort : '8443'}
-                        end
-                    `;
+        const [syncInterface, pskSecret] = matches.map(m => m && m[1]),
+            apiEndpoint = callbackUrl;
         let errorMessage;
         if (!apiEndpoint) {
             errorMessage = 'Api endpoint is missing';
@@ -337,8 +316,10 @@ module.exports = class AutoscaleHandler {
                     pskSecret: pskSecret && typeof pskSecret
                 })}`);
         }
-        await config.replace(SET_SECRET_EXPR, '$1 *');
-        return config;
+        return await this._baseConfig.replace(new RegExp('set role master','gm'),
+        `set role slave\n    set master-ip ${masterIp}`)
+        .replace(new RegExp('{CALLBACK_URL}','gm'), callbackUrl)
+        .replace(SET_SECRET_EXPR, '$1 *');
     }
 
     async checkMasterElection() {
