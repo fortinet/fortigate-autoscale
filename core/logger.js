@@ -3,17 +3,21 @@
 /*
 Author: Fortinet
 */
-
+/* eslint-disable no-unused-vars */
 /**
  * A unified logger class to handle logging across different platforms.
  */
 module.exports = class Logger {
     constructor(loggerObject) {
         this.logger = loggerObject;
+        this._outputQueue = false;
+        this._flushing = false;
+        this._timeZoneOffset = 0;
+        this._queue = [];
     }
 
     /**
-     * control logging output level.
+     * control logging output or queue level.
      * @param {Object} levelObject {log: true | false, info: true | false, warn: true | false,
      *  error: true | false}
      */
@@ -22,23 +26,78 @@ module.exports = class Logger {
     }
 
     /**
-     * output information to a regular logging stream.
+     * if use output queue to output all logs as a single log item.
+     * @param {Boolean} enable enable this logging feature or not
      */
-    log() {} // eslint-disable-line no-unused-vars
+    set outputQueue(enable) {
+        this._outputQueue = enable;
+    }
+
+    get outputQueue() {
+        return this._outputQueue;
+    }
+
+    set timeZoneOffset(offset) {
+        this._timeZoneOffset = isNaN(offset) ? 0 : parseInt(offset);
+    }
+
+    get timeZoneOffset() {
+        return this._timeZoneOffset;
+    }
+
+    enQueue(level, args) {
+        let d = new Date();
+        d.setUTCHours(d.getTimezoneOffset() / 60 + this._timeZoneOffset);
+        let item = {level: level, timestamp: d, arguments: []};
+        item.arguments = Array.prototype.slice.call(args).map(arg => {
+            return arg && arg.toString ? arg.toString() : arg;
+        });
+        this._queue.push(item);
+        return this;
+    }
+
     /**
-     * output information to the debug logging stream.
+     * output or queue information to a regular logging stream.
+     * @returns {Logger} return logger instance for chaining
      */
-    debug() {} // eslint-disable-line no-unused-vars
+    log() {
+        return this;
+    }
     /**
-     * output information to the info logging stream.
+     * output or queue information to the debug logging stream.
+     * @returns {Logger} return logger instance for chaining
      */
-    info() {} // eslint-disable-line no-unused-vars
+    debug() {
+        return this;
+    }
     /**
-     * output information to the warning logging stream.
+     * output or queue information to the info logging stream.
+     * @returns {Logger} return logger instance for chaining
      */
-    warn() {} // eslint-disable-line no-unused-vars
+    info() {
+        return this;
+    }
     /**
-     * output information to the error logging stream.
+     * output or queue information to the warning logging stream.
+     * @returns {Logger} return logger instance for chaining
      */
-    error() {} // eslint-disable-line no-unused-vars
+    warn() {
+        return this;
+    }
+    /**
+     * output or queue information to the error logging stream.
+     * @returns {Logger} return logger instance for chaining
+     */
+    error() {
+        return this;
+    }
+
+    /**
+     * flush all queued logs to the output
+     * @param {String} level flush all queued logs with this level
+     * @returns {Logger} return logger instance for chaining
+     */
+    flush(level = 'log') {
+        return this;
+    }
 };

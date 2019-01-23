@@ -30,28 +30,92 @@ class DefaultLogger extends Logger {
     }
     log() {
         if (!(this.level && this.level.log === false)) {
-            this.logger.log.apply(null, arguments);
+            if (this._outputQueue && !this._flushing) {
+                this.enQueue('log', arguments);
+            } else {
+                this.logger.log.apply(null, arguments);
+            }
         }
+        return this;
     }
     debug() {
         if (!(this.level && this.level.debug === false)) {
-            this.logger.debug.apply(null, arguments);
+            if (this._outputQueue && !this._flushing) {
+                this.enQueue('debug', arguments);
+            } else {
+                this.logger.debug.apply(null, arguments);
+            }
         }
+        return this;
     }
     info() {
         if (!(this.level && this.level.info === false)) {
-            this.logger.info.apply(null, arguments);
+            if (this._outputQueue && !this._flushing) {
+                this.enQueue('info', arguments);
+            } else {
+                this.logger.info.apply(null, arguments);
+            }
         }
+        return this;
     }
     warn() {
         if (!(this.level && this.level.warn === false)) {
-            this.logger.warn.apply(null, arguments);
+            if (this._outputQueue && !this._flushing) {
+                this.enQueue('warn', arguments);
+            } else {
+                this.logger.warn.apply(null, arguments);
+            }
         }
+        return this;
     }
     error() {
         if (!(this.level && this.level.error === false)) {
-            this.logger.error.apply(null, arguments);
+            if (this._outputQueue && !this._flushing) {
+                this.enQueue('error', arguments);
+            } else {
+                this.logger.error.apply(null, arguments);
+            }
         }
+        return this;
+    }
+    flush(level = 'log') {
+        if (!this._outputQueue) {
+            return this;
+        }
+        let outputContent = '';
+        while (this._queue.length > 0) {
+            let item = this._queue.shift();
+            outputContent += `[${item.level}][${item.timestamp.toString()}]\n`;
+            if (item.arguments.length > 0) {
+                item.arguments.forEach(arg => {
+                    outputContent += `${arg}\n`;
+                });
+            }
+
+        }
+        this._flushing = true;
+        switch (level) {
+            case 'log':
+                this.log(outputContent);
+                break;
+            case 'debug':
+                this.debug(outputContent);
+                break;
+            case 'info':
+                this.info(outputContent);
+                break;
+            case 'warn':
+                this.warn(outputContent);
+                break;
+            case 'error':
+                this.error(outputContent);
+                break;
+            default:
+                this.log(outputContent);
+                break;
+        }
+        this._flushing = false;
+        return this;
     }
 }
 
