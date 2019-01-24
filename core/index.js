@@ -8,6 +8,7 @@ const CoreFunctions = require('./core-functions');
 exports.LifecycleItem = require('./lifecycle-item');
 exports.CloudPlatform = require('./cloud-platform');
 exports.AutoscaleHandler = require('./autoscale-handler');
+exports.dbDefinitions = require('./db-definitions');
 const {VirtualMachine, NetworkInterface} = require('./virtual-machine');
 exports.VirtualMachine = VirtualMachine;
 exports.NetworkInterface = NetworkInterface;

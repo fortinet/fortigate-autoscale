@@ -29,7 +29,7 @@ const
     docClient = new AWS.DynamoDB.DocumentClient(),
     unique_id = process.env.UNIQUE_ID.replace(/.*\//, ''),
     custom_id = process.env.CUSTOM_ID.replace(/.*\//, ''),
-    dbTables = ftgtAutoscaleAws.dbDefinitions.getTables(custom_id, unique_id);
+    dbTables = ftgtAutoscaleAws.AutoScaleCore.dbDefinitions.getTables(custom_id, unique_id);
 
 ftgtAutoscaleAws.initModule();
 

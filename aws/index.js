@@ -8,7 +8,6 @@ exports = module.exports;
 const path = require('path');
 const AWS = require('aws-sdk');
 const AutoScaleCore = require('fortigate-autoscale-core');
-const dbDefinitions = require('./db-definitions');
 
 // lock the API versions
 AWS.config.apiVersions = {
@@ -31,7 +30,7 @@ const
     unique_id = process.env.UNIQUE_ID.replace(/.*\//, ''),
     custom_id = process.env.CUSTOM_ID.replace(/.*\//, ''),
     SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
-    DB = dbDefinitions.getTables(custom_id, unique_id),
+    DB = AutoScaleCore.dbDefinitions.getTables(custom_id, unique_id),
     moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems;
 
@@ -908,59 +907,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     }
 
-    /**
-     * @override
-     */
-    async getBaseConfig() {
-        let baseConfig = await this.getConfigSet('baseconfig');
-        let psksecret = process.env.FORTIGATE_PSKSECRET,
-            fazConfig = '',
-            fazIp;
-        if (baseConfig) {
-            // check if other config set are required
-            let requiredConfigSet = process.env.REQUIRED_CONFIG_SET.split(',');
-            let configContent = '';
-            for (let configset of requiredConfigSet) {
-                let [name, selected] = configset.trim().split('-');
-                if (selected.toLowerCase() === 'yes') {
-                    switch (name) {
-                        // handle https routing policy
-                        case 'httpsroutingpolicy':
-                            configContent += await this.getConfigSet('internalelbweb');
-                            configContent += await this.getConfigSet(name);
-                            break;
-                        // handle fortianalyzer logging config
-                        case 'storelogtofaz':
-                            fazConfig = await this.getConfigSet(name);
-                            fazIp = await this.getFazIp();
-                            configContent += fazConfig.replace(
-                                new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
-                            break;
-                        default:
-                            break;
-                    }
-                }
-            }
-            baseConfig += configContent;
-
-            baseConfig = baseConfig
-                .replace(new RegExp('{SYNC_INTERFACE}', 'gm'),
-                    process.env.FORTIGATE_SYNC_INTERFACE ?
-                        process.env.FORTIGATE_SYNC_INTERFACE : 'port1')
-                .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')
-                .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
-                .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
-                .replace(new RegExp('{TRAFFIC_PORT}', 'gm'),
-                    process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
-                .replace(new RegExp('{ADMIN_PORT}', 'gm'),
-                    process.env.FORTIGATE_ADMIN_PORT ? process.env.FORTIGATE_ADMIN_PORT : 8443)
-                .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
-                    process.env.FORTIGATE_INTERNAL_ELB_DNS ?
-                        process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
-        }
-        return baseConfig;
-    }
-
     /* ==== Sub-Handlers ==== */
 
     /* eslint-disable max-len */
@@ -1494,6 +1440,5 @@ exports.initModule = initModule;
 exports.AutoScaleCore = AutoScaleCore; // get a reference to the core
 exports.AwsPlatform = AwsPlatform;
 exports.AwsAutoscaleHandler = AwsAutoscaleHandler;
-exports.dbDefinitions = dbDefinitions;
 exports.settingItems = settingItems;
 exports.logger = logger;
