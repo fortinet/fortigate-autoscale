@@ -258,6 +258,22 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    async listBlobFromStorage(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    async updateLicenseUsage(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    async listLicenseUsage(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    async deleteLicenseUsage(parameters) {
+        await this.throwNotImplementedException();
+    }
+
     async terminateInstanceInAutoScalingGroup(instance) {
         await this.throwNotImplementedException();
     }

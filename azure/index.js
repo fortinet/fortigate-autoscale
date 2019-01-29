@@ -9,25 +9,24 @@ exports = module.exports;
 const url = require('url');
 const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./azure-arm-client');
-const azureStorage = require('azure-storage');
-const dbDefinitions = require('./db-definitions');
 const UNIQUE_ID = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '';
 const CUSTOM_ID = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '';
 const SUBSCRIPTION_ID = process.env.SUBSCRIPTION_ID;
 const RESOURCE_GROUP = process.env.RESOURCE_GROUP;
 const DATABASE_NAME = `${CUSTOM_ID ? `${CUSTOM_ID}-` : ''}` +
     `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
-const SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ?
-    process.env.SCRIPT_TIMEOUT.replace(/.*\//, '') : 300;// Azure function default timeout
-const DB = dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
+const DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
+const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
 
 var logger = new AutoScaleCore.DefaultLogger();
-var dbClient, computeClient;
+var dbClient, computeClient, storageClient;
 
 // this variable is to store the anticipated script execution expire time (milliseconds)
-let scriptExecutionExpireTime;
+let scriptExecutionExpireTime,
+    electionWaitingTime = process.env.ELECTION_WAIT_TIME ?
+        parseInt(process.env.ELECTION_WAIT_TIME) : 60000; // in ms
 
 class AzureLogger extends AutoScaleCore.DefaultLogger {
     constructor(loggerObject) {
@@ -35,8 +34,13 @@ class AzureLogger extends AutoScaleCore.DefaultLogger {
     }
     log() {
         if (!(this.level && this.level.log === false)) {
-            this.logger.apply(null, arguments);
+            if (this._outputQueue && !this._flushing) {
+                this.enQueue('log', arguments);
+            } else {
+                this.logger.apply(null, arguments);
+            }
         }
+        return this;
     }
 }
 
@@ -85,6 +89,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     `unknown error:${JSON.stringify(result)}`);
                 }
             },
+            // eslint-disable-next-line no-unused-vars
             checkCollectionsAvailability = async function(collections = []) {
                 if (!Array.isArray(collections) || collections.length === 0) {
                     return [];
@@ -140,13 +145,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     let available = await checkDatabaseAvailability();
                     if (!available) {
                         await createDatabase();
-                    }
-                    let collectionNames = Object.keys(DB).map(element => {
-                        return DB[element].TableName;
-                    });
-                    let missingCollections = await checkCollectionsAvailability(collectionNames);
-                    if (missingCollections.length > 0) {
-                        await createCollections(missingCollections);
+                        let collectionNames = Object.keys(DB).map(element => {
+                            return DB[element].TableName;
+                        });
+                        await createCollections(collectionNames);
                     }
                     return true;
                 } catch (error) {
@@ -170,7 +172,6 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 process.env.REST_APP_SECRET, process.env.TENANT_ID)]).catch(error => {
             throw error;
         });
-        armClient.useSubscription(process.env.SUBSCRIPTION_ID);
     }
 
     async getCallbackEndpointUrl(fromContext = null) {
@@ -193,7 +194,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             let endpoint = new url.URL(request.url).pathname.match('(?<=api/).*(?=/)?');
             if (Array.isArray(endpoint) && endpoint.length > 0) {
                 scaleSetName = endpoint[0] === 'byol-asg-handler' ?
-                process.env.SCALING_GROUP_NAME_BYOL : process.env.SCALING_GROUP_NAME_PAYG;
+                    process.env.SCALING_GROUP_NAME_BYOL : process.env.SCALING_GROUP_NAME_PAYG;
             } else {
                 throw new Error(`unable to find a scaleset name from url:${request.url}`);
             }
@@ -234,6 +235,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 instanceId: candidateInstance.instanceId,
                 vpcId: candidateInstance.virtualNetworkId,
                 subnetId: candidateInstance.subnetId,
+                voteEndTime: Date.now() + electionWaitingTime,
                 voteState: voteState
             };
             return !!await dbClient.createDocument(DATABASE_NAME, DB.ELECTION.TableName,
@@ -303,9 +305,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return Promise.reject(`invalid instance: ${JSON.stringify(instance)}`);
         }
 
+        let asgName = instance.asgName ? instance.asgName : this.scalingGroupName;
+
         const keyExpression = {
-                name: 'asgName',
-                value: instance.asgName
+                name: 'id',
+                value: `${asgName}-${instance.instanceId}`
             }, filterExpression = [
                 {
                     name: 'instanceId',
@@ -365,6 +369,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             let result, document = {
                 id: `${this.scalingGroupName}-${healthCheckObject.instanceId}`,
                 asgName: this.scalingGroupName,
+                instanceId: healthCheckObject.instanceId,
                 heartBeatLossCount: healthCheckObject.heartBeatLossCount,
                 nextHeartBeatTime: checkPointTime + heartBeatInterval * 1000,
                 masterIp: masterIp ? masterIp : 'null',
@@ -400,19 +405,51 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
 
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
-        let virtualMachine;
+        let virtualMachine, hitCache = '',
+            readCache = !(parameters.readCache && parameters.readCache === false) &&
+                    process.env.VM_INFO_CACHE_ENABLED &&
+                    process.env.VM_INFO_CACHE_ENABLED.toLowerCase() === 'true';
         if (parameters.scaleSetName) {
-            // describe instance in vmss
-            virtualMachine = await computeClient.refVirtualMachineScaleSet(parameters.scaleSetName)
-            .getVirtualMachine(parameters.instanceId);
-        } else {
-            virtualMachine =
-            await computeClient.getVirtualMachine(
-                parameters.resourceGroup, parameters.scaleSetName,
-                parameters.virtualMachineId);
-        }
-        logger.info('called describeInstance');
+            // use a proper method to get the vm
+            if (isNaN(parameters.instanceId)) {
+                // describe instance in vmss by vmid
+                // get from cache if VM_INFO_CACHE_ENABLED (shoule be enabled by default)
+                if (readCache) {
+                    virtualMachine = await this.getVmInfoCache(parameters.scaleSetName, null,
+                        parameters.instanceId);
+                    hitCache = virtualMachine ? ' (hit cache)' : '';
+                }
+                if (!virtualMachine) {
+                    virtualMachine = await computeClient.refVirtualMachineScaleSet(
+                        parameters.scaleSetName).getVirtualMachineByVmId(parameters.instanceId);
+                    if (virtualMachine) {
+                        await this.setVmInfoCache(parameters.scaleSetName, virtualMachine,
+                            virtualMachine.instanceId);
+                    }
+                }
+            } else {
+                // describe instance in vmss
+                // get from cache if VM_INFO_CACHE_ENABLED (shoule be enabled by default)
+                if (readCache) {
+                    virtualMachine = await this.getVmInfoCache(parameters.scaleSetName,
+                        parameters.instanceId);
+                    hitCache = virtualMachine ? ' (hit cache)' : '';
+                }
+                if (!virtualMachine) {
+                    virtualMachine = await computeClient.refVirtualMachineScaleSet(
+                    parameters.scaleSetName).getVirtualMachine(parameters.instanceId);
+                    if (virtualMachine) {
+                        await this.setVmInfoCache(parameters.scaleSetName, virtualMachine,
+                            virtualMachine.instanceId);
+                    }
+                }
+            }
 
+        } else {
+            throw new Error('Not enough parameters to describe an instance > parameters:',
+            parameters);
+        }
+        logger.info(`called describeInstance${hitCache}`);
         return virtualMachine && AutoScaleCore.VirtualMachine.fromAzureVm(virtualMachine);
     }
 
@@ -483,6 +520,90 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
+    async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
+        let idValue = `${scaleSetName}-${instanceId || vmId}`;
+        try {
+            const filterExpression = [{
+                name: vmId ? 'vmId' : 'instanceId',
+                value: vmId ? vmId : instanceId
+            },
+            {
+                name: 'asgName',
+                value: scaleSetName
+            }];
+
+            let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.VMINFOCACHE.TableName,
+                null, filterExpression);
+            if (!Array.isArray(items) || items.length === 0) {
+                return null;
+            }
+            if (items[0].timestamp + VM_INFO_CACHE_TIME * 1000 < Date.now()) {
+                logger.info('called getVmInfoCache > cached expired.');
+                return null;
+            }
+            return JSON.parse(items[0].info);
+        } catch (error) {
+            logger.warn(`called getVmInfoCache (id: ${idValue}) > error: `, error);
+            return null;
+        }
+    }
+
+    async setVmInfoCache(scaleSetName, info) {
+        let document = {
+            id: `${scaleSetName}-${info.instanceId}`,
+            instanceId: info.instanceId,
+            vmId: info.properties.vmId,
+            asgName: scaleSetName,
+            info: typeof info === 'string' ? info : JSON.stringify(info),
+            timestamp: Date.now()
+        };
+        try {
+            return !!await dbClient.createDocument(DATABASE_NAME, DB.VMINFOCACHE.TableName,
+                document, true);// create new or replace existing
+        } catch (error) {
+            logger.warn('called setSettingItem > error: ', error, 'setSettingItem:', document);
+            return false;
+        }
+    }
+
+    async saveLogToDb(log) {
+        let timestamp = Date.now(), document = {
+            id: `t-${timestamp}`,
+            logContent: typeof log === 'string' ? log : JSON.stringify(log),
+            timestamp: timestamp
+        };
+        try {
+            return !!await dbClient.createDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
+                document, true);// create new or replace existing
+        } catch (error) {
+            logger.warn('called saveLogToDb > error: ', error, 'document item:', document);
+            return false;
+        }
+    }
+
+    // eslint-disable-next-line no-unused-vars
+    async listLogFromDb(timeFrom, timeTo = null) {
+        try {
+            let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
+                null, null, null, {
+                    order: {
+                        by: 'timestamp',
+                        direction: 'asc'
+                    }
+                });
+            if (!Array.isArray(items) || items.length === 0) {
+                return [];
+            }
+            let logContent = '';
+            items.forEach(item => {
+                logContent += item.logContent;
+            });
+            return logContent;
+        } catch (error) {
+            return [];
+        }
+    }
+
     // end of azurePlatform class
 }
 
@@ -491,47 +612,50 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         super(new AzurePlatform(), '', myLogger);
         this._electionLock = null;
         this._selfInstance = null;
+        this.scalingGroupName = null;
+        this.masterScalingGroupName = null;
     }
 
     proxyResponse(statusCode, res) {
-        logger.log(`(${statusCode}) response body:`, res);
+        let log = logger.log(`(${statusCode}) response body:`, res).flush();
+        if (process.env.DEBUG_SAVE_CUSTOM_LOG && (!process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR ||
+            process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR &&
+            logger.errorCount > 0) && log !== '') {
+            this.platform.saveLogToDb(log);
+        }
         return {
             status: statusCode, /* Defaults to 200 */
             headers: {
                 'Content-Type': 'text/plain'
             },
-            body: JSON.stringify(res)
+            body: typeof res.toString === 'function' ? res.toString() : JSON.stringify(res)
         };
     }
 
     async handle(context, event) {
-        // let x = require(require.resolve(`${process.cwd()}/azure-arm-client`));
         logger.info('start to handle autoscale');
         let proxyMethod = 'method' in event && event.method,
             result;
         try {
             await this.init();
-            this.scalingGroupName = await this.platform.extractRequestInfo(event).scaleSetName;
-            this.masterScalingGroupName = process.env.MASTER_SCALING_GROUP_NAME;
-            this.platform.setMasterScalingGroup(this.masterScalingGroupName);
-            this.platform.setScalingGroup(this.scalingGroupName);
+            const instanceId = this.platform.extractRequestInfo(event).instanceId;
+            // authenticate the calling instance
+            if (!instanceId) {
+                context.res = this.proxyResponse(403, 'Instance id not provided.');
+                return;
+            }
+            await this.parseInstanceInfo(instanceId);
+
+            if (!this.scalingGroupName) {
+                // not trusted
+                throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). ` +
+                'Instance not found in scale set.');
+            }
             if (proxyMethod === 'GET') {
-                // authenticate the calling instance
-                const instanceId = this.getCallingInstanceId(event);
-                if (!instanceId) {
-                    context.res = this.proxyResponse(403, 'Instance id not provided.');
-                    return;
-                }
                 // handle get config
                 result = await this.handleGetConfig(event);
                 context.res = this.proxyResponse(200, result);
             } else if (proxyMethod === 'POST') {
-                // authenticate the calling instance
-                const instanceId = this.getCallingInstanceId(event);
-                if (!instanceId) {
-                    context.res = this.proxyResponse(403, 'Instance id not provided.');
-                    return;
-                }
                 result = await this.handleSyncedCallback(event);
                 context.res = this.proxyResponse(200, result);
             }
@@ -555,7 +679,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             let configContent = '';
             for (let configset of requiredConfigSet) {
                 let [name, selected] = configset.trim().split('-');
-                if (selected.toLowerCase() === 'yes') {
+                if (selected && selected.toLowerCase() === 'yes') {
                     switch (name) {
                         // handle https routing policy
                         case 'httpsroutingpolicy':
@@ -607,7 +731,9 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling handleGetConfig');
         let config,
             masterInfo;
+        let duplicatedGetConfigCall = false, masterIp;
 
+        // FortiGate actually returns its vmId instead of instanceid
         let instanceId = this.platform.extractRequestInfo(event).instanceId;
 
         // verify the caller (diagram: trusted source?)
@@ -625,7 +751,16 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // let result = await this.checkMasterElection();
         let promiseEmitter = this.checkMasterElection.bind(this),
             validator = result => {
-            // if i am the master, don't wait, continue, if not, wait
+                // if i am the master, don't wait, continue, if not, wait
+                // this if-condition is to work around the double GET config calls.
+                if (this._masterRecord && this._masterRecord.voteState === 'pending' &&
+                this._selfInstance &&
+                this._masterRecord.instanceId === this._selfInstance.instanceId &&
+                this._masterRecord.asgName === this.scalingGroupName) {
+                    duplicatedGetConfigCall = true;
+                    masterIp = this._masterRecord.ip;
+                    return true;
+                }
                 if (result &&
                 result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
                     return true;
@@ -639,36 +774,40 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 }
                 return false;
             },
-            counter = () => {
-                if (Date.now() < scriptExecutionExpireTime - 3000) {
+            counter = currentCount => {
+                logger.info(`wait for master election (attempt: #${currentCount})`);
+                if (Date.now() < scriptExecutionExpireTime) {
                     return false;
                 }
-                logger.warn('script execution is about to expire');
-                return true;
+                throw new Error(`failed to wait for a result within ${currentCount} attempts.`);
             };
 
         try {
             masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
         } catch (error) {
+            logger.warn(error);
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            if (this._masterRecord.instanceId === this._selfInstance.InstanceId) {
+            if (this._masterRecord.instanceId === this._selfInstance.instanceId) {
                 await this.platform.removeMasterRecord();
             }
-            await this.terminateInstanceInAutoScalingGroup(this._selfInstance);
+            // await this.platform.terminateInstanceInAutoScalingGroup(this._selfInstance);
             throw new Error('Failed to determine the master instance within script timeout. ' +
             'This instance is unable to bootstrap. Please report this to administrators.');
         }
 
         // the master ip same as mine? (diagram: master IP same as mine?)
-        if (masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
+        // this checking for 'duplicatedGetConfigCall' is to work around
+        // the double GET config calls.
+        if (duplicatedGetConfigCall ||
+            masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
             config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl(event));
             logger.info('called handleGetConfig: returning master config' +
-                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${masterIp || masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
@@ -756,11 +895,120 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async handleGetLicense(context, event) {
         // TODO: this function is for Poc only for now
-        let licenseFile = await this.platform.getBlobFromStorage({
-            path: 'fgt-asg-license',
-            fileName: 'test-license'
-        });
-        context.res = this.proxyResponse(200, licenseFile);
+        try {
+            await this.platform.init();
+            // authenticate the calling instance
+            const instanceId = this.getCallingInstanceId(event);
+            if (!instanceId) {
+                context.res = this.proxyResponse(403, 'Instance id not provided.');
+                return;
+            }
+            let licenseFile = await this.platform.getBlobFromStorage({
+                path: 'fgt-asg-license',
+                fileName: 'license.lic'
+            });
+            context.res = this.proxyResponse(200, licenseFile);
+        } catch (error) {
+            logger.error(error);
+            context.res = this.proxyResponse(500, error);
+        }
+    }
+
+    async handleGetCustomLog(context, event) {
+        // TODO: this function is for Poc only for now
+        try {
+            let psksecret;
+            await this.platform.init();
+            if (event && event.headers && event.headers.psksecret) {
+                psksecret = event.headers.psksecret;
+            }
+            if (!(psksecret && psksecret === process.env.FORTIGATE_PSKSECRET)) {
+                return;
+            }
+            context.res = this.proxyResponse(200, await this.platform.listLogFromDb(-1, 'html'));
+            // context.res = this.proxyResponse(200, licenseFile);
+        } catch (error) {
+            logger.error(error);
+            context.res = this.proxyResponse(500, error);
+        }
+    }
+
+    setScalingGroup(master, self) {
+        // this.scalingGroupName = await this.platform.extractRequestInfo(event).scaleSetName;
+        // this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME);
+        // this.masterScalingGroupName = process.env.MASTER_SCALING_GROUP_NAME;
+        // this.platform.setMasterScalingGroup(this.masterScalingGroupName);
+        // this.platform.setScalingGroup(this.scalingGroupName);
+        this.masterScalingGroupName = master;
+        this.platform.setMasterScalingGroup(master);
+        this.scalingGroupName = self;
+        this.platform.setScalingGroup(self);
+    }
+
+    async parseInstanceInfo(instanceId) {
+        // look for this vm in both byol and payg vmss
+        let cachedInfo = null;
+        if (!this._selfInstance) {
+            // look from cache first (if cache enabled){
+            if (process.env.VM_INFO_CACHE_ENABLED) {
+                // look from BYOL scaling group
+                cachedInfo =
+                    await this.platform.getVmInfoCache(
+                            process.env.SCALING_GROUP_NAME_BYOL,
+                            isNaN(instanceId) ? null : instanceId,
+                            isNaN(instanceId) ? instanceId : null
+                    );
+                // found in BYOL
+                if (cachedInfo) {
+                    this.setScalingGroup(
+                        process.env.MASTER_SCALING_GROUP_NAME,
+                        process.env.SCALING_GROUP_NAME_BYOL
+                    );
+                } else {
+                    // look from PAYG scaling group
+                    cachedInfo =
+                    await this.platform.getVmInfoCache(
+                            process.env.SCALING_GROUP_NAME_PAYG,
+                            isNaN(instanceId) ? null : instanceId,
+                            isNaN(instanceId) ? instanceId : null
+                    );
+                    if (cachedInfo) {
+                        this.setScalingGroup(
+                            process.env.MASTER_SCALING_GROUP_NAME,
+                            process.env.SCALING_GROUP_NAME_PAYG
+                        );
+                    }
+                }
+            }
+
+            // if no instance info cache found, get instance info from platform
+            if (!cachedInfo) {
+                // look from byol first
+                this._selfInstance = this._selfInstance || await this.platform.describeInstance({
+                    instanceId: instanceId,
+                    scaleSetName: process.env.SCALING_GROUP_NAME_BYOL,
+                    readCache: false
+                });
+                if (this._selfInstance) {
+                    this.setScalingGroup(
+                    process.env.MASTER_SCALING_GROUP_NAME,
+                    process.env.SCALING_GROUP_NAME_BYOL
+                    );
+                } else { // not found in byol vmss, look from payg
+                    this._selfInstance = await this.platform.describeInstance({
+                        instanceId: instanceId,
+                        scaleSetName: process.env.SCALING_GROUP_NAME_PAYG,
+                        readCache: false
+                    });
+                    if (this._selfInstance) {
+                        this.setScalingGroup(
+                        process.env.MASTER_SCALING_GROUP_NAME,
+                        process.env.SCALING_GROUP_NAME_PAYG
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // end of AzureAutoscaleHandler class
@@ -776,10 +1024,14 @@ exports.AzureAutoscaleHandler = AzureAutoscaleHandler;
  * @returns {Object} exports
  */
 function initModule() {
+    // process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT is used globally as the script approximate
+    // starting time
     process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT = Date.now();
     dbClient = new armClient.CosmosDB.ApiClient(process.env.SCALESET_DB_ACCOUNT,
         process.env.REST_API_MASTER_KEY);
     computeClient = new armClient.Compute.ApiClient(SUBSCRIPTION_ID, RESOURCE_GROUP);
+    storageClient = new armClient.Storage.ApiClient(process.env.AZURE_STORAGE_ACCOUNT,
+        process.env.AZURE_STORAGE_ACCESS_KEY);
     return exports;
 }
 
@@ -790,22 +1042,71 @@ function initModule() {
  */
 exports.handle = async (context, req) => {
     // no way to get dynamic timeout time from runtime env so have to defined one in process env
-    scriptExecutionExpireTime = Date.now() + SCRIPT_TIMEOUT * 1000;
+    // Azure function has a weird hard limit of 230 sec to a http response time. see:
+    // https://stackoverflow.com/questions/38673318/azure-asp-net-webapp-the-request-timed-out. and
+    // https://github.com/Azure/azure-functions-host/issues/3391.  we set the execution expiry to
+    // even earlier to bypass these issues.
+    // now the script timeout is set to 200 seconds which is 30 seconds earlier.
+    // Leave it some time for function finishing up.
+    let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
+        parseInt(process.env.SCRIPT_TIMEOUT) : 200000;
+    if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
+        scriptTimeOut = 200000;
+    }
+    scriptExecutionExpireTime = Date.now() + scriptTimeOut;
     logger = new AzureLogger(context.log);
+    armClient.useLogger(logger);
+    if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+        logger.outputQueue = true;
+        if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
+            logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
+        }
+    }
     const handler = new AzureAutoscaleHandler();
     handler.useLogger(logger);
     initModule();
+    logger.log(`Incoming request: ${JSON.stringify(req)}`);
     return await handler.handle(context, req);
 };
 
 exports.handleGetLicense = async (context, req) => {
     // no way to get dynamic timeout time from runtime env so have to defined one in process env
-    scriptExecutionExpireTime = Date.now() + SCRIPT_TIMEOUT * 1000;
+    // Azure function has a weird hard limit of 230 sec to a http response time. see:
+    // https://stackoverflow.com/questions/38673318/azure-asp-net-webapp-the-request-timed-out. and
+    // https://github.com/Azure/azure-functions-host/issues/3391.  we set the execution expriry to
+    // even earlier to bypass these issues.
+    // now the script timeout is set to 200 seconds which is 30 seconds earlier.
+    // Leave it some time for function finishing up.
+    let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
+        parseInt(process.env.SCRIPT_TIMEOUT) : 200000;
+    if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
+        scriptTimeOut = 200000;
+    }
+    scriptExecutionExpireTime = Date.now() + scriptTimeOut;
     logger = new AzureLogger(context.log);
+    armClient.useLogger(logger);
+    if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+        logger.outputQueue = true;
+        if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
+            logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
+        }
+    }
     const handler = new AzureAutoscaleHandler();
     handler.useLogger(logger);
     initModule();
+    logger.log(`Incoming request: ${JSON.stringify(req)}`);
     return await handler.handleGetLicense(context, req);
+};
+
+exports.handleListCustomLog = async (context, req) => {
+    logger = new AzureLogger(context.log);
+    armClient.useLogger(logger);
+    const handler = new AzureAutoscaleHandler();
+    handler.useLogger(logger);
+    initModule();
+    return await handler.handleGetCustomLog(context, req);
 };
 
 /**
@@ -817,6 +1118,5 @@ exports.initModule = initModule;
 exports.AutoScaleCore = AutoScaleCore; // get a reference to the core
 exports.AzurePlatform = AzurePlatform;
 exports.AzureAutoscaleHandler = AzureAutoscaleHandler;
-exports.dbDefinitions = dbDefinitions;
 exports.settingItems = settingItems;
 exports.logger = logger;

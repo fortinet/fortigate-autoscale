@@ -24,8 +24,7 @@ const Logger = require('./logger');
 const CoreFunctions = require('./core-functions');
 const
     AUTOSCALE_SECTION_EXPR =
-    /(?:^|\n)\s*config?\s*system?\s*auto-scale[\s\n]*((?:.|\n)*)\bend\b/,
-    SET_SECRET_EXPR = /(set\s+(?:psksecret|password)\s+).*/g;
+    /(?:^|\n)\s*config?\s*system?\s*auto-scale[\s\n]*((?:.|\n)*)\bend\b/;
 
 module.exports = class AutoscaleHandler {
 
@@ -33,7 +32,9 @@ module.exports = class AutoscaleHandler {
         this.platform = platform;
         this._baseConfig = baseConfig;
         this._selfInstance = null;
+        this._selfHealthCheck = null;
         this._masterRecord = null;
+        this._masterInfo = null;
     }
 
     /**
@@ -138,38 +139,45 @@ module.exports = class AutoscaleHandler {
             statusSuccess = status && status === 'success' || false;
         // if fortigate is sending callback in response to obtaining config, this is a state
         // message
-        let parameters = {}, selfHealthCheck, masterHealthCheck, lifecycleShouldAbandon = false;
+        let parameters = {}, masterHealthCheck, lifecycleShouldAbandon = false;
 
         parameters.instanceId = instanceId;
         parameters.scaleSetName = this.scalingGroupName;
         // get selfinstance
         this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
+
+        if (!this._selfInstance) {
+            // not trusted
+            throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). ` +
+            'Instance not found in scale set.');
+        }
         // handle hb monitor
         // get self health check
-        selfHealthCheck = selfHealthCheck || await this.platform.getInstanceHealthCheck({
+        this._selfHealthCheck = this._selfHealthCheck ||
+        await this.platform.getInstanceHealthCheck({
             instanceId: this._selfInstance.instanceId
         }, interval);
         // if self is already out-of-sync, skip the monitoring logics
-        if (selfHealthCheck && !selfHealthCheck.inSync) {
+        if (this._selfHealthCheck && !this._selfHealthCheck.inSync) {
             return {};
         }
         // get master instance monitoring
-        let masterInfo = await this.getMasterInfo();
-        if (masterInfo) {
+        this._masterInfo = this._masterInfo || await this.getMasterInfo();
+        if (this._masterInfo) {
             masterHealthCheck = await this.platform.getInstanceHealthCheck({
-                instanceId: masterInfo.instanceId,
+                instanceId: this._masterInfo.instanceId,
                 asgName: this.masterScalingGroupName
             }, interval);
         }
         // if this instance is the master, skip checking master election
-        if (masterInfo && this._selfInstance.instanceId === masterInfo.instanceId &&
+        if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
             this.scalingGroupName === this.masterScalingGroupName) {
             // use master health check result as self health check result
-            selfHealthCheck = masterHealthCheck;
-        } else if (selfHealthCheck && !selfHealthCheck.healthy) {
+            this._selfHealthCheck = masterHealthCheck;
+        } else if (this._selfHealthCheck && !this._selfHealthCheck.healthy) {
             // if this instance is unhealth, skip master election check
 
-        } else if (!(masterInfo && masterHealthCheck && masterHealthCheck.healthy)) {
+        } else if (!(this._masterInfo && masterHealthCheck && masterHealthCheck.healthy)) {
             // if no master or master is unhealthy, try to run a master election or check if a
             // master election is running then wait for it to end
             // promiseEmitter to handle the master election process by periodically check:
@@ -211,7 +219,8 @@ module.exports = class AutoscaleHandler {
                 };
 
             try {
-                masterInfo = await CoreFunctions.waitFor(promiseEmitter, validator, 5000, counter);
+                this._masterInfo = await CoreFunctions.waitFor(
+                    promiseEmitter, validator, 5000, counter);
                 // after new master is elected, get the new master healthcheck
                 // there are two possible results here:
                 // 1. a new instance comes up and becomes the new master, master healthcheck won't
@@ -222,7 +231,7 @@ module.exports = class AutoscaleHandler {
                 //   2.1. in this case, the instance will take actions based on its healthcheck
                 //        result.
                 masterHealthCheck = await this.platform.getInstanceHealthCheck({
-                    instanceId: masterInfo.instanceId
+                    instanceId: this._masterInfo.instanceId
                 }, interval);
             } catch (error) {
                 // if error occurs, check who is holding a master election, if it is this instance,
@@ -241,7 +250,8 @@ module.exports = class AutoscaleHandler {
 
         // check if myself is under health check monitoring
         // (master instance itself may have got its healthcheck result in some code blocks above)
-        selfHealthCheck = selfHealthCheck || await this.platform.getInstanceHealthCheck({
+        this._selfHealthCheck = this._selfHealthCheck ||
+        await this.platform.getInstanceHealthCheck({
             instanceId: this._selfInstance.instanceId
         }, interval);
 
@@ -251,10 +261,11 @@ module.exports = class AutoscaleHandler {
         // 2. this instance is new and sending a respond with 'status: success'
         this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
 
-        if (masterInfo && this._selfInstance.instanceId === masterInfo.instanceId &&
+        if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
             this.scalingGroupName === this.masterScalingGroupName &&
         this._masterRecord && this._masterRecord.voteState === 'pending') {
-            if (selfHealthCheck && selfHealthCheck.healthy || !selfHealthCheck && statusSuccess) {
+            if (this._selfHealthCheck && this._selfHealthCheck.healthy ||
+                !this._selfHealthCheck && statusSuccess) {
                 // if election couldn't be finalized, remove the current election so someone else
                 // could start another election
                 if (!await this.platform.finalizeMasterElection()) {
@@ -279,9 +290,9 @@ module.exports = class AutoscaleHandler {
         // its all lifecycle actions are complete before starting to monitor it.
         // for instance not yet in monitor and there's a master instance (regarless its health
         // status), add this instance to monitor
-        if (!selfHealthCheck && masterInfo) {
+        if (!this._selfHealthCheck && this._masterInfo) {
             await this.addInstanceToMonitor(this._selfInstance, interval,
-                masterInfo.primaryPrivateIpAddress);
+                Date.now() + interval * 1000, this._masterInfo.primaryPrivateIpAddress);
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
                 `ip: ${this._selfInstance.primaryPrivateIpAddress}) is added to monitor.`);
             // if this newly come-up instance is the new master, save its instance id as the
@@ -289,7 +300,7 @@ module.exports = class AutoscaleHandler {
             // the master there's a case if users never changed the master's password, when the
             // master was torn-down, there will be no way to retrieve this original password.
             // so in this case, should keep track of the update of default password.
-            if (this._selfInstance.instanceId === masterInfo.instanceId &&
+            if (this._selfInstance.instanceId === this._masterInfo.instanceId &&
                 this.scalingGroupName === this.masterScalingGroupName) {
                 await this.platform.setSettingItem('fortigate-default-password', {
                     value: this._selfInstance.instanceId,
@@ -297,32 +308,33 @@ module.exports = class AutoscaleHandler {
                 });
             }
             return '';
-        } else if (selfHealthCheck && selfHealthCheck.healthy && masterInfo) {
+        } else if (this._selfHealthCheck && this._selfHealthCheck.healthy && this._masterInfo) {
             // for those already in monitor, if there's a healthy master instance, keep track of
             // the master ip and notify the instanc with any change of the master ip.
             // if no master present (due to errors in master election), keep what ever master ip
             // it has, keep it in-sync without any notification for change in master ip.
-            let masterIp = masterInfo && masterHealthCheck && masterHealthCheck.healthy ?
-                masterInfo.primaryPrivateIpAddress : selfHealthCheck.masterIp;
-            await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval, masterIp,
+            let masterIp = this._masterInfo && masterHealthCheck && masterHealthCheck.healthy ?
+                this._masterInfo.primaryPrivateIpAddress : this._selfHealthCheck.masterIp;
+            await this.platform.updateInstanceHealthCheck(this._selfHealthCheck, interval, masterIp,
                 Date.now());
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
             `ip: ${this._selfInstance.primaryPrivateIpAddress}) health check ` +
-            `(${selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
-            `heartBeatLossCount: ${selfHealthCheck.heartBeatLossCount}, ` +
-            `nextHeartBeatTime: ${selfHealthCheck.nextHeartBeatTime}` +
-            `syncState: ${selfHealthCheck.syncState}).`);
-            return selfHealthCheck.masterIp !== masterIp ? {
-                'master-ip': masterInfo.primaryPrivateIpAddress
+            `(${this._selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
+            `heartBeatLossCount: ${this._selfHealthCheck.heartBeatLossCount}, ` +
+            `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
+            `syncState: ${this._selfHealthCheck.syncState}).`);
+            return this._selfHealthCheck.masterIp !== masterIp ? {
+                'master-ip': this._masterInfo.primaryPrivateIpAddress
             } : '';
         } else {
             // for unhealthy instances
             // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script will stop
             // keeping it in sync and stop doing any other logics for it any longer.
-            if (selfHealthCheck && selfHealthCheck.inSync) {
+            if (this._selfHealthCheck && this._selfHealthCheck.inSync) {
                 // change its sync state to 'out of sync' by updating it state one last time
-                await this.platform.updateInstanceHealthCheck(selfHealthCheck, interval,
-                    masterInfo ? masterInfo.primaryPrivateIpAddress : null, Date.now(), true);
+                await this.platform.updateInstanceHealthCheck(this._selfHealthCheck, interval,
+                    this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null,
+                    Date.now(), true);
                 // terminate it from auto-scaling group
                 await this.removeInstance(this._selfInstance);
             }
@@ -369,13 +381,11 @@ module.exports = class AutoscaleHandler {
         }
         return await this._baseConfig.replace(new RegExp('set role master','gm'),
         `set role slave\n    set master-ip ${masterIp}`)
-        .replace(new RegExp('{CALLBACK_URL}','gm'), callbackUrl)
-        .replace(SET_SECRET_EXPR, '$1 *');
+        .replace(new RegExp('{CALLBACK_URL}','gm'), callbackUrl);
     }
 
     async checkMasterElection() {
-        let masterInfo,
-            masterHealthCheck,
+        let masterHealthCheck,
             needElection = false,
             purgeMaster = false,
             electionLock = false,
@@ -389,12 +399,12 @@ module.exports = class AutoscaleHandler {
         // if there's a complete election, get master health check
         if (this._masterRecord && this._masterRecord.voteState === 'done') {
         // get the current master info
-            masterInfo = await this.getMasterInfo();
+            this._masterInfo = this._masterInfo || await this.getMasterInfo();
             // get current master heart beat record
-            if (masterInfo) {
+            if (this._masterInfo) {
                 masterHealthCheck =
                 await this.platform.getInstanceHealthCheck({
-                    instanceId: masterInfo.instanceId
+                    instanceId: this._masterInfo.instanceId
                 });
             }
             // if master is unhealthy, we need a new election
@@ -431,13 +441,13 @@ module.exports = class AutoscaleHandler {
                     this.logger.info(`Election completed: ${electionComplete}`);
                     // (diagram: master exists?)
                     this._masterRecord = null;
-                    masterInfo = electionComplete && await this.getMasterInfo();
+                    this._masterInfo = electionComplete && await this.getMasterInfo();
                 } catch (error) {
                     this.logger.error('Something went wrong in the master election.');
                 }
             }
         }
-        return Promise.resolve(masterInfo);
+        return Promise.resolve(this._masterInfo);
     }
 
     /**

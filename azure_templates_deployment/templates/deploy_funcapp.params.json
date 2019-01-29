@@ -1,0 +1,44 @@
+{
+    "FuncAppName": {
+        "value": ""
+    },
+    "DbName": {
+        "value": ""
+    },
+    "StorageAccountType": {
+        "value": "Standard_LRS"
+    },
+    "TenantId": {
+        "value": ""
+    },
+    "SubscriptionId": {
+        "value": ""
+    },
+    "RestAppId": {
+        "value": ""
+    },
+    "HeartBeatLossCount": {
+        "value": "3"
+    },
+    "RestAppSecret": {
+        "value": ""
+    },
+    "ScalingGroupResourceGroupName": {
+        "value": ""
+    },
+    "ScalingGroupNamePrefix": {
+        "value": ""
+    },
+    "ScriptTimeOut": {
+        "value": "230"
+    },
+    "PskSecret": {
+        "value": ""
+    },
+    "PackageResUrl": {
+        "value": ""
+    },
+    "ResourceGroupLocation": {
+        "value": "[resourceGroup().location]"
+    }
+}

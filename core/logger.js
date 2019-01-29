@@ -14,6 +14,11 @@ module.exports = class Logger {
         this._flushing = false;
         this._timeZoneOffset = 0;
         this._queue = [];
+        this._logCount = 0;
+        this._infoCount = 0;
+        this._debugCount = 0;
+        this._warnCount = 0;
+        this._errorCount = 0;
     }
 
     /**
@@ -43,6 +48,26 @@ module.exports = class Logger {
 
     get timeZoneOffset() {
         return this._timeZoneOffset;
+    }
+
+    get logCount() {
+        return this._logCount;
+    }
+
+    get infoCount() {
+        return this._infoCount;
+    }
+
+    get debugCount() {
+        return this._debugCount;
+    }
+
+    get warnCount() {
+        return this._warnCount;
+    }
+
+    get errorCount() {
+        return this._errorCount;
     }
 
     enQueue(level, args) {

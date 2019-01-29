@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-
+/* eslint-disable no-unused-vars */
 const path = require('path'),
     fs = require('fs');
 let { exec, spawn } = require('child_process');
@@ -239,6 +239,7 @@ async function zipSafe(fileName, src, excludeList = [], options = {}) {
     await runCmd('zip', args, des, options);
     return path.resolve(des, fileName);
 }
+
 
 async function npmInstallLocal(location, args = [], options = {}, cachePath = null,
 pacache = {}) {
@@ -729,6 +730,8 @@ async function makeDistAzureFuncApp() {
         ['node_modules', 'local', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
     // install azure as dependency
 
+
+
     // await npmInstallLocal(rTempDirSrcFuncApp,
     //     [], {noSymlink: true}, rTempDirSrcLib);
     await npmInstallAt(rTempDirSrcFuncApp,
@@ -883,3 +886,4 @@ switch (scrptName.toLowerCase()) {
         console.warn('npm run build-aws-quickstart-special');
         break;
 }
+/* eslint-enable no-unused-vars */

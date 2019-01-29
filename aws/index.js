@@ -1007,12 +1007,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // force updating this instance sync state to 'out-of-sync' so the script can treat
             // it as an unhealthy instance
             let instance = this._selfInstance ||
-                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId }),
-                selfHealthCheck = await this.platform.getInstanceHealthCheck({
-                    instanceId: instance.instanceId
-                });
-            await this.platform.updateInstanceHealthCheck(selfHealthCheck,
-                0, selfHealthCheck ? selfHealthCheck.masterIp : null, Date.now(), true);
+                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
+            this._selfHealthCheck = await this.platform.getInstanceHealthCheck({
+                instanceId: instance.instanceId
+            }, 0);
+            await this.platform.updateInstanceHealthCheck(this._selfHealthCheck,
+                0, this._selfHealthCheck ? this._selfHealthCheck.masterIp : null, Date.now(), true);
             // check if master
             let masterInfo = await this.getMasterInfo();
             logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);

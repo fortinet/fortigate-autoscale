@@ -7,9 +7,19 @@ Author: Fortinet
 const request = require('request');
 const crypto = require('crypto');
 const MsRest = require('ms-rest-azure');
+const azureStorage = require('azure-storage');
 const MultiCloudCore = require('fortigate-autoscale-core');
 var logger = new MultiCloudCore.DefaultLogger(console);
-var credentials, token, subscription;
+var credentials, token;
+
+
+async function getNicsForVirtualMachine(virtualMachine, appVersion) {
+    let networkInterfaces = await getResource(`${virtualMachine.id}/networkInterfaces`, appVersion);
+    if (networkInterfaces.value) {
+        virtualMachine.properties.networkProfile.networkInterfaces = networkInterfaces.value;
+    }
+    return virtualMachine;
+}
 
 class VirtualMachineScaleSetApiClient {
     constructor(subscriptionId, resourceGroupName, scaleSetName) {
@@ -28,16 +38,14 @@ class VirtualMachineScaleSetApiClient {
             `${this.resourceGroupName}/providers/Microsoft.Compute/` +
             `virtualMachineScaleSets/${this.scaleSetName}/virtualMachines/${instanceId}`;
         try {
-            let virtualMachine, networkInterfaces;
+            let virtualMachine;
             virtualMachine = await getResource(resourceId, this.apiVersion);
             if (virtualMachine) {
-                networkInterfaces =
-                    await getResource(`${resourceId}/networkInterfaces`, this.apiVersion);
-                virtualMachine.properties.networkProfile.networkInterfaces =
-                    networkInterfaces.value;
+                virtualMachine = await getNicsForVirtualMachine(virtualMachine, this.apiVersion);
             }
             return virtualMachine;
         } catch (error) {
+            logger.warn('getVirtualMachine > error:', error);
             return null;
         }
     }
@@ -47,17 +55,38 @@ class VirtualMachineScaleSetApiClient {
      * @param {String} resourceGroup the resource group id
      * @param {String} scaleSetName the scale set name
      */
-    async listVirtualMachines(resourceGroup, scaleSetName) {
-        let resourceId = `/subscriptions/${subscription}/resourceGroups/${resourceGroup}/providers/Microsoft.Compute/virtualMachineScaleSets/${scaleSetName}/virtualMachines`; // eslint-disable-line max-len
+    async listVirtualMachines() {
+        let resourceId = `/subscriptions/${this.subscriptionId}/resourceGroups/` +
+        `${this.resourceGroupName}/providers/Microsoft.Compute/virtualMachineScaleSets/` +
+        `${this.scaleSetName}/virtualMachines`;
         try {
-            logger.info('calling listVirtualMachines.');
-            let response = await getResource(resourceId, '2017-12-01');
-            logger.info('called listVirtualMachines.');
+            let response = await getResource(resourceId, this.apiVersion);
             return response.value;
         } catch (error) {
-            logger.error(`listVirtualMachines > error ${JSON.stringify(error)}`);
+            logger.warn('listVirtualMachines > error:', error);
             return [];
         }
+    }
+
+    /**
+     * get a virtual machine by a vmid
+     * @param {String} vmId the vmid of a virtual machine
+     */
+    async getVirtualMachineByVmId(vmId) {
+        let virtualMachines = await this.listVirtualMachines();
+        for (let vm of virtualMachines) {
+            try {
+                if (vm.properties && vm.properties.vmId === vmId) {
+                    vm = await getNicsForVirtualMachine(vm, this.apiVersion);
+                    return vm;
+                }
+            } catch (error) {
+                logger.warn('getVirtualMachineByVmId > error:', error);
+                return null;
+            }
+        }
+        logger.warn('getVirtualMachineByVmId > vm not found.');
+        return null;
     }
 
     /* eslint-disable max-len */
@@ -257,7 +286,7 @@ class CosmosDbApiClient {
     }
 
     async simpleQueryDocument(dbName, collectionName, keyExp = null, filterExp = null,
-        partitioning = null) {
+        partitioning = null, options = null) {
         let queryObject = {
             query: `SELECT * FROM ${collectionName} c`,
             parameters: []
@@ -283,6 +312,14 @@ class CosmosDbApiClient {
                     value: exp.value
                 });
             });
+        }
+        if (options && options.order && options.order.by && options.order.direction) {
+            let direction = options.order.direction.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+            queryObject.query += ` ORDER BY c.${options.order.by} ${direction}`;
+        }
+        if (options && options.limit) {
+            queryObject.query = queryObject.query.replace('SELECT * FROM', 'SELECT TOP ' +
+            `${options.limit} * FROM`);
         }
         let date = (new Date()).toUTCString();
         let _token = getAuthorizationTokenUsingMasterKey('post', 'docs',
@@ -343,7 +380,7 @@ class CosmosDbApiClient {
             if (resource.collectionName !== undefined) {
                 if (resource.dbName === undefined) {
                 // TODO: what should return by this reject?
-                    logger.error('called azureApiCosmosDbQuery: invalid resource ' +
+                    logger.warn('called azureApiCosmosDbQuery: invalid resource ' +
                     `${JSON.stringify(resource)}`);
                     reject({});
                     return;
@@ -378,7 +415,7 @@ class CosmosDbApiClient {
                 });
             } catch (error) {
             // TODO: what should return by this reject?
-                logger.error('called azureApiCosmosDbQuery: invalid queryObject -> ' +
+                logger.warn('called azureApiCosmosDbQuery: invalid queryObject -> ' +
                 `${JSON.stringify(resource.queryObject)}.`);
                 reject({});
             }
@@ -388,7 +425,7 @@ class CosmosDbApiClient {
                 body: body
             }, function(error, response, _body) { // eslint-disable-line no-unused-vars
                 if (error) {
-                    logger.error('called azureApiCosmosDbQuery > unknown error: ' +
+                    logger.warn('called azureApiCosmosDbQuery > unknown error: ' +
                     `${JSON.stringify(response)}`);
                     reject(error);
                 } else if (response.statusCode === 200) {
@@ -412,7 +449,7 @@ class CosmosDbApiClient {
                     `${resourcePath} was deleted.`);
                     reject(response);
                 } else {
-                    logger.error('called azureApiCosmosDbQuery > other error: ' +
+                    logger.warn('called azureApiCosmosDbQuery > other error: ' +
                     `${JSON.stringify(response)}`);
                     reject(response);
                 }
@@ -558,6 +595,35 @@ class ComputeApiClient {
     }
 }
 
+class StorageApiClient {
+    constructor(storageAccount, accessKey) {
+        this.storageAccount = storageAccount;
+        this.accessKey = accessKey;
+        this.blobService = null;
+    }
+
+    /**
+     * the blob service requires two process env vriables:
+     * process.env.AZURE_STORAGE_ACCOUNT
+     * process.env.AZURE_STORAGE_ACCESS_KEY
+     * @returns {blobService} azure blob service
+     */
+    refBlobService() {
+        if (!process.env.AZURE_STORAGE_ACCOUNT ||
+            process.env.AZURE_STORAGE_ACCOUNT !== this.storageAccount) {
+            process.env.AZURE_STORAGE_ACCOUNT = this.storageAccount;
+        }
+        if (!process.env.AZURE_STORAGE_ACCESS_KEY ||
+            process.env.AZURE_STORAGE_ACCESS_KEY !== this.accessKey) {
+            process.env.AZURE_STORAGE_ACCESS_KEY = this.accessKey;
+        }
+        if (!this.blobService) {
+            this.blobService = azureStorage.createBlobService();
+        }
+        return this.blobService;
+    }
+}
+
 /**
  * Call an ARM api
  * this function doesn't do error handling. The caller must do error handling.
@@ -621,13 +687,13 @@ function AzureArmGet(url) {
         }, function(error, response, body) {
             // TODO: handle error.
             if (error) {
-                logger.error(`called AzureArmGet but returned unknown error ${JSON.stringify(error)}`); // eslint-disable-line max-len
+                logger.warn(`called AzureArmGet but returned unknown error ${JSON.stringify(error)}`); // eslint-disable-line max-len
                 reject(error);
             } else {
                 if (response.statusCode === 200) {
                     resolve(body);
                 } else {
-                    logger.error(`called AzureArmGet but returned error (code: ${response.statusCode}) ${response.body}`); // eslint-disable-line max-len
+                    logger.warn(`called AzureArmGet but returned error (code: ${response.statusCode}) ${response.body}`); // eslint-disable-line max-len
                     reject(response);
                 }
             }
@@ -706,9 +772,6 @@ function getAuthorizationTokenUsingMasterKey(verb, resourceType, resourceId, dat
 }
 
 exports.authWithServicePrincipal = authWithServicePrincipal;
-exports.useSubscription = _subscription => {
-    subscription = _subscription;
-};
 
 exports.Compute = {
     ApiClient: ComputeApiClient
@@ -716,4 +779,12 @@ exports.Compute = {
 
 exports.CosmosDB = {
     ApiClient: CosmosDbApiClient
+};
+
+exports.Storage = {
+    ApiClient: StorageApiClient
+};
+
+exports.useLogger = function(lg) {
+    logger = lg;
 };

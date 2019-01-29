@@ -29,6 +29,7 @@ class DefaultLogger extends Logger {
         super(loggerObject);
     }
     log() {
+        this._logCount ++;
         if (!(this.level && this.level.log === false)) {
             if (this._outputQueue && !this._flushing) {
                 this.enQueue('log', arguments);
@@ -39,6 +40,7 @@ class DefaultLogger extends Logger {
         return this;
     }
     debug() {
+        this._debugCount ++;
         if (!(this.level && this.level.debug === false)) {
             if (this._outputQueue && !this._flushing) {
                 this.enQueue('debug', arguments);
@@ -49,6 +51,7 @@ class DefaultLogger extends Logger {
         return this;
     }
     info() {
+        this._infoCount ++;
         if (!(this.level && this.level.info === false)) {
             if (this._outputQueue && !this._flushing) {
                 this.enQueue('info', arguments);
@@ -59,6 +62,7 @@ class DefaultLogger extends Logger {
         return this;
     }
     warn() {
+        this._warnCount ++;
         if (!(this.level && this.level.warn === false)) {
             if (this._outputQueue && !this._flushing) {
                 this.enQueue('warn', arguments);
@@ -69,6 +73,7 @@ class DefaultLogger extends Logger {
         return this;
     }
     error() {
+        this._errorCount ++;
         if (!(this.level && this.level.error === false)) {
             if (this._outputQueue && !this._flushing) {
                 this.enQueue('error', arguments);
@@ -80,12 +85,16 @@ class DefaultLogger extends Logger {
     }
     flush(level = 'log') {
         if (!this._outputQueue) {
-            return this;
+            return '';
         }
         let outputContent = '';
+        if (this._queue.length > 0) {
+            outputContent += `Queued Logs: [log: ${this._logCount}, info: ${this._infoCount}, ` +
+            `debug: ${this._debugCount}, warn: ${this._warnCount}, error: ${this._errorCount}]\n`;
+        }
         while (this._queue.length > 0) {
             let item = this._queue.shift();
-            outputContent += `[${item.level}][${item.timestamp.toString()}]\n`;
+            outputContent += `[${item.level}][${item.timestamp.toString()}][/${item.level}]\n`;
             if (item.arguments.length > 0) {
                 item.arguments.forEach(arg => {
                     outputContent += `${arg}\n`;
@@ -115,7 +124,7 @@ class DefaultLogger extends Logger {
                 break;
         }
         this._flushing = false;
-        return this;
+        return outputContent;
     }
 }
 
@@ -168,7 +177,14 @@ const waitFor = async (promiseEmitter, validator, interval = 5000, counter = nul
             currentCount ++;
         }
     } catch (error) {
-        return Promise.reject(`failed to wait due to error: ${JSON.stringify(error)}`);
+        let message = '';
+        if (error instanceof Error) {
+            message = error.message;
+        } else {
+            message = error && typeof error.toString === 'function' ?
+                error.toString() : JSON.stringify(error);
+        }
+        return Promise.reject(`failed to wait due to error: ${message}`);
     }
     return Promise.resolve(result);
 };
