@@ -227,6 +227,10 @@
                             "value": ""
                         },
                         {
+                            "name": "VM_INFO_CACHE_ENABLED",
+                            "value": "true"
+                        },
+                        {
                             "name": "UNIQUE_ID",
                             "value": ""
                         },

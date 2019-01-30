@@ -17,7 +17,7 @@
     "build-core": "scripts/make-dist.js core",
     "build-azure": "scripts/make-dist.js azure",
     "build-azure-funcapp": "scripts/make-dist.js azure-funcapp",
-    "build-azure-quickstart": "scripts/make-dist.js azure-quickstart",
+    "build-azure-template-deployment": "scripts/make-dist.js azure-template-deployment",
     "build-aws": "scripts/make-dist.js aws",
     "build-aws-lambda": "scripts/make-dist.js aws-lambda",
     "build-aws-lambda-faz-handler": "scripts/make-dist.js aws-lambda-faz-handler",

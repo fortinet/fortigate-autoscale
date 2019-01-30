@@ -789,7 +789,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            if (this._masterRecord.instanceId === this._selfInstance.instanceId) {
+            if (this._masterRecord &&
+                this._masterRecord.instanceId === this._selfInstance.instanceId) {
                 await this.platform.removeMasterRecord();
             }
             // await this.platform.terminateInstanceInAutoScalingGroup(this._selfInstance);

@@ -787,15 +787,15 @@ async function makeDistProject() {
     console.info(`${saveAsFilePath}`);
 }
 
-async function makeDistAzureQuickStart() {
+async function makeDistAzureTemplateDeployment() {
     // create the azure function app
     await makeDistAzureFuncApp();
-    console.info('Making Azure QuickStart zip package');
+    console.info('Making Azure Template Deployment zip package');
     // create temp folder
     let rTempDir = await makeTempDir(),
-        rTempDirQuickStart = path.resolve(rTempDir, 'azure_quickstart'),
+        rTempDirTemplateDeployment = path.resolve(rTempDir, 'azure_template_deployment'),
         rDirSrcFuncapp = path.resolve(REAL_PROJECT_ROOT, './azure_funcapp'),
-        rDirSrcQuickStart = path.resolve(REAL_PROJECT_ROOT, './azure_quickstart'),
+        rDirSrcTemplateDeployment = path.resolve(REAL_PROJECT_ROOT, './azure_template_deployment'),
         rDirDist = path.resolve(REAL_PROJECT_ROOT, 'dist'),
         packageInfo,
         zipFileName,
@@ -803,17 +803,17 @@ async function makeDistAzureQuickStart() {
         rDistZipFuncapp;
 
     // copy azure quick start to temp dir
-    await copyAndDelete(rDirSrcQuickStart, rTempDirQuickStart,
+    await copyAndDelete(rDirSrcTemplateDeployment, rTempDirTemplateDeployment,
         ['local*']);
     // read package info of azure funcapp module
     packageInfo = readPackageJsonAt(rDirSrcFuncapp);
     zipFileName = `${packageInfo.name}.zip`;
     rDistZipFuncapp = path.resolve(rDirDist, zipFileName);
     // copy azure function app zip to the temp quick start dir
-    await copy(rDistZipFuncapp, rTempDirQuickStart);
+    await copy(rDistZipFuncapp, rTempDirTemplateDeployment);
     // zip the quick start dir
-    zipFileName = 'fortigate-autoscale-azure-quickstart.zip';
-    zipFilePath = await zipSafe(zipFileName, rTempDirQuickStart);
+    zipFileName = 'fortigate-autoscale-azure-template-deployment.zip';
+    zipFilePath = await zipSafe(zipFileName, rTempDirTemplateDeployment);
     // copy the zip file to dist
     await moveSafe(zipFilePath, rDirDist);
     await removeTempDir();
@@ -827,7 +827,7 @@ async function makeDistAll() {
     await makeDistAWSLambda();
     await makeDistAzure();
     await makeDistAzureFuncApp();
-    await makeDistAzureQuickStart();
+    await makeDistAzureTemplateDeployment();
     await makeDistProject();
     await makeDistAwsCloudFormation();
 }
@@ -844,8 +844,8 @@ switch (scrptName.toLowerCase()) {
     case 'azure':
         makeDistAzure();
         break;
-    case 'azure-quickstart':
-        makeDistAzureQuickStart();
+    case 'azure-template-deployment':
+        makeDistAzureTemplateDeployment();
         break;
     case 'azure-funcapp':
         makeDistAzureFuncApp();
@@ -878,7 +878,7 @@ switch (scrptName.toLowerCase()) {
         console.warn('npm run build-core');
         console.warn('npm run build-azure');
         console.warn('npm run build-azure-funcapp');
-        console.warn('npm run build-azure-quickstart');
+        console.warn('npm run build-azure-template-deployment');
         console.warn('npm run build-aws-lambda');
         console.warn('npm run build-aws-lambda-faz-handler');
         console.warn('npm run build-aws-lambda-nic-attachment');
