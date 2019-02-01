@@ -20,6 +20,7 @@ class VirtualMachine {
         this._sourcePlatform = platform; // platform name in lower case
         this._sourceVmData = vmData; // the original vm data retrieved from the platform
         this._primaryPrivateIp = null;
+        this._scalingGroupName = null;
     }
 
     get instanceId() {
@@ -38,15 +39,20 @@ class VirtualMachine {
         return this._subnetId;
     }
 
-    static fromAwsEc2(instance) {
+    get scalingGroupName() {
+        return this._scalingGroupName;
+    }
+
+    static fromAwsEc2(instance, scalingGroupName = '') {
         let virtualMachine = new VirtualMachine(instance.InstanceId, 'aws', instance);
         this._primaryPrivateIp = instance.PrivateIpAddress;
         this._virtualNetworkId = instance.VpcId;
         this._subnetId = instance.SubnetId;
+        this._scalingGroupName = scalingGroupName;
         return virtualMachine;
     }
 
-    static fromAzureVm(vm) {
+    static fromAzureVm(vm, scalingGroupName = '') {
         let virtualMachine = new VirtualMachine(vm.instanceId, 'azure', vm);
         let retrieveNetworkInformation = function() {
             for (let networkInterface of vm.properties.networkProfile.networkInterfaces) {
@@ -76,7 +82,7 @@ class VirtualMachine {
             virtualMachine._subnetId = subnetId;
             virtualMachine._primaryPrivateIp = ipv4;
         }
-
+        this._scalingGroupName = scalingGroupName;
         return virtualMachine;
     }
 }

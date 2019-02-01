@@ -241,7 +241,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let params = {
                 TableName: DB.ELECTION.TableName,
                 Item: {
-                    asgName: this.masterScalingGroupName,
+                    asgName: this.scalingGroupName,
                     ip: candidateInstance.primaryPrivateIpAddress,
                     instanceId: candidateInstance.instanceId,
                     vpcId: candidateInstance.virtualNetworkId,
@@ -270,7 +270,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     '#PrimaryKeyName': 'asgName'
                 },
                 ExpressionAttributeValues: {
-                    ':primaryKeyValue': this.masterScalingGroupName
+                    ':primaryKeyValue': this.scalingGroupName
                 }
             },
             response = await docClient.scan(params).promise(),
@@ -289,13 +289,13 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // race condition
         const params = {
             TableName: DB.ELECTION.TableName,
-            Key: { asgName: this.masterScalingGroupName },
+            Key: { asgName: this.scalingGroupName },
             ConditionExpression: '#AsgName = :asgName',
             ExpressionAttributeNames: {
                 '#AsgName': 'asgName'
             },
             ExpressionAttributeValues: {
-                ':asgName': this.masterScalingGroupName
+                ':asgName': this.scalingGroupName
             }
         };
         return await docClient.delete(params).promise();
@@ -797,6 +797,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         this._step = '';
         this._selfInstance = null;
         this._masterRecord = null;
+        this.setScalingGroup(process.env.AUTO_SCALING_GROUP_NAME,
+            process.env.AUTO_SCALING_GROUP_NAME);
     }
 
     async init() {
@@ -820,10 +822,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         let proxyMethod = 'httpMethod' in event && event.httpMethod, result;
         try {
             const platformInitSuccess = await this.init();
-            this.scalingGroupName = process.env.AUTO_SCALING_GROUP_NAME;
-            this.masterScalingGroupName = process.env.AUTO_SCALING_GROUP_NAME;
-            this.platform.setMasterScalingGroup(this.masterScalingGroupName);
-            this.platform.setScalingGroup(this.scalingGroupName);
             // enter instance termination process if cannot init for any reason
             if (!platformInitSuccess) {
                 result = 'fatal error, cannot initialize.';
@@ -1116,7 +1114,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            if (this._masterRecord.instanceId === this._selfInstance.instanceId) {
+            if (this._masterRecord.instanceId === this._selfInstance.instanceId &&
+                this._masterRecord.asgName === this._selfInstance.scalingGroupName) {
                 await this.platform.removeMasterRecord();
             }
             await this.removeInstance(this._selfInstance);
@@ -1161,7 +1160,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
             // create a nic
             let description = `Addtional nic for instance(id:${this._selfInstance.instanceId}) ` +
-                `in auto-scaling group: ${this.masterScalingGroupName}`;
+                `in auto-scaling group: ${this.scalingGroupName}`;
             let securityGroups = [];
             this._selfInstance.SecurityGroups.forEach(sgItem => {
                 securityGroups.push(sgItem.GroupId);
@@ -1282,7 +1281,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async updateCapacity(desiredCapacity, minSize, maxSize) {
         logger.info('calling updateCapacity');
         let params = {
-            AutoScalingGroupName: this.masterScalingGroupName
+            AutoScalingGroupName: this.scalingGroupName
         };
         if (desiredCapacity !== null && !isNaN(desiredCapacity)) {
             params.DesiredCapacity = parseInt(desiredCapacity);
@@ -1314,10 +1313,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 noInstance = false,
                 noNic = false;
             let groupCheck = await this.platform.describeAutoScalingGroups(
-                this.masterScalingGroupName
+                this.scalingGroupName
             );
             if (!groupCheck) {
-                throw new Error(`auto scaling group (${this.masterScalingGroupName})` +
+                throw new Error(`auto scaling group (${this.scalingGroupName})` +
                 'not exist.');
             }
             // check if capacity set to (desired:0, minSize: 0, maxSize: any number)

@@ -790,10 +790,16 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
             if (this._masterRecord &&
-                this._masterRecord.instanceId === this._selfInstance.instanceId) {
+                this._masterRecord.instanceId === this._selfInstance.instanceId &&
+                this._masterRecord.asgName === this._selfInstance.scalingGroupName) {
                 await this.platform.removeMasterRecord();
             }
-            // await this.platform.terminateInstanceInAutoScalingGroup(this._selfInstance);
+            // TODO: this works around the double GET call issue in fgt. need to uncomment once
+            // the issue is fixed.
+            if (duplicatedGetConfigCall) {
+                await this.removeInstance(this._selfInstance);
+            }
+
             throw new Error('Failed to determine the master instance within script timeout. ' +
             'This instance is unable to bootstrap. Please report this to administrators.');
         }
@@ -932,18 +938,6 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             logger.error(error);
             context.res = this.proxyResponse(500, error);
         }
-    }
-
-    setScalingGroup(master, self) {
-        // this.scalingGroupName = await this.platform.extractRequestInfo(event).scaleSetName;
-        // this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME);
-        // this.masterScalingGroupName = process.env.MASTER_SCALING_GROUP_NAME;
-        // this.platform.setMasterScalingGroup(this.masterScalingGroupName);
-        // this.platform.setScalingGroup(this.scalingGroupName);
-        this.masterScalingGroupName = master;
-        this.platform.setMasterScalingGroup(master);
-        this.scalingGroupName = self;
-        this.platform.setScalingGroup(self);
     }
 
     async parseInstanceInfo(instanceId) {

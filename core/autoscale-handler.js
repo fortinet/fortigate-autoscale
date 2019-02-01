@@ -185,11 +185,11 @@ module.exports = class AutoscaleHandler {
             // 2. if there isn't a running election, then runs an election and complete it
             let promiseEmitter = this.checkMasterElection.bind(this),
                 // validator set a condition to determine if the fgt needs to keep waiting or not.
-                validator = result => {
+                validator = masterInfo => {
                     // if i am the new master, don't wait, continue to finalize the election.
                     // should return yes to end the waiting.
-                    if (result &&
-                        result.primaryPrivateIpAddress ===
+                    if (masterInfo &&
+                        masterInfo.primaryPrivateIpAddress ===
                             this._selfInstance.primaryPrivateIpAddress) {
                         return true;
                     } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
@@ -203,9 +203,22 @@ module.exports = class AutoscaleHandler {
                         // need to wait.
                         // should return true to end the waiting.
                         return true;
+                    } else {
+                        // no master elected yet
+                        // entering this syncedCallback function means i am already insync so
+                        // i used to be assigned a master.
+                        // if i am not in the master scaling group then I can't start a new
+                        // election.
+                        // i stay as is and hoping for someone in the master scaling group
+                        // triggers a master election. Then I will be notified at some point.
+                        if (this.scalingGroupName !== this.masterScalingGroupName) {
+                            return true;
+                        } else {
+                            // for new instance or instance in the master scaling group
+                            // they should keep on waiting
+                            return false;
+                        }
                     }
-                    // should return false to wait due to any other conditions
-                    return false;
                 },
                 // counter to set a time based condition to end this waiting. If script execution
                 // time is close to its timeout (6 seconds - abount 1 inteval + 1 second), ends the
@@ -238,7 +251,8 @@ module.exports = class AutoscaleHandler {
                 // terminates this election. then continue
                 this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
 
-                if (this._masterRecord.instanceId === this._selfInstance.instanceId) {
+                if (this._masterRecord.instanceId === this._selfInstance.instanceId &&
+                    this._masterRecord.asgName === this._selfInstance.scalingGroupName) {
                     await this.platform.removeMasterRecord();
                 }
                 await this.removeInstance(this._selfInstance);
@@ -447,7 +461,7 @@ module.exports = class AutoscaleHandler {
                 }
             }
         }
-        return Promise.resolve(this._masterInfo);
+        return Promise.resolve(this._masterInfo); // return the new master
     }
 
     /**
@@ -596,5 +610,12 @@ module.exports = class AutoscaleHandler {
 
     async removeInstance(instance) {
         return await this.throwNotImplementedException() || instance;
+    }
+
+    setScalingGroup(master, self) {
+        this.masterScalingGroupName = master;
+        this.platform.setMasterScalingGroup(master);
+        this.scalingGroupName = self;
+        this.platform.setScalingGroup(self);
     }
 };
