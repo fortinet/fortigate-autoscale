@@ -1,6 +1,6 @@
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-    "contentVersion": "1.0.0.0",
+    "contentVersion": "1.0.0.1",
     "parameters": {
         "InstanceType": {
             "type": "string",
@@ -16,7 +16,7 @@
         },
         "FOSVersion": {
             "defaultValue": "6.0.3",
-            "type": "string",
+            "type": "String",
             "metadata": {
                 "description": "FOS Version supported for auto-scaling."
             },
@@ -25,8 +25,8 @@
                 "6.0.3"
             ]
         },
-        "VmssNamePrefix": {
-            "defaultValue": "dchao2vmss",
+        "VMSSNamePrefix": {
+            "defaultValue": "test2vmss",
             "type": "string",
             "metadata": {
                 "description": "Prefix name used as a base for naming resources."
@@ -36,79 +36,85 @@
         "SubnetAddressPrefix": {
             "type": "string",
             "metadata": {
-                "description": "Prefix of the subnet. Example 10.0.0.0/16"
+                "description": "Prefix for the Private Subnet. Example 10.0.0.0/16."
             },
             "defaultValue": "10.0.0.0/16"
         },
-        "PublicsubnetPrefix": {
+        "PublicSubnetPrefix": {
             "type": "string",
             "metadata": {
-                "description": "Prefix of the subnet1. Example 10.0.0.0/24.  Public Facing"
+                "description": "Prefix for the Subnet1. Example 10.0.0.0/24.  Public Facing."
             },
             "defaultValue": "10.0.0.0/24"
         },
         "PrivateSubnet2Prefix": {
             "type": "string",
             "metadata": {
-                "description": "Prefix of the subnet2. Example 10.0.1.0/24.  Private Facing"
+                "description": "Prefix of the Subnet2. Example 10.0.1.0/24.  Private Facing."
             },
             "defaultValue": "10.0.1.0/24"
         },
         "PrivateSubnet3Prefix": {
             "type": "string",
             "metadata": {
-                "description": "Prefix of the subnet3. Example 10.0.2.0/24.  Private Facing"
+                "description": "Prefix of the Subnet3. Example 10.0.2.0/24.  Private Facing."
             },
             "defaultValue": "10.0.2.0/24"
         },
         "PrivateSubnet4Prefix": {
             "type": "string",
             "metadata": {
-                "description": "Prefix of the subnet3. Example 10.0.3.0/24.  Private Facing"
+                "description": "Prefix of the Subnet3. Example 10.0.3.0/24.  Private Facing."
             },
             "defaultValue": "10.0.3.0/24"
         },
-        "ByolInstanceCount": {
+        "LoadBalancerIP": {
+            "type": "string",
+            "metadata": {
+                "description": "Load Balancer's Front End Private IP for the last octet.  For example: 10.  Then, the Private IP would be 10.0.1.10."
+            },
+            "defaultValue": "10"
+        },
+        "BYOLInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "Number of VM for BYOL VMSS"
+                "description": "Number of VM for BYOL VMSS."
             },
             "defaultValue": 1,
             "maxValue": 2
         },
-        "PaygInstanceCount": {
+        "PAYGInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "Number of VM for PAYG VMSS"
+                "description": "Number of VM for PAYG VMSS."
             },
             "defaultValue": 0
         },
-        "MaxPaygInstanceCount": {
+        "MaxPAYGInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "Max Number of VM for PAYG VMSS"
+                "description": "Max Number of VM for PAYG VMSS."
             },
             "defaultValue": 6
         },
         "ScaleUpThreshold": {
             "defaultValue": 80,
-            "type": "int",
+            "type": "Int",
             "metadata": {
-                "description": "CPU usage percentage at which scaleup should occur"
+                "description": "CPU usage percentage at which scaleup should occur."
             }
         },
         "ScaleDownThreshold": {
             "defaultValue": 20,
-            "type": "int",
+            "type": "Int",
             "metadata": {
-                "description": "CPU Usage percentage at which scaledown should occur"
+                "description": "CPU Usage percentage at which scaledown should occur."
             }
         },
         "EndPoints": {
-            "defaultValue": "",
-            "type": "string",
+            "type": "String",
             "metadata": {
-                "description": "Auto-Scale App service URL.  For example, https://fgt-app-serv.azurewebsites.net/api/"
+                "description": "Auto-Scale App service URL.  For example, https://fgt-app-serv.azurewebsites.net/api/."
             }
         },
         "AdminUsername": {
@@ -129,34 +135,36 @@
         "namingInfix": "[resourceGroup().name]",
         "location": "[resourceGroup().location]",
         "addressPrefix": "[parameters('SubnetAddressPrefix')]",
-        "subnetPrefix": "[parameters('PublicsubnetPrefix')]",
-        "subnet2Prefix": "[parameters('PrivateSubnet2Prefix')]",
-        "subnet3Prefix": "[parameters('PrivateSubnet3Prefix')]",
-        "subnet4Prefix": "[parameters('PrivateSubnet4Prefix')]",
-        "subnet2LoadBalancerIP": "10.0.1.10",
-        "lpVmssName": "[concat(parameters('VmssNamePrefix'), 'byol')]",
-        "regVmssName": "[concat(parameters('VmssNamePrefix'), 'payg')]",
-        "virtualNetworkName": "[concat(parameters('VmssNamePrefix'), 'vnet')]",
-        "publicIPAddressName": "[concat(parameters('VmssNamePrefix'), 'pip')]",
-        "subnetName": "[concat(parameters('VmssNamePrefix'), 'subnet')]",
-        "subnet2Name": "[concat(parameters('VmssNamePrefix'), 'subnet2')]",
-        "subnet3Name": "[concat(parameters('VmssNamePrefix'), 'subnet3')]",
-        "subnet4Name": "[concat(parameters('VmssNamePrefix'), 'subnet4')]",
-        "loadBalancerName": "[concat(parameters('VmssNamePrefix'), 'extlb')]",
-        "loadBalancer2Name": "[concat(parameters('VmssNamePrefix'), 'intlb')]",
-        "loadBalancer3Name": "[concat(parameters('VmssNamePrefix'), 'dmzlb')]",
-        "loadBalancer4Name": "[concat(parameters('VmssNamePrefix'), 'mgmtlb')]",
-        "networkSecurityGroupName": "[concat(parameters('VmssNamePrefix'), 'nsg')]",
+        "SubnetPrefix": "[parameters('PublicSubnetPrefix')]",
+        "Subnet2Prefix": "[parameters('PrivateSubnet2Prefix')]",
+        "Subnet3Prefix": "[parameters('PrivateSubnet3Prefix')]",
+        "Subnet4Prefix": "[parameters('PrivateSubnet4Prefix')]",
+        "Subnet2LoadBalancerIP": "[concat(substring(variables('Subnet2Prefix'), 0, lastIndexOf(variables('Subnet2Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
+        "Subnet3LoadBalancerIP": "[concat(substring(variables('Subnet3Prefix'), 0, lastIndexOf(variables('Subnet3Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
+        "Subnet4LoadBalancerIP": "[concat(substring(variables('Subnet4Prefix'), 0, lastIndexOf(variables('Subnet4Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
+        "lpVmssName": "[concat(parameters('VMSSNamePrefix'), 'byol')]",
+        "regVmssName": "[concat(parameters('VMSSNamePrefix'), 'payg')]",
+        "virtualNetworkName": "[concat(parameters('VMSSNamePrefix'), 'vnet')]",
+        "publicIPAddressName": "[concat(parameters('VMSSNamePrefix'), 'pip')]",
+        "SubnetName": "[concat(parameters('VMSSNamePrefix'), 'Subnet')]",
+        "Subnet2Name": "[concat(parameters('VMSSNamePrefix'), 'Subnet2')]",
+        "Subnet3Name": "[concat(parameters('VMSSNamePrefix'), 'Subnet3')]",
+        "Subnet4Name": "[concat(parameters('VMSSNamePrefix'), 'Subnet4')]",
+        "loadBalancerName": "[concat(parameters('VMSSNamePrefix'), 'extlb')]",
+        "loadBalancer2Name": "[concat(parameters('VMSSNamePrefix'), 'intlb')]",
+        "loadBalancer3Name": "[concat(parameters('VMSSNamePrefix'), 'dmzlb')]",
+        "loadBalancer4Name": "[concat(parameters('VMSSNamePrefix'), 'mgmtlb')]",
+        "networkSecurityGroupName": "[concat(parameters('VMSSNamePrefix'), 'nsg')]",
         "publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]",
         "lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('loadBalancerName'))]",
-        "lpNatPoolName": "[concat(parameters('VmssNamePrefix'), 'lpnatpoolssh')]",
-        "lpNatPoolNameHTTPS": "[concat(parameters('VmssNamePrefix'), 'lpnatpoolhttps')]",
-        "regNatPoolName": "[concat(parameters('VmssNamePrefix'), 'regnatpoolssh')]",
-        "regNatPoolNameHTTPS": "[concat(parameters('VmssNamePrefix'), 'regnatpoolhttps')]",
-        "bePoolName": "[concat(parameters('VmssNamePrefix'), 'bepool')]",
-        "intbePoolName": "[concat(parameters('VmssNamePrefix'), 'intbepool')]",
-        "dmzbePoolName": "[concat(parameters('VmssNamePrefix'), 'dmzbepool')]",
-        "mgmtbePoolName": "[concat(parameters('VmssNamePrefix'), 'mgmtbepool')]",
+        "lpNatPoolName": "[concat(parameters('VMSSNamePrefix'), 'lpnatpoolssh')]",
+        "lpNatPoolNameHTTPS": "[concat(parameters('VMSSNamePrefix'), 'lpnatpoolhttps')]",
+        "regNatPoolName": "[concat(parameters('VMSSNamePrefix'), 'regnatpoolssh')]",
+        "regNatPoolNameHTTPS": "[concat(parameters('VMSSNamePrefix'), 'regnatpoolhttps')]",
+        "bePoolName": "[concat(parameters('VMSSNamePrefix'), 'bepool')]",
+        "intbePoolName": "[concat(parameters('VMSSNamePrefix'), 'intbepool')]",
+        "dmzbePoolName": "[concat(parameters('VMSSNamePrefix'), 'dmzbepool')]",
+        "mgmtbePoolName": "[concat(parameters('VMSSNamePrefix'), 'mgmtbepool')]",
         "lpnatStartPort": 50030,
         "lpnatEndPort": 50120,
         "lpnatStartPortHTTPS": 40030,
@@ -175,28 +183,32 @@
         "regNicNameint": "[concat(variables('regVmssName'), 'nicint')]",
         "regNicNamedmz": "[concat(variables('regVmssName'), 'nicdmz')]",
         "regNicNamemgmt": "[concat(variables('regVmssName'), 'nicmgmt')]",
-        "ipConfigName": "[concat(parameters('VmssNamePrefix'), 'ipconfig')]",
-        "ipConfigintName": "[concat(parameters('VmssNamePrefix'), 'ipconfigint')]",
-        "ipConfigdmzName": "[concat(parameters('VmssNamePrefix'), 'ipconfigdmz')]",
-        "ipConfigmgmtName": "[concat(parameters('VmssNamePrefix'), 'ipconfigmgmt')]",
+        "ipConfigName": "[concat(parameters('VMSSNamePrefix'), 'ipconfig')]",
+        "ipConfigintName": "[concat(parameters('VMSSNamePrefix'), 'ipconfigint')]",
+        "ipConfigdmzName": "[concat(parameters('VMSSNamePrefix'), 'ipconfigdmz')]",
+        "ipConfigmgmtName": "[concat(parameters('VMSSNamePrefix'), 'ipconfigmgmt')]",
         "frontEndIPConfigID": "[concat(variables('lbID'),'/frontendIPConfigurations/loadBalancerFrontEnd')]",
         "vnetID": "[resourceId(variables('namingInfix'),'Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
-        "subnet2Ref": "[concat(variables('vnetID'),'/subnets/', variables('subnet2Name'))]",
-        "subnet3Ref": "[concat(variables('vnetID'),'/subnets/', variables('subnet3Name'))]",
-        "subnet4Ref": "[concat(variables('vnetID'),'/subnets/', variables('subnet4Name'))]",
-        "routeTableName": "[concat(parameters('VmssNamePrefix'),'-RouteTable')]",
+        "Subnet2Ref": "[concat(variables('vnetID'),'/Subnets/', variables('Subnet2Name'))]",
+        "Subnet3Ref": "[concat(variables('vnetID'),'/Subnets/', variables('Subnet3Name'))]",
+        "Subnet4Ref": "[concat(variables('vnetID'),'/Subnets/', variables('Subnet4Name'))]",
+        "routeTableName": "[concat(parameters('VMSSNamePrefix'),'-INTRouteTable')]",
+        "routeTable2Name": "[concat(parameters('VMSSNamePrefix'),'-DMZRouteTable')]",
+        "routeTable3Name": "[concat(parameters('VMSSNamePrefix'),'-MGMTRouteTable')]",
         "routeTableId": "[resourceId('Microsoft.Network/routeTables',variables('routeTableName'))]",
+        "routeTable2Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable2Name'))]",
+        "routeTable3Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable3Name'))]",
         "osType": {
             "publisher": "Fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm_payg",
-            "version": "[parameters('FOSVersion')]"
+            "version": "[parameters('fosversion')]"
         },
         "osType2": {
             "publisher": "Fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm",
-            "version": "[parameters('FOSVersion')]"
+            "version": "[parameters('fosversion')]"
         },
         "imageReference": "[variables('osType')]",
         "imageReference2": "[variables('osType2')]",
@@ -216,13 +228,96 @@
             "location": "[resourceGroup().location]",
             "properties": {
                 "routes": [{
-                    "name": "toDefault",
-                    "properties": {
-                        "addressPrefix": "0.0.0.0/0",
-                        "nextHopType": "VirtualAppliance",
-                        "nextHopIPAddress": "[variables('subnet2LoadBalancerIP')]"
+                        "name": "toDefault",
+                        "properties": {
+                            "addressPrefix": "0.0.0.0/0",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet2LoadBalancerIP')]"
+                        }
+                    },
+                    {
+                        "name": "todmz",
+                        "properties": {
+                            "addressPrefix": "[variables('Subnet3Prefix')]",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet2LoadBalancerIP')]"
+                        }
+                    },
+                    {
+                        "name": "tomgmt",
+                        "properties": {
+                            "addressPrefix": "[variables('Subnet4Prefix')]",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet2LoadBalancerIP')]"
+                        }
                     }
-                }]
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/routeTables",
+            "name": "[variables('routeTable2Name')]",
+            "apiVersion": "2017-09-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "routes": [{
+                        "name": "toDefault",
+                        "properties": {
+                            "addressPrefix": "0.0.0.0/0",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet3LoadBalancerIP')]"
+                        }
+                    },
+                    {
+                        "name": "toint",
+                        "properties": {
+                            "addressPrefix": "[variables('Subnet2Prefix')]",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet3LoadBalancerIP')]"
+                        }
+                    },
+                    {
+                        "name": "tomgmt",
+                        "properties": {
+                            "addressPrefix": "[variables('Subnet4Prefix')]",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet3LoadBalancerIP')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/routeTables",
+            "name": "[variables('routeTable3Name')]",
+            "apiVersion": "2017-09-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "routes": [{
+                        "name": "toDefault",
+                        "properties": {
+                            "addressPrefix": "0.0.0.0/0",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet4LoadBalancerIP')]"
+                        }
+                    },
+                    {
+                        "name": "toint",
+                        "properties": {
+                            "addressPrefix": "[variables('Subnet2Prefix')]",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet4LoadBalancerIP')]"
+                        }
+                    },
+                    {
+                        "name": "todmz",
+                        "properties": {
+                            "addressPrefix": "[variables('Subnet3Prefix')]",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIPAddress": "[variables('Subnet4LoadBalancerIP')]"
+                        }
+                    }
+                ]
             }
         },
         {
@@ -277,19 +372,19 @@
                         "[variables('addressPrefix')]"
                     ]
                 },
-                "subnets": [{
-                        "name": "[variables('subnetName')]",
+                "Subnets": [{
+                        "name": "[variables('SubnetName')]",
                         "properties": {
-                            "addressPrefix": "[variables('subnetPrefix')]",
+                            "addressPrefix": "[variables('SubnetPrefix')]",
                             "networkSecurityGroup": {
                                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
                             }
                         }
                     },
                     {
-                        "name": "[variables('subnet2Name')]",
+                        "name": "[variables('Subnet2Name')]",
                         "properties": {
-                            "addressPrefix": "[variables('subnet2Prefix')]",
+                            "addressPrefix": "[variables('Subnet2Prefix')]",
                             "networkSecurityGroup": {
                                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
                             },
@@ -299,26 +394,26 @@
                         }
                     },
                     {
-                        "name": "[variables('subnet3Name')]",
+                        "name": "[variables('Subnet3Name')]",
                         "properties": {
-                            "addressPrefix": "[variables('subnet3Prefix')]",
+                            "addressPrefix": "[variables('Subnet3Prefix')]",
                             "networkSecurityGroup": {
                                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
                             },
                             "routeTable": {
-                                "id": "[variables('routeTableId')]"
+                                "id": "[variables('routeTable2Id')]"
                             }
                         }
                     },
                     {
-                        "name": "[variables('subnet4Name')]",
+                        "name": "[variables('Subnet4Name')]",
                         "properties": {
-                            "addressPrefix": "[variables('subnet4Prefix')]",
+                            "addressPrefix": "[variables('Subnet4Prefix')]",
                             "networkSecurityGroup": {
                                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
                             },
                             "routeTable": {
-                                "id": "[variables('routeTableId')]"
+                                "id": "[variables('routeTable3Id')]"
                             }
                         }
                     }
@@ -336,7 +431,7 @@
             "properties": {
                 "publicIPAllocationMethod": "Static",
                 "dnsSettings": {
-                    "domainNameLabel": "[parameters('VmssNamePrefix')]"
+                    "domainNameLabel": "[parameters('VMSSNamePrefix')]"
                 }
             }
         },
@@ -353,35 +448,101 @@
             ],
             "properties": {
                 "frontendIPConfigurations": [{
-                    "name": "LoadBalancerBackEnd",
-                    "properties": {
-                        "privateIPAddress": "[variables('subnet2LoadBalancerIP')]",
-                        "privateIPAllocationMethod": "Static",
-                        "subnet": {
-                            "id": "[variables('subnet2Ref')]"
+                        "name": "LoadBalancerBackEnd",
+                        "properties": {
+                            "privateIPAddress": "[variables('Subnet2LoadBalancerIP')]",
+                            "privateIPAllocationMethod": "Static",
+                            "Subnet": {
+                                "id": "[variables('Subnet2Ref')]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "LoadBalancerDMZBackEnd",
+                        "properties": {
+                            "privateIPAddress": "[variables('Subnet3LoadBalancerIP')]",
+                            "privateIPAllocationMethod": "Static",
+                            "Subnet": {
+                                "id": "[variables('Subnet3Ref')]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "LoadBalancerMGMTBackEnd",
+                        "properties": {
+                            "privateIPAddress": "[variables('Subnet4LoadBalancerIP')]",
+                            "privateIPAllocationMethod": "Static",
+                            "Subnet": {
+                                "id": "[variables('Subnet4Ref')]"
+                            }
                         }
                     }
-                }],
+                ],
                 "backendAddressPools": [{
-                    "name": "[variables('intbePoolName')]"
-                }],
+                        "name": "[variables('intbePoolName')]"
+                    },
+                    {
+                        "name": "[variables('dmzbePoolName')]"
+                    },
+                    {
+                        "name": "[variables('mgmtbePoolName')]"
+                    }
+                ],
                 "loadBalancingRules": [{
-                    "name": "intRule",
-                    "properties": {
-                        "frontendIPConfiguration": {
-                            "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/frontendIPConfigurations/LoadBalancerBackEnd')]"
-                        },
-                        "backendAddressPool": {
-                            "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/backendAddressPools/',variables('intbePoolName'))]"
-                        },
-                        "protocol": "All",
-                        "frontendPort": 0,
-                        "backendPort": 0,
-                        "probe": {
-                            "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/probes/tcpProbe')]"
+                        "name": "intRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/frontendIPConfigurations/LoadBalancerBackEnd')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/backendAddressPools/',variables('intbePoolName'))]"
+                            },
+                            "protocol": "All",
+                            "frontendPort": 0,
+                            "backendPort": 0,
+                            "loadDistribution": "SourceIP",
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/probes/tcpProbe')]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "dmzRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/frontendIPConfigurations/LoadBalancerDMZBackEnd')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/backendAddressPools/',variables('dmzbePoolName'))]"
+                            },
+                            "protocol": "All",
+                            "frontendPort": 0,
+                            "backendPort": 0,
+                            "loadDistribution": "SourceIP",
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/probes/tcpProbe')]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "mgmtRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/frontendIPConfigurations/LoadBalancerMGMTBackEnd')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/backendAddressPools/',variables('mgmtbePoolName'))]"
+                            },
+                            "protocol": "All",
+                            "frontendPort": 0,
+                            "backendPort": 0,
+                            "loadDistribution": "SourceIP",
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancer2Name')), '/probes/tcpProbe')]"
+                            }
                         }
                     }
-                }],
+                ],
                 "probes": [{
                     "name": "tcpProbe",
                     "properties": {
@@ -477,6 +638,7 @@
                             "protocol": "Tcp",
                             "frontendPort": 80,
                             "backendPort": 80,
+                            "loadDistribution": "SourceIP",
                             "probe": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName')), '/probes/tcpProbe')]"
                             }
@@ -494,6 +656,7 @@
                             "protocol": "Tcp",
                             "frontendPort": 443,
                             "backendPort": 443,
+                            "loadDistribution": "SourceIP",
                             "probe": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName')), '/probes/tcpProbe')]"
                             }
@@ -529,7 +692,7 @@
             "sku": {
                 "name": "[parameters('InstanceType')]",
                 "tier": "Standard",
-                "capacity": "[parameters('ByolInstanceCount')]"
+                "capacity": "[parameters('byolInstanceCount')]"
             },
             "properties": {
                 "overprovision": "false",
@@ -550,10 +713,10 @@
                         "imageReference": "[variables('imageReference2')]"
                     },
                     "osProfile": {
-                        "computerNamePrefix": "[variables('lpvmssName')]",
-                        "adminUsername": "[parameters('AdminUsername')]",
+                        "computerNamePrefix": "[variables('lpVmssName')]",
+                        "adminUsername": "[parameters('adminUsername')]",
                         "customData": "[base64(variables('userdata2'))]",
-                        "adminPassword": "[parameters('AdminPassword')]"
+                        "adminPassword": "[parameters('adminPassword')]"
                     },
                     "networkProfile": {
                         "networkInterfaceConfigurations": [{
@@ -563,8 +726,8 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnetName'))]"
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('SubnetName'))]"
                                             },
                                             "loadBalancerBackendAddressPools": [{
                                                 "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancerName'), '/backendAddressPools/', variables('bePoolName'))]"
@@ -589,8 +752,8 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigintName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnet2Name'))]"
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('Subnet2Name'))]"
                                             },
                                             "loadBalancerBackendAddressPools": [{
                                                 "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancer2Name'), '/backendAddressPools/', variables('intbePoolName'))]"
@@ -607,9 +770,12 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigdmzName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnet3Name'))]"
-                                            }
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('Subnet3Name'))]"
+                                            },
+                                            "loadBalancerBackendAddressPools": [{
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancer2Name'), '/backendAddressPools/', variables('dmzbePoolName'))]"
+                                            }]
                                         }
                                     }]
                                 }
@@ -622,9 +788,12 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigmgmtName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnet4Name'))]"
-                                            }
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('Subnet4Name'))]"
+                                            },
+                                            "loadBalancerBackendAddressPools": [{
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancer2Name'), '/backendAddressPools/', variables('mgmtbePoolName'))]"
+                                            }]
                                         }
                                     }]
                                 }
@@ -649,9 +818,9 @@
                 "profiles": [{
                     "name": "Profile1",
                     "capacity": {
-                        "minimum": "[parameters('ByolInstanceCount')]",
-                        "maximum": "[parameters('ByolInstanceCount')]",
-                        "default": "[parameters('ByolInstanceCount')]"
+                        "minimum": "[parameters('byolInstanceCount')]",
+                        "maximum": "[parameters('byolInstanceCount')]",
+                        "default": "[parameters('byolInstanceCount')]"
                     },
                     "rules": []
                 }]
@@ -674,7 +843,7 @@
                     "capacity": {
                         "minimum": "0",
                         "maximum": "[parameters('MaxPaygInstanceCount')]",
-                        "default": "[parameters('PaygInstanceCount')]"
+                        "default": "[parameters('paygInstanceCount')]"
                     },
                     "rules": [{
                             "metricTrigger": {
@@ -686,7 +855,7 @@
                                 "timeWindow": "PT5M",
                                 "timeAggregation": "Average",
                                 "operator": "GreaterThan",
-                                "threshold": "[parameters('ScaleUpThreshold')]"
+                                "threshold": "[parameters('ScaleupThreshold')]"
                             },
                             "scaleAction": {
                                 "direction": "Increase",
@@ -705,7 +874,7 @@
                                 "timeWindow": "PT5M",
                                 "timeAggregation": "Average",
                                 "operator": "GreaterThan",
-                                "threshold": "[parameters('ScaleUpThreshold')]"
+                                "threshold": "[parameters('ScaleupThreshold')]"
                             },
                             "scaleAction": {
                                 "direction": "Increase",
@@ -724,7 +893,7 @@
                                 "timeWindow": "PT5M",
                                 "timeAggregation": "Average",
                                 "operator": "LessThan",
-                                "threshold": "[parameters('ScaleDownThreshold')]"
+                                "threshold": "[parameters('ScaledownThreshold')]"
                             },
                             "scaleAction": {
                                 "direction": "Decrease",
@@ -743,7 +912,7 @@
                                 "timeWindow": "PT5M",
                                 "timeAggregation": "Average",
                                 "operator": "LessThan",
-                                "threshold": "[parameters('ScaleDownThreshold')]"
+                                "threshold": "[parameters('ScaledownThreshold')]"
                             },
                             "scaleAction": {
                                 "direction": "Decrease",
@@ -774,7 +943,7 @@
             "sku": {
                 "name": "[parameters('InstanceType')]",
                 "tier": "Standard",
-                "capacity": "[parameters('PaygInstanceCount')]"
+                "capacity": "[parameters('paygInstanceCount')]"
             },
             "properties": {
                 "overprovision": "false",
@@ -799,8 +968,8 @@
                     "osProfile": {
                         "computerNamePrefix": "[variables('regVmssName')]",
                         "customData": "[base64(variables('userdata'))]",
-                        "adminUsername": "[parameters('AdminUsername')]",
-                        "adminPassword": "[parameters('AdminPassword')]"
+                        "adminUsername": "[parameters('adminUsername')]",
+                        "adminPassword": "[parameters('adminPassword')]"
                     },
                     "networkProfile": {
                         "networkInterfaceConfigurations": [{
@@ -810,8 +979,8 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnetName'))]"
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('SubnetName'))]"
                                             },
                                             "loadBalancerBackendAddressPools": [{
                                                 "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancerName'), '/backendAddressPools/', variables('bePoolName'))]"
@@ -836,8 +1005,8 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigintName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnet2Name'))]"
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('Subnet2Name'))]"
                                             },
                                             "loadBalancerBackendAddressPools": [{
                                                 "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancer2Name'), '/backendAddressPools/', variables('intbePoolName'))]"
@@ -854,9 +1023,12 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigdmzName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnet3Name'))]"
-                                            }
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('Subnet3Name'))]"
+                                            },
+                                            "loadBalancerBackendAddressPools": [{
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancer2Name'), '/backendAddressPools/', variables('dmzbePoolName'))]"
+                                            }]
                                         }
                                     }]
                                 }
@@ -869,9 +1041,12 @@
                                     "ipConfigurations": [{
                                         "name": "[variables('ipConfigmgmtName')]",
                                         "properties": {
-                                            "subnet": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/subnets/', variables('subnet4Name'))]"
-                                            }
+                                            "Subnet": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'), '/Subnets/', variables('Subnet4Name'))]"
+                                            },
+                                            "loadBalancerBackendAddressPools": [{
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('loadBalancer2Name'), '/backendAddressPools/', variables('mgmtbePoolName'))]"
+                                            }]
                                         }
                                     }]
                                 }
@@ -881,5 +1056,11 @@
                 }
             }
         }
-    ]
+    ],
+    "outputs": {
+        "Private2SubnetLoadBalancerIP": {
+            "value": "[concat(substring(variables('Subnet2Prefix'), 0, lastIndexOf(variables('Subnet2Prefix'), '.')),'.10')]",
+            "type": "string"
+        }
+    }
 }

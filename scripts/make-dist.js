@@ -313,21 +313,6 @@ async function npmInstallAt(location, args = [], options = {}) {
     }
 }
 
-// TODO: save for later. to make a fortigate-autoscale-core node module distribution
-function makeDistCore() {
-
-}
-
-// TODO: save for later. to make a fortigate-autoscale-aws node module distribution
-function makeDistAWS() {
-
-}
-
-// TODO: save for later. to make a fortigate-autoscale-azure node module distribution
-function makeDistAzure() {
-
-}
-
 async function makeDistAWSLambda(options = {saveToDist: 'zip', keepTemp: false}) {
     console.info('Making distribution zip package for: AWS Lambda');
     let rTempDir = await makeTempDir(),
@@ -822,10 +807,7 @@ async function makeDistAzureTemplateDeployment() {
 }
 
 async function makeDistAll() {
-    await makeDistCore();
-    // await makeDistAWS();
     await makeDistAWSLambda();
-    await makeDistAzure();
     await makeDistAzureFuncApp();
     await makeDistAzureTemplateDeployment();
     await makeDistProject();
@@ -835,15 +817,6 @@ async function makeDistAll() {
 let scrptName = process.argv[ARGV_PROCESS_PACKAGING_SCRIPT_NAME] || 'default';
 // make distribution package
 switch (scrptName.toLowerCase()) {
-    case 'core':
-        makeDistCore();
-        break;
-    case 'aws':
-        makeDistAWS();
-        break;
-    case 'azure':
-        makeDistAzure();
-        break;
     case 'azure-template-deployment':
         makeDistAzureTemplateDeployment();
         break;
@@ -875,8 +848,6 @@ switch (scrptName.toLowerCase()) {
         console.warn('( ͡° ͜ʖ ͡°) Usage: please use one of these commands:');
         console.warn('npm run build-all');
         console.warn('npm run build-project');
-        console.warn('npm run build-core');
-        console.warn('npm run build-azure');
         console.warn('npm run build-azure-funcapp');
         console.warn('npm run build-azure-template-deployment');
         console.warn('npm run build-aws-lambda');

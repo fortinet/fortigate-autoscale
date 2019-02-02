@@ -1,14 +1,14 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
+    "contentVersion": "1.0.0.1",
     "parameters": {
         "FuncAppName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the function app that you wish to create."
+                "description": "The name of the App Service Created."
             }
         },
-        "DbName": {
+        "CosomosDBName": {
             "type": "string",
             "metadata": {
                 "description": "The name of the Cosmos DB that you wish to create. The field can contain only lowercase letters, numbers and the '-' character, and must be between 3 and 31 characters."
@@ -23,87 +23,81 @@
                 "Standard_RAGRS"
             ],
             "metadata": {
-                "description": "Storage Account type"
+                "description": "Storage Account type."
             }
         },
-        "TenantId": {
+        "TenantID": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Azure Account Directory ID"
+                "description": "Azure Account Directory ID."
             }
         },
-        "SubscriptionId": {
+        "SubscriptionID": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Azure Subscription ID"
+                "description": "Azure Subscription ID."
             }
         },
         "RestAppId": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Application ID of the registered App"
+                "description": "Application ID for the Registered App."
             }
         },
         "HeartBeatLossCount": {
             "type": "string",
             "defaultValue": "3",
             "metadata": {
-                "description": "HeartBeat loss threshold when the FortiGate vm becomes unhealthy"
+                "description": "HeartBeat Interval Count"
             }
         },
         "RestAppSecret": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Application secret of the registered App"
+                "description": "Application secret for the registered App."
             }
         },
         "ScalingGroupResourceGroupName": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Name of the resource group of FGT autoscale is deployed in"
+                "description": "Name of the resource group of FGT autoscale is deployed in."
             }
         },
         "ScalingGroupNamePrefix": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Prefix Name of the VMSS Name(vmssName) that is given when deploying FGT autoscale template"
+                "description": "Prefix Name of the VMSS Name(VMSSName) that is given when deploying FGT autoscale template."
             }
         },
-        "ScriptTimeOut": {
+        "ScriptTimeout": {
             "type": "string",
-            "defaultValue": "230",
+            "defaultValue": "300",
             "metadata": {
-                "description": "Timeout value for the azure function script"
+                "description": "Timeout value for the azure function script."
             }
         },
-        "PskSecret": {
+        "LicenseGracePeriod": {
+            "type": "string",
+            "defaultValue": "600",
+            "metadata": {
+                "description": "The minimum time between a license is distributed and recycled to re-distribute. Unit is second."
+            }
+        },
+        "PSKSecretPassword": {
             "type": "securestring",
             "metadata": {
-                "description": "Preshare key password for autoscaling configuration"
+                "description": "Preshare key password for autoscaling configuration."
             }
         },
-        "PackageResUrl": {
+        "packageResUrl": {
             "type": "string",
-            "defaultValue": "https://github.com/mobilesuitzero/autoscale/raw/master/fortigate-autoscale-azure-funcapp-5.zip",
             "metadata": {
                 "description": "The public URL of package zip which contains the resource used to deploy the Function App."
-            }
-        },
-        "ResourceGroupLocation": {
-            "type": "string",
-            "defaultValue": "[resourceGroup().location]",
-            "metadata": {
-                "description": "Location for all resources."
             }
         }
     },
     "variables": {
+        "location": "[resourceGroup().location]",
         "functionAppName": "[parameters('FuncAppName')]",
         "hostingPlanName": "[parameters('FuncAppName')]",
         "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
@@ -112,10 +106,10 @@
     "resources": [{
             "apiVersion": "2015-04-08",
             "type": "Microsoft.DocumentDb/databaseAccounts",
-            "name": "[parameters('DbName')]",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "name": "[parameters('CosomosDBName')]",
+            "location": "[variables('location')]",
             "properties": {
-                "name": "[parameters('DbName')]",
+                "name": "[parameters('CosomosDBName')]",
                 "databaseAccountOfferType": "Standard"
             }
         },
@@ -123,17 +117,35 @@
             "type": "Microsoft.Storage/storageAccounts",
             "name": "[variables('storageAccountName')]",
             "apiVersion": "2016-12-01",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "location": "[variables('location')]",
             "kind": "Storage",
             "sku": {
                 "name": "[parameters('StorageAccountType')]"
-            }
+            },
+            "resources": [{
+                    "name": "default/configset",
+                    "type": "blobServices/containers",
+                    "apiVersion": "2018-03-01-preview",
+                    "dependsOn": [
+                        "[variables('storageAccountName')]"
+                    ]
+                },
+                {
+                    "name": "default/fgt-asg-license",
+                    "type": "blobServices/containers",
+                    "apiVersion": "2018-03-01-preview",
+                    "dependsOn": [
+                        "[variables('storageAccountName')]"
+                    ]
+                }
+
+            ]
         },
         {
             "apiVersion": "2015-04-01",
             "type": "Microsoft.Web/serverfarms",
             "name": "[variables('hostingPlanName')]",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "location": "[variables('location')]",
             "properties": {
                 "name": "[variables('hostingPlanName')]",
                 "computeMode": "Dynamic",
@@ -145,10 +157,10 @@
             "type": "Microsoft.Web/sites",
             "name": "[variables('functionAppName')]",
             "kind": "functionapp",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('DbName'))]",
+                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosomosDBName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {
@@ -192,11 +204,11 @@
                         },
                         {
                             "name": "WEBSITE_RUN_FROM_ZIP",
-                            "value": "[parameters('PackageResUrl')]"
+                            "value": "[parameters('packageResUrl')]"
                         },
                         {
                             "name": "SCALESET_DB_ACCOUNT",
-                            "value": "[parameters('DbName')]"
+                            "value": "[parameters('CosomosDBName')]"
                         },
                         {
                             "name": "SCALING_GROUP_NAME_PAYG",
@@ -212,7 +224,7 @@
                         },
                         {
                             "name": "TENANT_ID",
-                            "value": "[parameters('TenantId')]"
+                            "value": "[parameters('TenantID')]"
                         },
                         {
                             "name": "HEART_BEAT_LOSS_COUNT",
@@ -220,15 +232,11 @@
                         },
                         {
                             "name": "REST_API_MASTER_KEY",
-                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('DbName')), '2015-04-08').primaryMasterKey]"
+                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosomosDBName')), '2015-04-08').primaryMasterKey]"
                         },
                         {
                             "name": "REQUIRED_CONFIG_SET",
                             "value": ""
-                        },
-                        {
-                            "name": "VM_INFO_CACHE_ENABLED",
-                            "value": "true"
                         },
                         {
                             "name": "UNIQUE_ID",
@@ -240,11 +248,15 @@
                         },
                         {
                             "name": "FORTIGATE_PSKSECRET",
-                            "value": "[parameters('PskSecret')]"
+                            "value": "[parameters('PSKSecretPassword')]"
                         },
                         {
                             "name": "SCRIPT_TIMEOUT",
-                            "value": "[parameters('ScriptTimeOut')]"
+                            "value": "[parameters('ScriptTimeout')]"
+                        },
+                        {
+                            "name": "GET_LICENSE_GRACE_PERIOD",
+                            "value": "[parameters('LicenseGracePeriod')]"
                         },
                         {
                             "name": "AZURE_STORAGE_ACCOUNT",
@@ -256,7 +268,7 @@
                         },
                         {
                             "name": "SUBSCRIPTION_ID",
-                            "value": "[parameters('SubscriptionId')]"
+                            "value": "[parameters('SubscriptionID')]"
                         }
                     ]
                 }

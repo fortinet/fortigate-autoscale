@@ -66,7 +66,8 @@ module.exports = class AutoscaleHandler {
                 path: 'configset',
                 fileName: configName
             };
-            return await this.platform.getBlobFromStorage(parameters);
+            let blob = await this.platform.getBlobFromStorage(parameters);
+            return blob.content;
         } catch (error) {
             this.logger.warn(`called getConfigSet > error: ${error}`);
             throw error;

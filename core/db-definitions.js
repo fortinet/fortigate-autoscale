@@ -296,6 +296,10 @@ const DB = {
                 AttributeType: 'S'
             },
             {
+                AttributeName: 'algorithm',
+                AttributeType: 'S'
+            },
+            {
                 AttributeName: 'asgName',
                 AttributeType: 'S'
             },
