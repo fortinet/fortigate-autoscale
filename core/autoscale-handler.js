@@ -280,8 +280,8 @@ module.exports = class AutoscaleHandler {
         // for instance not yet in monitor and there's a master instance (regarless its health
         // status), add this instance to monitor
         if (!selfHealthCheck && masterInfo) {
-            await this.addInstanceToMonitor(this._selfInstance,
-                Date.now() + interval * 1000, masterInfo.primaryPrivateIpAddress);
+            await this.addInstanceToMonitor(this._selfInstance, interval,
+                masterInfo.primaryPrivateIpAddress);
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
                 `ip: ${this._selfInstance.primaryPrivateIpAddress}) is added to monitor.`);
             // if this newly come-up instance is the new master, save its instance id as the
@@ -563,9 +563,9 @@ module.exports = class AutoscaleHandler {
         }
     }
 
-    async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp = 'null') {
+    async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
         return await this.throwNotImplementedException() ||
-            instance && nextHeartBeatTime && masterIp;
+            instance && heartBeatInterval && masterIp;
     }
 
     async removeInstanceFromMonitor(instanceId) {

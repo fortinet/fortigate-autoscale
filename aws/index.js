@@ -325,7 +325,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      * @param {Object} instance instance object which a vmId property is required.
      * @param {Number} heartBeatInterval integer value, unit is second.
      */
-    async getInstanceHealthCheck(instance, heartBeatInterval) {
+    async getInstanceHealthCheck(instance, heartBeatInterval = null) {
         if (!(instance && instance.instanceId)) {
             logger.error('getInstanceHealthCheck > error: no instanceId property found' +
                 ` on instance: ${JSON.stringify(instance)}`);
@@ -341,6 +341,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let compensatedScriptTime,
                 healthy,
                 heartBeatLossCount,
+                interval,
                 data = await docClient.get(params).promise();
             if (data.Item) {
                 // to get a more accurate heart beat elapsed time, the script execution time so far
@@ -352,8 +353,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     healthy = true;
                     heartBeatLossCount = 0;
                 } else {
-                    // consider instance as health if hb loss < 3
-                    healthy = data.Item.heartBeatLossCount < 3;
+                    // if the current sync heartbeat is late, the instance is still considered
+                    // healthy unless 3 times of heartBeatInterval amount of time has passed.
+                    // where the instance have 0% chance to catch up with a heartbeat sync
+                    interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
+                        heartBeatInterval : data.Item.heartBeatInterval;
+                    healthy = data.Item.heartBeatLossCount < 3 &&
+                    Date.now() < data.Item.nextHeartBeatTime +
+                        interval * (2 - data.Item.heartBeatLossCount);
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
                 }
                 logger.info('called getInstanceHealthCheck');
@@ -361,7 +368,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     instanceId: instance.instanceId,
                     healthy: healthy,
                     heartBeatLossCount: heartBeatLossCount,
-                    nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
+                    heartBeatInterval: interval,
+                    nextHeartBeatTime: Date.now() + interval * 1000,
                     masterIp: data.Item.masterIp,
                     syncState: data.Item.syncState,
                     inSync: data.Item.syncState === 'in-sync'
@@ -391,10 +399,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 Key: {instanceId: healthCheckObject.instanceId},
                 TableName: DB.AUTOSCALE.TableName,
                 UpdateExpression: 'set heartBeatLossCount = :HeartBeatLossCount, ' +
+                'heartBeatInterval = :heartBeatInterval' +
                     'nextHeartBeatTime = :NextHeartBeatTime, ' +
-                    'masterIp = :MasterIp, syncState = :SyncState',
+                    'masterIp = :MasterIp, syncState = :SyncState, ',
                 ExpressionAttributeValues: {
                     ':HeartBeatLossCount': healthCheckObject.heartBeatLossCount,
+                    ':heartBeatInterval': heartBeatInterval,
                     ':NextHeartBeatTime': checkPointTime + heartBeatInterval * 1000,
                     ':MasterIp': masterIp ? masterIp : 'null',
                     ':SyncState': healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' :
@@ -995,7 +1005,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId }),
                 selfHealthCheck = await this.platform.getInstanceHealthCheck({
                     instanceId: instance.instanceId
-                }, 0);
+                });
             await this.platform.updateInstanceHealthCheck(selfHealthCheck,
                 0, selfHealthCheck ? selfHealthCheck.masterIp : null, Date.now(), true);
             // check if master
@@ -1019,15 +1029,16 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     /** @override */
-    async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp = 'null') {
+    async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
         logger.info('calling addInstanceToMonitor');
         var params = {
             Item: {
                 instanceId: instance.instanceId,
                 ip: instance.primaryPrivateIpAddress,
                 autoScalingGroupName: this.masterScalingGroupName,
-                nextHeartBeatTime: nextHeartBeatTime,
+                nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
                 heartBeatLossCount: 0,
+                heartBeatInterval: heartBeatInterval,
                 syncState: 'in-sync',
                 masterIp: masterIp
             },

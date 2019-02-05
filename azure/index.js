@@ -284,7 +284,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             isNewInstance = true;
             // save self to monitored instances db (diagram: add instance to monitor)
             await this.addInstanceToMonitor(this._selfInstance,
-                Date.now() + interval * 1000);
+                interval);
         }
 
         nextTime = Date.now();
