@@ -458,9 +458,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         // the blob service requires two process env variables:
         // process.env.AZURE_STORAGE_ACCOUNT
         // process.env.AZURE_STORAGE_ACCESS_KEY
-        let blobService = azureStorage.createBlobService();
         return await new Promise((resolve, reject) => {
-            blobService.getBlobToText(parameters.path, parameters.fileName,
+            storageClient.refBlobService().getBlobToText(parameters.path, parameters.fileName,
             (error, text, result, response) => {
                 if (error) {
                     reject(error);
