@@ -884,6 +884,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // the master ip same as mine? (diagram: master IP same as mine?)
         // this checking for 'duplicatedGetConfigCall' is to work around
         // the double GET config calls.
+        // TODO: remove the workaround if mantis item: #0534971 is consumed
         if (duplicatedGetConfigCall ||
             masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
@@ -1009,23 +1010,43 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // this returns the newest stockRecords on the db
             stockRecords = await this.updateLicenseStockRecord(licenseFiles, stockRecords);
 
+            let availStockItem,
+                updateUsage = true;
+
+            let itemKey, itemValue;
+
+            // TODO: remove the workaround if mantis item: #0534971 is consumed
+            // a workaround for dobule get call:
+            // check if a license is already assigned to one fgt, if it makes a second get call
+            // for license, returns the tracked usage record.
+
+            for ([itemKey, itemValue] of usageRecords.entries()) {
+                if (itemValue.asgName === this.scalingGroupName &&
+                    itemValue.instanceId === this._selfInstance.instanceId) {
+                    availStockItem = itemValue;
+                    updateUsage = false;
+                    break;
+                }
+            }
+
+            // this is a greedy approach
             // try to find one available license and use it.
             // if none availabe, try to check if any used one could be recycled.
             // if none recyclable, throw an error.
 
-            let availStockItem, stockRecIter = stockRecords.entries(), item = stockRecIter.next();
-
-            while (!item.done) {
-                if (item.value && item.value[0] && !usageRecords.has(item.value[0])) {
-                    availStockItem = item.value[1];
-                    break;
-                }
-                item = stockRecIter.next();
-            }
-
-            // if not found available license file
             if (!availStockItem) {
-                [availStockItem] = await this.findRecycleableLicense(stockRecords, usageRecords, 1);
+                for ([itemKey, itemValue] of stockRecords.entries()) {
+                    if (itemKey && !usageRecords.has(itemKey)) {
+                        availStockItem = itemValue;
+                        break;
+                    }
+                }
+
+                // if not found available license file
+                if (!availStockItem) {
+                    [availStockItem] = await this.findRecycleableLicense(stockRecords,
+                        usageRecords, 1);
+                }
             }
 
             if (!availStockItem) {
@@ -1039,11 +1060,13 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
             // license file found
             // update usage records
-            await this.platform.updateLicenseUsage({
-                stockItem: availStockItem,
-                asgName: this.scalingGroupName,
-                instanceId: this._selfInstance.instanceId
-            });
+            if (updateUsage) {
+                await this.platform.updateLicenseUsage({
+                    stockItem: availStockItem,
+                    asgName: this.scalingGroupName,
+                    instanceId: this._selfInstance.instanceId
+                });
+            }
             context.res = this.proxyResponse(200, licenseFile.content);
         } catch (error) {
             logger.error(error);
