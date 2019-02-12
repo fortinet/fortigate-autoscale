@@ -297,7 +297,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
      * @param {Object} instance instance object which a vmId property is required.
      * @param {Number} heartBeatInterval integer value, unit is second.
      */
-    async getInstanceHealthCheck(instance, heartBeatInterval) {
+    async getInstanceHealthCheck(instance, heartBeatInterval = null) {
         // TODO: not fully implemented in V3
         if (!(instance && instance.instanceId)) {
             logger.error('getInstanceHealthCheck > error: no instance id property found on ' +
@@ -320,34 +320,44 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             let compensatedScriptTime,
                 healthy,
                 heartBeatLossCount,
+                interval,
+                healthCheckRecord,
                 items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
                 keyExpression, filterExpression);
             if (!Array.isArray(items) || items.length === 0) {
                 logger.info('called getInstanceHealthCheck: no record found');
                 return null;
             }
+            healthCheckRecord = items[0];
             // to get a more accurate heart beat elapsed time, the script execution time so far
             // is compensated.
             compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
-            healthy = compensatedScriptTime < items[0].nextHeartBeatTime;
-            if (compensatedScriptTime < items[0].nextHeartBeatTime) {
+            healthy = compensatedScriptTime < healthCheckRecord.nextHeartBeatTime;
+            interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
+                heartBeatInterval : healthCheckRecord.heartBeatInterval;
+            if (compensatedScriptTime < healthCheckRecord.nextHeartBeatTime) {
                 // reset hb loss cound if instance sends hb within its interval
                 healthy = true;
                 heartBeatLossCount = 0;
             } else {
-                // consider instance as health if hb loss < 3
-                healthy = items[0].heartBeatLossCount < 3;
-                heartBeatLossCount = items[0].heartBeatLossCount + 1;
+                // if the current sync heartbeat is late, the instance is still considered
+                // healthy unless 3 times of heartBeatInterval amount of time has passed.
+                // where the instance have 0% chance to catch up with a heartbeat sync
+                healthy = healthCheckRecord.heartBeatLossCount < 3 &&
+                    Date.now() < healthCheckRecord.nextHeartBeatTime +
+                        interval * (2 - healthCheckRecord.heartBeatLossCount);
+                heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
             }
             logger.info('called getInstanceHealthCheck');
             return {
                 instanceId: instance.instanceId,
                 healthy: healthy,
                 heartBeatLossCount: heartBeatLossCount,
-                nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
-                masterIp: items[0].masterIp,
-                syncState: items[0].syncState,
-                inSync: items[0].syncState === 'in-sync'
+                heartBeatInterval: interval,
+                nextHeartBeatTime: Date.now() + interval * 1000,
+                masterIp: healthCheckRecord.masterIp,
+                syncState: healthCheckRecord.syncState,
+                inSync: healthCheckRecord.syncState === 'in-sync'
             };
         } catch (error) {
             logger.info('called getInstanceHealthCheck with error. ' +
@@ -371,6 +381,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 asgName: this.scalingGroupName,
                 instanceId: healthCheckObject.instanceId,
                 heartBeatLossCount: healthCheckObject.heartBeatLossCount,
+                heartBeatInterval: heartBeatInterval,
                 nextHeartBeatTime: checkPointTime + heartBeatInterval * 1000,
                 masterIp: masterIp ? masterIp : 'null',
                 syncState: healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync'
@@ -1231,66 +1242,26 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async parseInstanceInfo(instanceId) {
         // look for this vm in both byol and payg vmss
-        let cachedInfo = null;
-        // look from cache first (if cache enabled){
-        if (process.env.VM_INFO_CACHE_ENABLED) {
-            // look from BYOL scaling group
-            cachedInfo =
-                await this.platform.getVmInfoCache(
-                    process.env.SCALING_GROUP_NAME_BYOL,
-                    isNaN(instanceId) ? null : instanceId,
-                    isNaN(instanceId) ? instanceId : null
-                );
-            // found in BYOL
-            if (cachedInfo) {
-                this._selfInstance = this._selfInstance || cachedInfo;
-                this.setScalingGroup(
-                    process.env.MASTER_SCALING_GROUP_NAME,
-                    process.env.SCALING_GROUP_NAME_BYOL
-                );
-            } else {
-                // look from PAYG scaling group
-                cachedInfo =
-                    await this.platform.getVmInfoCache(
-                        process.env.SCALING_GROUP_NAME_PAYG,
-                        isNaN(instanceId) ? null : instanceId,
-                        isNaN(instanceId) ? instanceId : null
-                    );
-                if (cachedInfo) {
-                    this._selfInstance = this._selfInstance || cachedInfo;
-                    this.setScalingGroup(
-                        process.env.MASTER_SCALING_GROUP_NAME,
-                        process.env.SCALING_GROUP_NAME_PAYG
-                    );
-                }
-            }
-        }
-
-        // if no instance info cache found, get instance info from platform
-        if (!cachedInfo) {
-            // look from byol first
-            this._selfInstance = this._selfInstance || await this.platform.describeInstance({
+        // look from byol first
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance({
+            instanceId: instanceId,
+            scaleSetName: process.env.SCALING_GROUP_NAME_BYOL
+        });
+        if (this._selfInstance) {
+            this.setScalingGroup(
+                process.env.MASTER_SCALING_GROUP_NAME,
+                process.env.SCALING_GROUP_NAME_BYOL
+            );
+        } else { // not found in byol vmss, look from payg
+            this._selfInstance = await this.platform.describeInstance({
                 instanceId: instanceId,
-                scaleSetName: process.env.SCALING_GROUP_NAME_BYOL,
-                readCache: false
+                scaleSetName: process.env.SCALING_GROUP_NAME_PAYG
             });
             if (this._selfInstance) {
                 this.setScalingGroup(
                     process.env.MASTER_SCALING_GROUP_NAME,
-                    process.env.SCALING_GROUP_NAME_BYOL
+                    process.env.SCALING_GROUP_NAME_PAYG
                 );
-            } else { // not found in byol vmss, look from payg
-                this._selfInstance = await this.platform.describeInstance({
-                    instanceId: instanceId,
-                    scaleSetName: process.env.SCALING_GROUP_NAME_PAYG,
-                    readCache: false
-                });
-                if (this._selfInstance) {
-                    this.setScalingGroup(
-                        process.env.MASTER_SCALING_GROUP_NAME,
-                        process.env.SCALING_GROUP_NAME_PAYG
-                    );
-                }
             }
         }
     }
