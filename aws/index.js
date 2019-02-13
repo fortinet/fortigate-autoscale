@@ -361,7 +361,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
                     healthy = data.Item.heartBeatLossCount < 3 &&
                     Date.now() < data.Item.nextHeartBeatTime +
-                        interval * (2 - data.Item.heartBeatLossCount);
+                        interval * 1000 * (2 - data.Item.heartBeatLossCount);
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
                 }
                 logger.info('called getInstanceHealthCheck');

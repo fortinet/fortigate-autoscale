@@ -26,7 +26,7 @@ var dbClient, computeClient, storageClient;
 // this variable is to store the anticipated script execution expire time (milliseconds)
 let scriptExecutionExpireTime,
     electionWaitingTime = process.env.ELECTION_WAIT_TIME ?
-        parseInt(process.env.ELECTION_WAIT_TIME) : 60000; // in ms
+        parseInt(process.env.ELECTION_WAIT_TIME) * 1000 : 60000; // in ms
 
 class AzureLogger extends AutoScaleCore.DefaultLogger {
     constructor(loggerObject) {
@@ -345,12 +345,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 // where the instance have 0% chance to catch up with a heartbeat sync
                 healthy = healthCheckRecord.heartBeatLossCount < 3 &&
                     Date.now() < healthCheckRecord.nextHeartBeatTime +
-                        interval * (2 - healthCheckRecord.heartBeatLossCount);
+                        interval * 1000 * (2 - healthCheckRecord.heartBeatLossCount);
                 heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
             }
-            logger.info('called getInstanceHealthCheck');
+            logger.info(`called getInstanceHealthCheck. (time: ${compensatedScriptTime}, ` +
+                `interval:${heartBeatInterval}) healthcheck record:`,
+                JSON.stringify(healthCheckRecord));
             return {
                 instanceId: instance.instanceId,
+                ip: healthCheckRecord.ip ? healthCheckRecord.ip : '',
                 healthy: healthy,
                 heartBeatLossCount: heartBeatLossCount,
                 heartBeatInterval: interval,
@@ -378,13 +381,14 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         try {
             let result, document = {
                 id: `${this.scalingGroupName}-${healthCheckObject.instanceId}`,
-                asgName: this.scalingGroupName,
                 instanceId: healthCheckObject.instanceId,
+                ip: healthCheckObject.ip,
+                asgName: this.scalingGroupName,
+                nextHeartBeatTime: checkPointTime + heartBeatInterval * 1000,
                 heartBeatLossCount: healthCheckObject.heartBeatLossCount,
                 heartBeatInterval: heartBeatInterval,
-                nextHeartBeatTime: checkPointTime + heartBeatInterval * 1000,
-                masterIp: masterIp ? masterIp : 'null',
-                syncState: healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync'
+                syncState: healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync',
+                masterIp: masterIp ? masterIp : 'null'
             };
             if (!forceOutOfSync && healthCheckObject.syncState === 'out-of-sync') {
                 logger.info(`instance already out of sync: healthcheck info: ${healthCheckObject}`);
@@ -417,7 +421,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
         let virtualMachine, hitCache = '',
-            readCache = !(parameters.readCache && parameters.readCache === false) &&
+            readCache = !(parameters.readCache !== undefined && parameters.readCache === false) &&
                     process.env.VM_INFO_CACHE_ENABLED &&
                     process.env.VM_INFO_CACHE_ENABLED.toLowerCase() === 'true';
         if (parameters.scaleSetName) {
@@ -649,6 +653,38 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
+    async deleteLogFromDb(timeFrom, timeTo = null) {
+        try {
+            let timeRangeFrom = timeFrom && !isNaN(timeFrom) ? parseInt(timeFrom) : 0,
+                timeRangeTo = timeTo && !isNaN(timeTo) ? parseInt(timeTo) : Date.now();
+            let deletionTasks = [], errorTasks = [];
+            let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
+                null, null, null, {
+                    order: {
+                        by: 'timestamp',
+                        direction: 'asc'
+                    }
+                });
+            if (!Array.isArray(items) || items.length === 0) {
+                return `${deletionTasks.length} rows deleted. ${errorTasks.length} error rows.`;
+            }
+            items.forEach(item => {
+                if (item.timestamp >= timeRangeFrom && item.timestamp <= timeRangeTo) {
+                    deletionTasks.push(
+                        dbClient.deleteDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
+                        item.id).catch(e => {
+                            errorTasks.push(item);
+                            return e;
+                        }));
+                }
+            });
+            await Promise.all(deletionTasks);
+            return `${deletionTasks.length} rows deleted. ${errorTasks.length} error rows.`;
+        } catch (error) {
+            return false;
+        }
+    }
+
     async listLicenseFiles() {
         let blobService = storageClient.refBlobService();
         return await new Promise((resolve, reject) => {
@@ -775,7 +811,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             headers: {
                 'Content-Type': 'text/plain'
             },
-            body: typeof res.toString === 'function' ? res.toString() : JSON.stringify(res)
+            body: typeof res.toString === 'function' && res.toString() !== '[object Object]' ?
+                res.toString() : JSON.stringify(res)
         };
     }
 
@@ -920,15 +957,16 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     /** @override */
-    async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp = 'null') {
+    async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
         logger.info('calling addInstanceToMonitor');
         let document = {
             id: `${this.scalingGroupName}-${instance.instanceId}`,
-            ip: instance.primaryPrivateIpAddress,
             instanceId: instance.instanceId,
+            ip: instance.primaryPrivateIpAddress,
             asgName: this.scalingGroupName,
-            nextHeartBeatTime: nextHeartBeatTime,
+            nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
             heartBeatLossCount: 0,
+            heartBeatInterval: heartBeatInterval,
             syncState: 'in-sync',
             masterIp: masterIp
         };
@@ -1169,7 +1207,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         tasks.push(
                             ref.platform.describeInstance({
                                 instanceId: item.instanceId,
-                                scaleSetName: item.asgName
+                                scaleSetName: item.asgName,
+                                readCache: false
                             }).catch(() => null));
                         let [healthCheck, instance] = await Promise.all(tasks);
                         return {
@@ -1222,17 +1261,46 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     async handleGetCustomLog(context, event) {
-        // TODO: this function is for Poc only for now
+        // TODO: this function should be inaccessible on production
         try {
-            let psksecret;
+            let psksecret, proxyMethod = 'method' in event && event.method, result = '';
+            let timeFrom, timeTo;
             await this.platform.init();
-            if (event && event.headers && event.headers.psksecret) {
-                psksecret = event.headers.psksecret;
+            if (event && event.headers) {
+                if (event.headers.psksecret) {
+                    psksecret = event.headers.psksecret;
+                }
+                timeFrom = event.headers.timefrom ? event.headers.timefrom : 0;
+                timeTo = event.headers.timeto ? event.headers.timeto : null;
             }
             if (!(psksecret && psksecret === process.env.FORTIGATE_PSKSECRET)) {
                 return;
             }
-            context.res = this.proxyResponse(200, await this.platform.listLogFromDb(-1, 'html'));
+            switch (proxyMethod && proxyMethod.toUpperCase()) {
+                case 'GET':
+                    result = await this.platform.listLogFromDb(-1, 'html');
+                    break;
+                case 'DELETE':
+                    if (timeFrom && isNaN(timeFrom)) {
+                        try {
+                            timeFrom = new Date(timeFrom).getTime();
+                        } catch (error) {
+                            timeFrom = 0;
+                        }
+                    }
+                    if (timeTo && isNaN(timeTo)) {
+                        try {
+                            timeTo = new Date(timeTo).getTime();
+                        } catch (error) {
+                            timeTo = null;
+                        }
+                    }
+                    result = await this.platform.deleteLogFromDb(timeFrom, timeTo);
+                    break;
+                default:
+                    break;
+            }
+            context.res = this.proxyResponse(200, result);
             // context.res = this.proxyResponse(200, licenseFile);
         } catch (error) {
             logger.error(error);
@@ -1264,6 +1332,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 );
             }
         }
+        logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
+        `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
     }
     // end of AzureAutoscaleHandler class
 }
@@ -1303,7 +1373,7 @@ exports.handle = async (context, req) => {
     // now the script timeout is set to 200 seconds which is 30 seconds earlier.
     // Leave it some time for function finishing up.
     let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
-        parseInt(process.env.SCRIPT_TIMEOUT) : 200000;
+        parseInt(process.env.SCRIPT_TIMEOUT) * 1000 : 200000;
     if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
         scriptTimeOut = 200000;
     }
@@ -1333,7 +1403,7 @@ exports.handleGetLicense = async (context, req) => {
     // now the script timeout is set to 200 seconds which is 30 seconds earlier.
     // Leave it some time for function finishing up.
     let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
-        parseInt(process.env.SCRIPT_TIMEOUT) : 200000;
+        parseInt(process.env.SCRIPT_TIMEOUT) * 1000 : 200000;
     if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
         scriptTimeOut = 200000;
     }
