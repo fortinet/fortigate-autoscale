@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.1",
+    "contentVersion": "1.0.0.2",
     "parameters": {
         "FuncAppName": {
             "type": "string",
@@ -81,6 +81,13 @@
             "defaultValue": "600",
             "metadata": {
                 "description": "The minimum time between a license is distributed and recycled to re-distribute. Unit is second."
+            }
+        },
+        "ElectionWaitTime": {
+            "type": "string",
+            "defaultValue": "90",
+            "metadata": {
+                "description": "The maximum time to wait for a master election to complete. Unit is second."
             }
         },
         "PSKSecretPassword": {
@@ -236,7 +243,7 @@
                         },
                         {
                             "name": "REQUIRED_CONFIG_SET",
-                            "value": ""
+                            "value": "extraports-yes, extrastaticroutes-yes"
                         },
                         {
                             "name": "UNIQUE_ID",
@@ -259,6 +266,10 @@
                             "value": "[parameters('LicenseGracePeriod')]"
                         },
                         {
+                            "name": "ELECTION_WAIT_TIME",
+                            "value": "[parameters('ElectionWaitTime')]"
+                        },
+                        {
                             "name": "AZURE_STORAGE_ACCOUNT",
                             "value": "[variables('storageAccountName')]"
                         },
@@ -269,10 +280,6 @@
                         {
                             "name": "SUBSCRIPTION_ID",
                             "value": "[parameters('SubscriptionID')]"
-                        },
-                        {
-                            "name": "ELECTION_WAIT_TIME",
-                            "value": "90"
                         },
                         {
                             "name": "DEBUG_SAVE_CUSTOM_LOG",

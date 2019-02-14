@@ -1,6 +1,6 @@
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-    "contentVersion": "1.0.0.1",
+    "contentVersion": "1.0.0.2",
     "parameters": {
         "InstanceType": {
             "type": "string",
@@ -16,7 +16,7 @@
         },
         "FOSVersion": {
             "defaultValue": "6.0.3",
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "FOS Version supported for auto-scaling."
             },
@@ -112,7 +112,7 @@
             }
         },
         "EndPoints": {
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "Auto-Scale App service URL.  For example, https://fgt-app-serv.azurewebsites.net/api/."
             }

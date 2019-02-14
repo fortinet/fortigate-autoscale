@@ -105,6 +105,12 @@ module.exports = class AutoscaleHandler {
                             configContent += fazConfig.replace(
                                 new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
                             break;
+                        case 'extrastaticroutes':
+                            configContent += await this.getConfigSet('extrastaticroutes');
+                            break;
+                        case 'extraports':
+                            configContent += await this.getConfigSet('extraports');
+                            break;
                         default:
                             break;
                     }
