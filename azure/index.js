@@ -685,6 +685,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
+    genLicenseFileSimpleKey(fileName, eTag) {
+        return `${eTag}-${fileName}`;
+    }
+
     async listLicenseFiles() {
         let blobService = storageClient.refBlobService();
         return await new Promise((resolve, reject) => {
@@ -695,7 +699,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 } else {
                     if (data && data.entries) {
                         let iterable = data.entries.map(item => {
-                            return [item.etag, item];
+                            return [this.genLicenseFileSimpleKey(item.name, item.eTag),
+                                item];
                         });
                         resolve(new Map(iterable));
                     } else {
@@ -1131,10 +1136,12 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 if (stockRecords.size > 0) {
                     // filter out tracked license files
                     stockRecords.forEach(item => {
-                        if (licenseFiles.has(item.fileETag)) {
-                            untrackedFiles.delete(item.fileETag);
+                        let licenseFileKey =
+                            this.platform.genLicenseFileSimpleKey(item.fileName, item.fileETag);
+                        if (licenseFiles.has(licenseFileKey)) {
+                            untrackedFiles.delete(licenseFileKey);
                         }
-                    });
+                    }, this);
                 }
                 untrackedFiles.forEach(item => {
                     fileQueries.push(this.platform.getBlobFromStorage({
@@ -1332,8 +1339,12 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 );
             }
         }
-        logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
+        if (this._selfInstance) {
+            logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
         `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
+        } else {
+            logger.warn(`cannot identify instance: vmid:(${instanceId})`);
+        }
     }
     // end of AzureAutoscaleHandler class
 }
