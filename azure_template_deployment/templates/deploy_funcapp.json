@@ -5,10 +5,10 @@
         "FuncAppName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the App Service Created."
+                "description": "The name of the Function App created."
             }
         },
-        "CosomosDBName": {
+        "CosmosDBName": {
             "type": "string",
             "metadata": {
                 "description": "The name of the Cosmos DB that you wish to create. The field can contain only lowercase letters, numbers and the '-' character, and must be between 3 and 31 characters."
@@ -23,13 +23,13 @@
                 "Standard_RAGRS"
             ],
             "metadata": {
-                "description": "Storage Account type."
+                "description": "The Storage Account Type."
             }
         },
         "TenantID": {
             "type": "string",
             "metadata": {
-                "description": "Azure Account Directory ID."
+                "description": "Azure Directory ID."
             }
         },
         "SubscriptionID": {
@@ -41,26 +41,26 @@
         "RestAppId": {
             "type": "string",
             "metadata": {
-                "description": "Application ID for the Registered App."
+                "description": "The Application ID for the Registered app. This is under Azure Active Directory > App registrations > {your app}."
+            }
+        },
+        "RestAppSecret": {
+            "type": "string",
+            "metadata": {
+                "description": "This is the password for the Registered app."
             }
         },
         "HeartBeatLossCount": {
             "type": "string",
             "defaultValue": "3",
             "metadata": {
-                "description": "HeartBeat Interval Count"
-            }
-        },
-        "RestAppSecret": {
-            "type": "string",
-            "metadata": {
-                "description": "Application secret for the registered App."
+                "description": "Heart Beat Interval Count."
             }
         },
         "ScalingGroupResourceGroupName": {
             "type": "string",
             "metadata": {
-                "description": "Name of the resource group of FGT autoscale is deployed in."
+                "description": "The name of the Resource Group that the deploy_scaleset.json will be deployed into."
             }
         },
         "ScalingGroupNamePrefix": {
@@ -71,9 +71,9 @@
         },
         "ScriptTimeout": {
             "type": "string",
-            "defaultValue": "300",
+            "defaultValue": "230",
             "metadata": {
-                "description": "Timeout value for the azure function script."
+                "description": "The timeout value for the Azure function script. The default value is 230."
             }
         },
         "LicenseGracePeriod": {
@@ -90,7 +90,7 @@
                 "description": "The maximum time to wait for a master election to complete. Unit is second."
             }
         },
-        "PSKSecretPassword": {
+        "PSKSecret": {
             "type": "securestring",
             "metadata": {
                 "description": "Preshare key password for autoscaling configuration."
@@ -99,7 +99,7 @@
         "PackageResUrl": {
             "type": "string",
             "metadata": {
-                "description": "The public URL of package zip which contains the resource used to deploy the Function App."
+                "description": "The public URL of the deployment package zip file that contains the resource used to deploy the Function App. This URL must be accessible by Azure."
             }
         }
     },
@@ -113,10 +113,10 @@
     "resources": [{
             "apiVersion": "2015-04-08",
             "type": "Microsoft.DocumentDb/databaseAccounts",
-            "name": "[parameters('CosomosDBName')]",
+            "name": "[parameters('CosmosDBName')]",
             "location": "[variables('location')]",
             "properties": {
-                "name": "[parameters('CosomosDBName')]",
+                "name": "[parameters('CosmosDBName')]",
                 "databaseAccountOfferType": "Standard"
             }
         },
@@ -167,7 +167,7 @@
             "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosomosDBName'))]",
+                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosmosDBName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {
@@ -215,7 +215,7 @@
                         },
                         {
                             "name": "SCALESET_DB_ACCOUNT",
-                            "value": "[parameters('CosomosDBName')]"
+                            "value": "[parameters('CosmosDBName')]"
                         },
                         {
                             "name": "SCALING_GROUP_NAME_PAYG",
@@ -239,7 +239,7 @@
                         },
                         {
                             "name": "REST_API_MASTER_KEY",
-                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosomosDBName')), '2015-04-08').primaryMasterKey]"
+                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosmosDBName')), '2015-04-08').primaryMasterKey]"
                         },
                         {
                             "name": "REQUIRED_CONFIG_SET",
@@ -255,7 +255,7 @@
                         },
                         {
                             "name": "FORTIGATE_PSKSECRET",
-                            "value": "[parameters('PSKSecretPassword')]"
+                            "value": "[parameters('PSKSecret')]"
                         },
                         {
                             "name": "SCRIPT_TIMEOUT",

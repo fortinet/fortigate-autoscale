@@ -1,50 +1,54 @@
 {
-    "InstanceType": {
-        "value": "Standard_F4"
-    },
-    "FOSVersion": {
-        "value": "6.0.3"
-    },
-    "ScalingGroupNamePrefix": {
-        "value": ""
-    },
-    "SubnetAddressPrefix": {
-        "value": "10.0.0.0/16"
-    },
-    "PublicsubnetPrefix": {
-        "value": "10.0.0.0/24"
-    },
-    "PrivateSubnet2Prefix": {
-        "value": "10.0.1.0/24"
-    },
-    "PrivateSubnet3Prefix": {
-        "value": "10.0.2.0/24"
-    },
-    "PrivateSubnet4Prefix": {
-        "value": "10.0.2.0/24"
-    },
-    "InstanceCountByol": {
-        "value": "1"
-    },
-    "InstanceCountPayg": {
-        "value": "0"
-    },
-    "MaxInstanceCountPayg": {
-        "value": "0"
-    },
-    "ScaleUpThreshold": {
-        "value": "80"
-    },
-    "ScaleDownThreshold": {
-        "value": "20"
-    },
-    "FuncAppName": {
-        "value": ""
-    },
-    "AdminUsername": {
-        "value": "azureadmin"
-    },
-    "AdminPassword": {
-        "value": ""
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.3",
+    "parameters": {
+        "InstanceType": {
+            "value": "Standard_F4"
+        },
+        "FOSVersion": {
+            "value": "6.0.3"
+        },
+        "ScalingGroupNamePrefix": {
+            "value": ""
+        },
+        "SubnetAddressPrefix": {
+            "value": "10.0.0.0/16"
+        },
+        "PublicsubnetPrefix": {
+            "value": "10.0.0.0/24"
+        },
+        "PrivateSubnet2Prefix": {
+            "value": "10.0.1.0/24"
+        },
+        "PrivateSubnet3Prefix": {
+            "value": "10.0.2.0/24"
+        },
+        "PrivateSubnet4Prefix": {
+            "value": "10.0.2.0/24"
+        },
+        "LoadBalancerIP": {
+            "value": "10"
+        },
+        "BYOLInstanceCount": {
+            "value": 1
+        },
+        "PAYGInstanceCount": {
+            "value": 0
+        },
+        "MaxPAYGInstanceCount": {
+            "value": 0
+        },
+        "ScaleUpThreshold": {
+            "value": 80
+        },
+        "ScaleDownThreshold": {
+            "value": 20
+        },
+        "AdminUsername": {
+            "value": "azureadmin"
+        },
+        "AdminPassword": {
+            "value": ""
+        }
     }
 }

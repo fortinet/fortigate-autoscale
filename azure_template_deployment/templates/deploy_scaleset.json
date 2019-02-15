@@ -1,6 +1,6 @@
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-    "contentVersion": "1.0.0.2",
+    "contentVersion": "1.0.0.3",
     "parameters": {
         "InstanceType": {
             "type": "string",
@@ -25,11 +25,11 @@
                 "6.0.3"
             ]
         },
-        "VMSSNamePrefix": {
-            "defaultValue": "test2vmss",
+        "ScalingGroupNamePrefix": {
+            "defaultValue": "",
             "type": "string",
             "metadata": {
-                "description": "Prefix name used as a base for naming resources."
+                "description": "The name prefix used on all vmss resources."
             },
             "maxLength": 10
         },
@@ -78,7 +78,7 @@
         "BYOLInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "Number of VM for BYOL VMSS."
+                "description": "Number of VM for BYOL VMSS for the starting configuration. Maximum is 2."
             },
             "defaultValue": 1,
             "maxValue": 2
@@ -86,7 +86,7 @@
         "PAYGInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "Number of VM for PAYG VMSS."
+                "description": "Number of VM for PAYG VMSS for the starting configuration."
             },
             "defaultValue": 0
         },
@@ -99,14 +99,14 @@
         },
         "ScaleUpThreshold": {
             "defaultValue": 80,
-            "type": "Int",
+            "type": "int",
             "metadata": {
                 "description": "CPU usage percentage at which scaleup should occur."
             }
         },
         "ScaleDownThreshold": {
             "defaultValue": 20,
-            "type": "Int",
+            "type": "int",
             "metadata": {
                 "description": "CPU Usage percentage at which scaledown should occur."
             }
@@ -142,29 +142,29 @@
         "Subnet2LoadBalancerIP": "[concat(substring(variables('Subnet2Prefix'), 0, lastIndexOf(variables('Subnet2Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
         "Subnet3LoadBalancerIP": "[concat(substring(variables('Subnet3Prefix'), 0, lastIndexOf(variables('Subnet3Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
         "Subnet4LoadBalancerIP": "[concat(substring(variables('Subnet4Prefix'), 0, lastIndexOf(variables('Subnet4Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
-        "lpVmssName": "[concat(parameters('VMSSNamePrefix'), 'byol')]",
-        "regVmssName": "[concat(parameters('VMSSNamePrefix'), 'payg')]",
-        "virtualNetworkName": "[concat(parameters('VMSSNamePrefix'), 'vnet')]",
-        "publicIPAddressName": "[concat(parameters('VMSSNamePrefix'), 'pip')]",
-        "SubnetName": "[concat(parameters('VMSSNamePrefix'), 'Subnet')]",
-        "Subnet2Name": "[concat(parameters('VMSSNamePrefix'), 'Subnet2')]",
-        "Subnet3Name": "[concat(parameters('VMSSNamePrefix'), 'Subnet3')]",
-        "Subnet4Name": "[concat(parameters('VMSSNamePrefix'), 'Subnet4')]",
-        "loadBalancerName": "[concat(parameters('VMSSNamePrefix'), 'extlb')]",
-        "loadBalancer2Name": "[concat(parameters('VMSSNamePrefix'), 'intlb')]",
-        "loadBalancer3Name": "[concat(parameters('VMSSNamePrefix'), 'dmzlb')]",
-        "loadBalancer4Name": "[concat(parameters('VMSSNamePrefix'), 'mgmtlb')]",
-        "networkSecurityGroupName": "[concat(parameters('VMSSNamePrefix'), 'nsg')]",
+        "lpVmssName": "[concat(parameters('ScalingGroupNamePrefix'), 'byol')]",
+        "regVmssName": "[concat(parameters('ScalingGroupNamePrefix'), 'payg')]",
+        "virtualNetworkName": "[concat(parameters('ScalingGroupNamePrefix'), 'vnet')]",
+        "publicIPAddressName": "[concat(parameters('ScalingGroupNamePrefix'), 'pip')]",
+        "SubnetName": "[concat(parameters('ScalingGroupNamePrefix'), 'Subnet')]",
+        "Subnet2Name": "[concat(parameters('ScalingGroupNamePrefix'), 'Subnet2')]",
+        "Subnet3Name": "[concat(parameters('ScalingGroupNamePrefix'), 'Subnet3')]",
+        "Subnet4Name": "[concat(parameters('ScalingGroupNamePrefix'), 'Subnet4')]",
+        "loadBalancerName": "[concat(parameters('ScalingGroupNamePrefix'), 'extlb')]",
+        "loadBalancer2Name": "[concat(parameters('ScalingGroupNamePrefix'), 'intlb')]",
+        "loadBalancer3Name": "[concat(parameters('ScalingGroupNamePrefix'), 'dmzlb')]",
+        "loadBalancer4Name": "[concat(parameters('ScalingGroupNamePrefix'), 'mgmtlb')]",
+        "networkSecurityGroupName": "[concat(parameters('ScalingGroupNamePrefix'), 'nsg')]",
         "publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]",
         "lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('loadBalancerName'))]",
-        "lpNatPoolName": "[concat(parameters('VMSSNamePrefix'), 'lpnatpoolssh')]",
-        "lpNatPoolNameHTTPS": "[concat(parameters('VMSSNamePrefix'), 'lpnatpoolhttps')]",
-        "regNatPoolName": "[concat(parameters('VMSSNamePrefix'), 'regnatpoolssh')]",
-        "regNatPoolNameHTTPS": "[concat(parameters('VMSSNamePrefix'), 'regnatpoolhttps')]",
-        "bePoolName": "[concat(parameters('VMSSNamePrefix'), 'bepool')]",
-        "intbePoolName": "[concat(parameters('VMSSNamePrefix'), 'intbepool')]",
-        "dmzbePoolName": "[concat(parameters('VMSSNamePrefix'), 'dmzbepool')]",
-        "mgmtbePoolName": "[concat(parameters('VMSSNamePrefix'), 'mgmtbepool')]",
+        "lpNatPoolName": "[concat(parameters('ScalingGroupNamePrefix'), 'lpnatpoolssh')]",
+        "lpNatPoolNameHTTPS": "[concat(parameters('ScalingGroupNamePrefix'), 'lpnatpoolhttps')]",
+        "regNatPoolName": "[concat(parameters('ScalingGroupNamePrefix'), 'regnatpoolssh')]",
+        "regNatPoolNameHTTPS": "[concat(parameters('ScalingGroupNamePrefix'), 'regnatpoolhttps')]",
+        "bePoolName": "[concat(parameters('ScalingGroupNamePrefix'), 'bepool')]",
+        "intbePoolName": "[concat(parameters('ScalingGroupNamePrefix'), 'intbepool')]",
+        "dmzbePoolName": "[concat(parameters('ScalingGroupNamePrefix'), 'dmzbepool')]",
+        "mgmtbePoolName": "[concat(parameters('ScalingGroupNamePrefix'), 'mgmtbepool')]",
         "lpnatStartPort": 50030,
         "lpnatEndPort": 50120,
         "lpnatStartPortHTTPS": 40030,
@@ -183,18 +183,18 @@
         "regNicNameint": "[concat(variables('regVmssName'), 'nicint')]",
         "regNicNamedmz": "[concat(variables('regVmssName'), 'nicdmz')]",
         "regNicNamemgmt": "[concat(variables('regVmssName'), 'nicmgmt')]",
-        "ipConfigName": "[concat(parameters('VMSSNamePrefix'), 'ipconfig')]",
-        "ipConfigintName": "[concat(parameters('VMSSNamePrefix'), 'ipconfigint')]",
-        "ipConfigdmzName": "[concat(parameters('VMSSNamePrefix'), 'ipconfigdmz')]",
-        "ipConfigmgmtName": "[concat(parameters('VMSSNamePrefix'), 'ipconfigmgmt')]",
+        "ipConfigName": "[concat(parameters('ScalingGroupNamePrefix'), 'ipconfig')]",
+        "ipConfigintName": "[concat(parameters('ScalingGroupNamePrefix'), 'ipconfigint')]",
+        "ipConfigdmzName": "[concat(parameters('ScalingGroupNamePrefix'), 'ipconfigdmz')]",
+        "ipConfigmgmtName": "[concat(parameters('ScalingGroupNamePrefix'), 'ipconfigmgmt')]",
         "frontEndIPConfigID": "[concat(variables('lbID'),'/frontendIPConfigurations/loadBalancerFrontEnd')]",
         "vnetID": "[resourceId(variables('namingInfix'),'Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
         "Subnet2Ref": "[concat(variables('vnetID'),'/Subnets/', variables('Subnet2Name'))]",
         "Subnet3Ref": "[concat(variables('vnetID'),'/Subnets/', variables('Subnet3Name'))]",
         "Subnet4Ref": "[concat(variables('vnetID'),'/Subnets/', variables('Subnet4Name'))]",
-        "routeTableName": "[concat(parameters('VMSSNamePrefix'),'-INTRouteTable')]",
-        "routeTable2Name": "[concat(parameters('VMSSNamePrefix'),'-DMZRouteTable')]",
-        "routeTable3Name": "[concat(parameters('VMSSNamePrefix'),'-MGMTRouteTable')]",
+        "routeTableName": "[concat(parameters('ScalingGroupNamePrefix'),'-INTRouteTable')]",
+        "routeTable2Name": "[concat(parameters('ScalingGroupNamePrefix'),'-DMZRouteTable')]",
+        "routeTable3Name": "[concat(parameters('ScalingGroupNamePrefix'),'-MGMTRouteTable')]",
         "routeTableId": "[resourceId('Microsoft.Network/routeTables',variables('routeTableName'))]",
         "routeTable2Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable2Name'))]",
         "routeTable3Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable3Name'))]",
@@ -431,7 +431,7 @@
             "properties": {
                 "publicIPAllocationMethod": "Static",
                 "dnsSettings": {
-                    "domainNameLabel": "[parameters('VMSSNamePrefix')]"
+                    "domainNameLabel": "[parameters('ScalingGroupNamePrefix')]"
                 }
             }
         },
