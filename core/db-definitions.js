@@ -345,7 +345,7 @@ const DB = {
 exports.getTables = (custom_id, unique_id) => {
     let tables = {},
         prefix = () => { return custom_id ? `${custom_id}-` : '' },
-        suffix = () => { return unique_id ? `-${custom_id}` : '' };
+        suffix = () => { return unique_id ? `-${unique_id}` : '' };
     Object.keys(DB).forEach(itemName => {
         let table = {};
         table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
