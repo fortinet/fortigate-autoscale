@@ -21,6 +21,8 @@ class VirtualMachine {
         this._sourceVmData = vmData; // the original vm data retrieved from the platform
         this._primaryPrivateIp = null;
         this._scalingGroupName = null;
+        this._securityGroups = [];
+        this._networkInterfaces = [];
     }
 
     get instanceId() {
@@ -43,12 +45,22 @@ class VirtualMachine {
         return this._scalingGroupName;
     }
 
+    get securityGroups() {
+        return this._securityGroups;
+    }
+
+    get networkInterfaces() {
+        return this._networkInterfaces;
+    }
+
     static fromAwsEc2(instance, scalingGroupName = '') {
         let virtualMachine = new VirtualMachine(instance.InstanceId, 'aws', instance);
-        this._primaryPrivateIp = instance.PrivateIpAddress;
-        this._virtualNetworkId = instance.VpcId;
-        this._subnetId = instance.SubnetId;
-        this._scalingGroupName = scalingGroupName;
+        virtualMachine._primaryPrivateIp = instance.PrivateIpAddress;
+        virtualMachine._virtualNetworkId = instance.VpcId;
+        virtualMachine._subnetId = instance.SubnetId;
+        virtualMachine._scalingGroupName = scalingGroupName;
+        virtualMachine._securityGroups = [...instance.SecurityGroups];
+        virtualMachine._networkInterfaces = [...instance.NetworkInterfaces];
         return virtualMachine;
     }
 
@@ -73,10 +85,11 @@ class VirtualMachine {
                     }
                 }
             }
-            return null;
+            return {vpcId: null, subnetId: null, ipv4: null};
         };
         if (vm.properties.networkProfile &&
             Array.isArray(vm.properties.networkProfile.networkInterfaces)) {
+            virtualMachine._networkInterfaces = [...vm.properties.networkProfile.networkInterfaces];
             let { vpcId, subnetId, ipv4 } = retrieveNetworkInformation();
             virtualMachine._virtualNetworkId = vpcId;
             virtualMachine._subnetId = subnetId;
