@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.2",
+    "contentVersion": "1.0.0.3",
     "parameters": {
         "FuncAppName": {
             "type": "string",
@@ -74,13 +74,6 @@
             "defaultValue": "230",
             "metadata": {
                 "description": "The timeout value for the Azure function script. The default value is 230."
-            }
-        },
-        "LicenseGracePeriod": {
-            "type": "string",
-            "defaultValue": "600",
-            "metadata": {
-                "description": "The minimum time between a license is distributed and recycled to re-distribute. Unit is second."
             }
         },
         "ElectionWaitTime": {
@@ -191,7 +184,7 @@
                         },
                         {
                             "name": "FUNCTIONS_EXTENSION_VERSION",
-                            "value": "beta"
+                            "value": "~2"
                         },
                         {
                             "name": "WEBSITE_NODE_DEFAULT_VERSION",
@@ -223,11 +216,11 @@
                         },
                         {
                             "name": "SCALING_GROUP_NAME_BYOL",
-                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'byol')]"
+                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'payg')]"
                         },
                         {
                             "name": "MASTER_SCALING_GROUP_NAME",
-                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'byol')]"
+                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'payg')]"
                         },
                         {
                             "name": "TENANT_ID",
@@ -243,7 +236,7 @@
                         },
                         {
                             "name": "REQUIRED_CONFIG_SET",
-                            "value": "extraports-yes, extrastaticroutes-yes"
+                            "value": ""
                         },
                         {
                             "name": "UNIQUE_ID",
@@ -260,10 +253,6 @@
                         {
                             "name": "SCRIPT_TIMEOUT",
                             "value": "[parameters('ScriptTimeout')]"
-                        },
-                        {
-                            "name": "GET_LICENSE_GRACE_PERIOD",
-                            "value": "[parameters('LicenseGracePeriod')]"
                         },
                         {
                             "name": "ELECTION_WAIT_TIME",

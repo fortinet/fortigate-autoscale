@@ -35,9 +35,6 @@
         "ScriptTimeOut": {
             "value": "230"
         },
-        "LicenseGracePeriod": {
-            "value": "600"
-        },
         "ElectionWaitTime": {
             "value": "90"
         },
