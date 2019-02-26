@@ -208,6 +208,36 @@
                     ]
                 }
             }
+        },
+        "DdbTableCustomLog": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "AttributeDefinitions": [{
+                    "AttributeName": "timestamp",
+                    "AttributeType": "S"
+                }],
+                "KeySchema": [{
+                    "AttributeName": "timestamp",
+                    "KeyType": "HASH"
+                }],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": "1",
+                    "WriteCapacityUnits": "1"
+                },
+                "TableName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "CustomIdentifier"
+                            },
+                            "CustomLog",
+                            {
+                                "Ref": "UniqueId"
+                            }
+                        ]
+                    ]
+                }
+            }
         }
     },
     "Outputs": {
@@ -249,6 +279,12 @@
                         {
                             "Fn::GetAtt": [
                                 "DdbTableNicAttachment",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "DdbTableCustomLog",
                                 "Arn"
                             ]
                         }

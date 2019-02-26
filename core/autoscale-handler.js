@@ -149,7 +149,7 @@ module.exports = class AutoscaleHandler {
         let parameters = {}, masterHealthCheck, lifecycleShouldAbandon = false;
 
         parameters.instanceId = instanceId;
-        parameters.scaleSetName = this.scalingGroupName;
+        parameters.scalingGroupName = this.scalingGroupName;
         // get selfinstance
         this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
 

@@ -184,6 +184,14 @@
         "KeyPairName": {
             "Type": "AWS::EC2::KeyPair::KeyName",
             "Description": "Amazon EC2 Key Pair for admin access."
+        },
+        "HeartBeatLossCount": {
+            "Type": "Number",
+            "Default": 3,
+            "MinValue": 1,
+            "MaxValue": 65535,
+            "ConstraintDescription": "must be a valid number between 1 and 65535.",
+            "Description": "Number of consecutively lost heartbeats. When the Heartbeat loss count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
         }
     },
     "Conditions": {
@@ -367,7 +375,7 @@
                     "QSS3KeyPrefix": {
                         "Ref": "QSS3KeyPrefix"
                     },
-                    "ObjectPaths": "functions/packages/asg-handler.zip"
+                    "ObjectPaths": "functions/packages/fgt-asg-handler.zip"
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
@@ -968,7 +976,7 @@
                     },
                     "S3Key": {
                         "Fn::Sub": [
-                            "${KeyPrefix}functions/packages/asg-handler.zip",
+                            "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
                             {
                                 "KeyPrefix": {
                                     "Fn::GetAtt": [
@@ -1148,7 +1156,112 @@
                         "FORTIGATE_TRAFFIC_PORT": {
                             "Ref": "BalanceWebTrafficOverPort"
                         },
-                        "FORTIGATE_SYNC_INTERFACE": "port1"
+                        "FORTIGATE_SYNC_INTERFACE": "port1",
+                        "HEART_BEAT_LOSS_COUNT": {
+                            "Ref": "HeartBeatLossCount"
+                        },
+                        "SCALING_GROUP_NAME_PAYG": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "FortiGateAutoScalingGroup",
+                                    {
+                                        "Fn::Select": [
+                                            0,
+                                            {
+                                                "Fn::Split": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Select": [
+                                                            2,
+                                                            {
+                                                                "Fn::Split": [
+                                                                    "/",
+                                                                    {
+                                                                        "Ref": "AWS::StackId"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        },
+                        "SCALING_GROUP_NAME_BYOL": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "FortiGateAutoScalingGroup",
+                                    {
+                                        "Fn::Select": [
+                                            0,
+                                            {
+                                                "Fn::Split": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Select": [
+                                                            2,
+                                                            {
+                                                                "Fn::Split": [
+                                                                    "/",
+                                                                    {
+                                                                        "Ref": "AWS::StackId"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        },
+                        "MASTER_SCALING_GROUP_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "FortiGateAutoScalingGroup",
+                                    {
+                                        "Fn::Select": [
+                                            0,
+                                            {
+                                                "Fn::Split": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Select": [
+                                                            2,
+                                                            {
+                                                                "Fn::Split": [
+                                                                    "/",
+                                                                    {
+                                                                        "Ref": "AWS::StackId"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        }
                     }
                 }
             },
@@ -1213,7 +1326,7 @@
                     },
                     "S3Key": {
                         "Fn::Sub": [
-                            "${KeyPrefix}functions/packages/asg-handler.zip",
+                            "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
                             {
                                 "KeyPrefix": {
                                     "Fn::GetAtt": [
@@ -1393,7 +1506,112 @@
                         "FORTIGATE_TRAFFIC_PORT": {
                             "Ref": "BalanceWebTrafficOverPort"
                         },
-                        "FORTIGATE_SYNC_INTERFACE": "port1"
+                        "FORTIGATE_SYNC_INTERFACE": "port1",
+                        "HEART_BEAT_LOSS_COUNT": {
+                            "Ref": "HeartBeatLossCount"
+                        },
+                        "SCALING_GROUP_NAME_PAYG": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "FortiGateAutoScalingGroup",
+                                    {
+                                        "Fn::Select": [
+                                            0,
+                                            {
+                                                "Fn::Split": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Select": [
+                                                            2,
+                                                            {
+                                                                "Fn::Split": [
+                                                                    "/",
+                                                                    {
+                                                                        "Ref": "AWS::StackId"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        },
+                        "SCALING_GROUP_NAME_BYOL": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "FortiGateAutoScalingGroup",
+                                    {
+                                        "Fn::Select": [
+                                            0,
+                                            {
+                                                "Fn::Split": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Select": [
+                                                            2,
+                                                            {
+                                                                "Fn::Split": [
+                                                                    "/",
+                                                                    {
+                                                                        "Ref": "AWS::StackId"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        },
+                        "MASTER_SCALING_GROUP_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "FortiGateAutoScalingGroup",
+                                    {
+                                        "Fn::Select": [
+                                            0,
+                                            {
+                                                "Fn::Split": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Select": [
+                                                            2,
+                                                            {
+                                                                "Fn::Split": [
+                                                                    "/",
+                                                                    {
+                                                                        "Ref": "AWS::StackId"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        }
                     }
                 }
             },
@@ -2470,6 +2688,14 @@
                 },
                 {
                     "Label": {
+                        "default": "Fail-over management configuration"
+                    },
+                    "Parameters": [
+                        "HeartBeatLossCount"
+                    ]
+                },
+                {
+                    "Label": {
                         "default": "Load balancing configuration"
                     },
                     "Parameters": [
@@ -2547,7 +2773,7 @@
                     "default": "Scale-out threshold"
                 },
                 "FortiGateElbTgHealthyThreshold": {
-                    "default": "Healthy threshold"
+                    "default": "Health threshold"
                 },
                 "BalanceWebTrafficOverPort": {
                     "default": "Web service traffic port"
@@ -2572,6 +2798,9 @@
                 },
                 "FortiGatePskSecret": {
                     "default": "FortiGate PSK secret"
+                },
+                "HeartBeatLossCount": {
+                    "default": "Heart beat loss count"
                 }
             }
         }

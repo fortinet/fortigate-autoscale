@@ -54,7 +54,7 @@
             "type": "string",
             "defaultValue": "3",
             "metadata": {
-                "description": "Heart Beat Interval Count."
+                "description": "Number of consecutively lost heartbeats. When the Heartbeat Loss Count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
             }
         },
         "ScalingGroupResourceGroupName": {

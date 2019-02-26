@@ -6,8 +6,10 @@ Author: Fortinet
 */
 
 const ftgtAutoscaleAws = require('fortigate-autoscale-aws');
+const logger = new ftgtAutoscaleAws.AutoScaleCore.DefaultLogger(console);
+const autoscaleHandler = new ftgtAutoscaleAws.AwsAutoscaleHandler();
+autoscaleHandler.useLogger(logger);
 ftgtAutoscaleAws.initModule();
-let autoscaleHandler = new ftgtAutoscaleAws.AwsAutoscaleHandler();
 
 /**
  * AWS Lambda Entry.

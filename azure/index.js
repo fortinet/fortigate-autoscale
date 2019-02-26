@@ -424,21 +424,21 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             readCache = !(parameters.readCache !== undefined && parameters.readCache === false) &&
                     process.env.VM_INFO_CACHE_ENABLED &&
                     process.env.VM_INFO_CACHE_ENABLED.toLowerCase() === 'true';
-        if (parameters.scaleSetName) {
+        if (parameters.scalingGroupName) {
             // use a proper method to get the vm
             if (isNaN(parameters.instanceId)) {
                 // describe instance in vmss by vmid
                 // get from cache if VM_INFO_CACHE_ENABLED (shoule be enabled by default)
                 if (readCache) {
-                    virtualMachine = await this.getVmInfoCache(parameters.scaleSetName, null,
+                    virtualMachine = await this.getVmInfoCache(parameters.scalingGroupName, null,
                         parameters.instanceId);
                     hitCache = virtualMachine ? ' (hit cache)' : '';
                 }
                 if (!virtualMachine) {
                     virtualMachine = await computeClient.refVirtualMachineScaleSet(
-                        parameters.scaleSetName).getVirtualMachineByVmId(parameters.instanceId);
+                        parameters.scalingGroupName).getVirtualMachineByVmId(parameters.instanceId);
                     if (virtualMachine) {
-                        await this.setVmInfoCache(parameters.scaleSetName, virtualMachine,
+                        await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine,
                             virtualMachine.instanceId);
                     }
                 }
@@ -446,15 +446,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 // describe instance in vmss
                 // get from cache if VM_INFO_CACHE_ENABLED (shoule be enabled by default)
                 if (readCache) {
-                    virtualMachine = await this.getVmInfoCache(parameters.scaleSetName,
+                    virtualMachine = await this.getVmInfoCache(parameters.scalingGroupName,
                         parameters.instanceId);
                     hitCache = virtualMachine ? ' (hit cache)' : '';
                 }
                 if (!virtualMachine) {
                     virtualMachine = await computeClient.refVirtualMachineScaleSet(
-                    parameters.scaleSetName).getVirtualMachine(parameters.instanceId);
+                    parameters.scalingGroupName).getVirtualMachine(parameters.instanceId);
                     if (virtualMachine) {
-                        await this.setVmInfoCache(parameters.scaleSetName, virtualMachine,
+                        await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine,
                             virtualMachine.instanceId);
                     }
                 }
@@ -877,7 +877,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         this._selfInstance = this._selfInstance ||
             await this.platform.describeInstance({
                 instanceId: instanceId,
-                scaleSetName: this.scalingGroupName
+                scalingGroupName: this.scalingGroupName
             });
         if (!this._selfInstance) {
             // not trusted
@@ -1012,7 +1012,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
         return this._masterRecord && await this.platform.describeInstance(
             { instanceId: instanceId,
-                scaleSetName: this._masterRecord.asgName
+                scalingGroupName: this._masterRecord.asgName
             });
     }
 
@@ -1214,7 +1214,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         tasks.push(
                             ref.platform.describeInstance({
                                 instanceId: item.instanceId,
-                                scaleSetName: item.asgName,
+                                scalingGroupName: item.asgName,
                                 readCache: false
                             }).catch(() => null));
                         let [healthCheck, instance] = await Promise.all(tasks);
@@ -1320,7 +1320,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // look from byol first
         this._selfInstance = this._selfInstance || await this.platform.describeInstance({
             instanceId: instanceId,
-            scaleSetName: process.env.SCALING_GROUP_NAME_BYOL
+            scalingGroupName: process.env.SCALING_GROUP_NAME_BYOL
         });
         if (this._selfInstance) {
             this.setScalingGroup(
@@ -1330,7 +1330,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } else { // not found in byol vmss, look from payg
             this._selfInstance = await this.platform.describeInstance({
                 instanceId: instanceId,
-                scaleSetName: process.env.SCALING_GROUP_NAME_PAYG
+                scaleSscalingGroupNameetName: process.env.SCALING_GROUP_NAME_PAYG
             });
             if (this._selfInstance) {
                 this.setScalingGroup(

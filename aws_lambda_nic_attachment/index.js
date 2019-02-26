@@ -27,8 +27,8 @@ AWS.config.update({
 const
     dynamodb = new AWS.DynamoDB(),
     docClient = new AWS.DynamoDB.DocumentClient(),
-    unique_id = process.env.UNIQUE_ID.replace(/.*\//, ''),
-    custom_id = process.env.CUSTOM_ID.replace(/.*\//, ''),
+    unique_id = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '',
+    custom_id = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '',
     dbTables = ftgtAutoscaleAws.AutoScaleCore.dbDefinitions.getTables(custom_id, unique_id);
 
 ftgtAutoscaleAws.initModule();
