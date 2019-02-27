@@ -348,6 +348,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 // is compensated.
                 compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
                 healthy = compensatedScriptTime < data.Item.nextHeartBeatTime;
+                interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
+                    heartBeatInterval : data.Item.heartBeatInterval;
                 if (compensatedScriptTime < data.Item.nextHeartBeatTime) {
                     // reset hb loss cound if instance sends hb within its interval
                     healthy = true;
@@ -356,11 +358,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     // if the current sync heartbeat is late, the instance is still considered
                     // healthy unless 3 times of heartBeatInterval amount of time has passed.
                     // where the instance have 0% chance to catch up with a heartbeat sync
-                    interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
-                        heartBeatInterval : data.Item.heartBeatInterval;
+
                     healthy = data.Item.heartBeatLossCount < 3 &&
                     Date.now() < data.Item.nextHeartBeatTime +
-                        interval * (2 - data.Item.heartBeatLossCount);
+                        interval * 1000 * (2 - data.Item.heartBeatLossCount);
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
                 }
                 logger.info('called getInstanceHealthCheck');

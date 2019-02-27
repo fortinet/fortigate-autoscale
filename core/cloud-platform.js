@@ -262,10 +262,23 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
-    async updateLicenseUsage(parameters) {
+    /**
+     * List license files in storage
+     * @param {Object} parameters parameter require to list and filter licenses
+     * @returns {Map} must return a Map Key: checksum, Value: the file info (must include content)
+     */
+    async listLicenseFiles(parameters) {
         await this.throwNotImplementedException();
     }
 
+    async updateLicenseUsage(parameters) {
+        await this.throwNotImplementedException();
+    }
+    /**
+     * List license usage records
+     * @param {Object} parameters parameter require to list and filter license usage records
+     * @returns {Map} must return a Map Key: checksum, Value: the record
+     */
     async listLicenseUsage(parameters) {
         await this.throwNotImplementedException();
     }

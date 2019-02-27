@@ -26,7 +26,7 @@ var dbClient, computeClient, storageClient;
 // this variable is to store the anticipated script execution expire time (milliseconds)
 let scriptExecutionExpireTime,
     electionWaitingTime = process.env.ELECTION_WAIT_TIME ?
-        parseInt(process.env.ELECTION_WAIT_TIME) : 60000; // in ms
+        parseInt(process.env.ELECTION_WAIT_TIME) * 1000 : 60000; // in ms
 
 class AzureLogger extends AutoScaleCore.DefaultLogger {
     constructor(loggerObject) {
@@ -297,7 +297,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
      * @param {Object} instance instance object which a vmId property is required.
      * @param {Number} heartBeatInterval integer value, unit is second.
      */
-    async getInstanceHealthCheck(instance, heartBeatInterval) {
+    async getInstanceHealthCheck(instance, heartBeatInterval = null) {
         // TODO: not fully implemented in V3
         if (!(instance && instance.instanceId)) {
             logger.error('getInstanceHealthCheck > error: no instance id property found on ' +
@@ -320,34 +320,47 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             let compensatedScriptTime,
                 healthy,
                 heartBeatLossCount,
+                interval,
+                healthCheckRecord,
                 items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
                 keyExpression, filterExpression);
             if (!Array.isArray(items) || items.length === 0) {
                 logger.info('called getInstanceHealthCheck: no record found');
                 return null;
             }
+            healthCheckRecord = items[0];
             // to get a more accurate heart beat elapsed time, the script execution time so far
             // is compensated.
             compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
-            healthy = compensatedScriptTime < items[0].nextHeartBeatTime;
-            if (compensatedScriptTime < items[0].nextHeartBeatTime) {
+            healthy = compensatedScriptTime < healthCheckRecord.nextHeartBeatTime;
+            interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
+                heartBeatInterval : healthCheckRecord.heartBeatInterval;
+            if (compensatedScriptTime < healthCheckRecord.nextHeartBeatTime) {
                 // reset hb loss cound if instance sends hb within its interval
                 healthy = true;
                 heartBeatLossCount = 0;
             } else {
-                // consider instance as health if hb loss < 3
-                healthy = items[0].heartBeatLossCount < 3;
-                heartBeatLossCount = items[0].heartBeatLossCount + 1;
+                // if the current sync heartbeat is late, the instance is still considered
+                // healthy unless 3 times of heartBeatInterval amount of time has passed.
+                // where the instance have 0% chance to catch up with a heartbeat sync
+                healthy = healthCheckRecord.heartBeatLossCount < 3 &&
+                    Date.now() < healthCheckRecord.nextHeartBeatTime +
+                        interval * 1000 * (2 - healthCheckRecord.heartBeatLossCount);
+                heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
             }
-            logger.info('called getInstanceHealthCheck');
+            logger.info(`called getInstanceHealthCheck. (time: ${compensatedScriptTime}, ` +
+                `interval:${heartBeatInterval}) healthcheck record:`,
+                JSON.stringify(healthCheckRecord));
             return {
                 instanceId: instance.instanceId,
+                ip: healthCheckRecord.ip ? healthCheckRecord.ip : '',
                 healthy: healthy,
                 heartBeatLossCount: heartBeatLossCount,
-                nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
-                masterIp: items[0].masterIp,
-                syncState: items[0].syncState,
-                inSync: items[0].syncState === 'in-sync'
+                heartBeatInterval: interval,
+                nextHeartBeatTime: Date.now() + interval * 1000,
+                masterIp: healthCheckRecord.masterIp,
+                syncState: healthCheckRecord.syncState,
+                inSync: healthCheckRecord.syncState === 'in-sync'
             };
         } catch (error) {
             logger.info('called getInstanceHealthCheck with error. ' +
@@ -368,12 +381,14 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         try {
             let result, document = {
                 id: `${this.scalingGroupName}-${healthCheckObject.instanceId}`,
-                asgName: this.scalingGroupName,
                 instanceId: healthCheckObject.instanceId,
-                heartBeatLossCount: healthCheckObject.heartBeatLossCount,
+                ip: healthCheckObject.ip,
+                asgName: this.scalingGroupName,
                 nextHeartBeatTime: checkPointTime + heartBeatInterval * 1000,
-                masterIp: masterIp ? masterIp : 'null',
-                syncState: healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync'
+                heartBeatLossCount: healthCheckObject.heartBeatLossCount,
+                heartBeatInterval: heartBeatInterval,
+                syncState: healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync',
+                masterIp: masterIp ? masterIp : 'null'
             };
             if (!forceOutOfSync && healthCheckObject.syncState === 'out-of-sync') {
                 logger.info(`instance already out of sync: healthcheck info: ${healthCheckObject}`);
@@ -406,7 +421,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
         let virtualMachine, hitCache = '',
-            readCache = !(parameters.readCache && parameters.readCache === false) &&
+            readCache = !(parameters.readCache !== undefined && parameters.readCache === false) &&
                     process.env.VM_INFO_CACHE_ENABLED &&
                     process.env.VM_INFO_CACHE_ENABLED.toLowerCase() === 'true';
         if (parameters.scaleSetName) {
@@ -455,11 +470,46 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
 
     /** @override */
     async getBlobFromStorage(parameters) {
-        // the blob service requires two process env variables:
-        // process.env.AZURE_STORAGE_ACCOUNT
-        // process.env.AZURE_STORAGE_ACCESS_KEY
+        let blobService = storageClient.refBlobService();
+        let queries = [];
+        queries.push(new Promise((resolve, reject) => {
+            blobService.getBlobToText(parameters.path, parameters.fileName,
+            (error, text, result, response) => {
+                if (error) {
+                    reject(error);
+                } else if (response && response.statusCode === 200 || response.isSuccessful) {
+                    resolve(response.body);
+                } else {
+                    reject(response);
+                }
+            });
+        }));
+        if (parameters.getProperties) {
+            queries.push(new Promise((resolve, reject) => {
+                blobService.getBlobProperties(parameters.path, parameters.fileName,
+                (error, result, response) => {
+                    if (error) {
+                        reject(error);
+                    } else if (response && response.statusCode === 200 || response.isSuccessful) {
+                        resolve(result);
+                    } else {
+                        reject(response);
+                    }
+                });
+            }));
+        }
+        let result = await Promise.all(queries);
+        return {
+            content: result[0],
+            properties: parameters.getProperties && result[1] ? result[1] : null
+        };
+    }
+
+    /** @override */
+    async listBlobFromStorage(parameters) {
+        let blobService = storageClient.refBlobService();
         return await new Promise((resolve, reject) => {
-            storageClient.refBlobService().getBlobToText(parameters.path, parameters.fileName,
+            blobService.getBlobToText(parameters.path, parameters.fileName,
             (error, text, result, response) => {
                 if (error) {
                     reject(error);
@@ -603,6 +653,145 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
+    async deleteLogFromDb(timeFrom, timeTo = null) {
+        try {
+            let timeRangeFrom = timeFrom && !isNaN(timeFrom) ? parseInt(timeFrom) : 0,
+                timeRangeTo = timeTo && !isNaN(timeTo) ? parseInt(timeTo) : Date.now();
+            let deletionTasks = [], errorTasks = [];
+            let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
+                null, null, null, {
+                    order: {
+                        by: 'timestamp',
+                        direction: 'asc'
+                    }
+                });
+            if (!Array.isArray(items) || items.length === 0) {
+                return `${deletionTasks.length} rows deleted. ${errorTasks.length} error rows.`;
+            }
+            items.forEach(item => {
+                if (item.timestamp >= timeRangeFrom && item.timestamp <= timeRangeTo) {
+                    deletionTasks.push(
+                        dbClient.deleteDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
+                        item.id).catch(e => {
+                            errorTasks.push(item);
+                            return e;
+                        }));
+                }
+            });
+            await Promise.all(deletionTasks);
+            return `${deletionTasks.length} rows deleted. ${errorTasks.length} error rows.`;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    genLicenseFileSimpleKey(fileName, eTag) {
+        return `${eTag}-${fileName}`;
+    }
+
+    async listLicenseFiles() {
+        let blobService = storageClient.refBlobService();
+        return await new Promise((resolve, reject) => {
+            blobService.listBlobsSegmented('fgt-asg-license', null,
+            (error, data) => {
+                if (error) {
+                    reject(error);
+                } else {
+                    if (data && data.entries) {
+                        let iterable = data.entries.map(item => {
+                            return [this.genLicenseFileSimpleKey(item.name, item.eTag),
+                                item];
+                        });
+                        resolve(new Map(iterable));
+                    } else {
+                        resolve(new Map());
+                    }
+                }
+            });
+        });
+    }
+
+    /** @override */
+    async listLicenseUsage() {
+        try {
+            let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
+                DB.LICENSEUSAGE.TableName);
+            if (!Array.isArray(items) || items.length === 0) {
+                return new Map();
+            }
+            let iterable = items.map(item => [item['sha1-checksum'], item]);
+            return new Map(iterable);
+        } catch (error) {
+            return new Map();
+        }
+    }
+
+    /** @override */
+    async updateLicenseUsage(parameters) {
+        let document = {
+            id: parameters.stockItem.checksum,
+            'sha1-checksum': parameters.stockItem.checksum,
+            filePath: parameters.stockItem.filePath,
+            fileName: parameters.stockItem.fileName,
+            asgName: parameters.asgName,
+            instanceId: parameters.instanceId,
+            assignedTime: Date.now()
+        };
+
+        try {
+            let doc = await dbClient.createDocument(DATABASE_NAME, DB.LICENSEUSAGE.TableName,
+                document, true);
+            if (doc) {
+                return true;
+            } else {
+                return false;
+            }
+        } catch (error) {
+            logger.error('updateLicenseUsage > error', error);
+            return false;
+        }
+    }
+
+    /** @override */
+    async listLicenseStock() {
+        try {
+            let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
+                DB.LICENSESTOCK.TableName);
+            if (!Array.isArray(items) || items.length === 0) {
+                return new Map();
+            }
+            let iterable = items.map(item => [item.checksum, item]);
+            return new Map(iterable);
+        } catch (error) {
+            return new Map();
+        }
+    }
+
+    /** @override */
+    async updateLicenseStock(parameters) {
+        // eTag is originally wrapped with a pair of double quotes.
+        let eTag = parameters.item.properties.etag.replace(new RegExp('"', 'g'), '');
+        let document = {
+            id: parameters.checksum,
+            checksum: parameters.checksum,
+            filePath: parameters.item.properties.container,
+            fileName: parameters.item.properties.name,
+            algorithm: parameters.algorithm,
+            fileETag: eTag
+        };
+
+        try {
+            let doc = await dbClient.createDocument(DATABASE_NAME, DB.LICENSESTOCK.TableName,
+                document, parameters.replace !== null ? parameters.replace : true);
+            if (doc) {
+                return true;
+            } else {
+                return false;
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
     // end of azurePlatform class
 }
 
@@ -627,7 +816,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             headers: {
                 'Content-Type': 'text/plain'
             },
-            body: typeof res.toString === 'function' ? res.toString() : JSON.stringify(res)
+            body: typeof res.toString === 'function' && res.toString() !== '[object Object]' ?
+                res.toString() : JSON.stringify(res)
         };
     }
 
@@ -662,59 +852,6 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             logger.error(error);
             context.res = this.proxyResponse(500, error);
         }
-    }
-
-    /**
-     * @override
-     */
-    async getBaseConfig() {
-        let baseConfig = await this.getConfigSet('baseconfig');
-        let psksecret = process.env.FORTIGATE_PSKSECRET,
-            fazConfig = '',
-            fazIp;
-        if (baseConfig) {
-            // check if other config set are required
-            let requiredConfigSet = process.env.REQUIRED_CONFIG_SET.split(',');
-            let configContent = '';
-            for (let configset of requiredConfigSet) {
-                let [name, selected] = configset.trim().split('-');
-                if (selected && selected.toLowerCase() === 'yes') {
-                    switch (name) {
-                        // handle https routing policy
-                        case 'httpsroutingpolicy':
-                            configContent += await this.getConfigSet('internalelbweb');
-                            configContent += await this.getConfigSet(name);
-                            break;
-                        // handle fortianalyzer logging config
-                        case 'storelogtofaz':
-                            fazConfig = await this.getConfigSet(name);
-                            fazIp = await this.getFazIp();
-                            configContent += fazConfig.replace(
-                                new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
-                            break;
-                        default:
-                            break;
-                    }
-                }
-            }
-            baseConfig += configContent;
-
-            baseConfig = baseConfig
-                .replace(new RegExp('{SYNC_INTERFACE}', 'gm'),
-                    process.env.FORTIGATE_SYNC_INTERFACE ?
-                        process.env.FORTIGATE_SYNC_INTERFACE : 'port1')
-                .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')
-                .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
-                .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
-                .replace(new RegExp('{TRAFFIC_PORT}', 'gm'),
-                    process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
-                .replace(new RegExp('{ADMIN_PORT}', 'gm'),
-                    process.env.FORTIGATE_ADMIN_PORT ? process.env.FORTIGATE_ADMIN_PORT : 8443)
-                .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
-                    process.env.FORTIGATE_INTERNAL_ELB_DNS ?
-                        process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
-        }
-        return baseConfig;
     }
 
     /** @override */
@@ -788,17 +925,11 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            if (this._masterRecord &&
-                this._masterRecord.instanceId === this._selfInstance.instanceId &&
+            if (this._masterRecord.instanceId === this._selfInstance.instanceId &&
                 this._masterRecord.asgName === this._selfInstance.scalingGroupName) {
                 await this.platform.removeMasterRecord();
             }
-            // TODO: this works around the double GET call issue in fgt. need to uncomment once
-            // the issue is fixed.
-            if (duplicatedGetConfigCall) {
-                await this.removeInstance(this._selfInstance);
-            }
-
+            // await this.removeInstance(this._selfInstance);
             throw new Error('Failed to determine the master instance within script timeout. ' +
             'This instance is unable to bootstrap. Please report this to administrators.');
         }
@@ -806,6 +937,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // the master ip same as mine? (diagram: master IP same as mine?)
         // this checking for 'duplicatedGetConfigCall' is to work around
         // the double GET config calls.
+        // TODO: remove the workaround if mantis item: #0534971 is consumed
         if (duplicatedGetConfigCall ||
             masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
@@ -830,15 +962,16 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     /** @override */
-    async addInstanceToMonitor(instance, nextHeartBeatTime, masterIp = 'null') {
+    async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
         logger.info('calling addInstanceToMonitor');
         let document = {
             id: `${this.scalingGroupName}-${instance.instanceId}`,
-            ip: instance.primaryPrivateIpAddress,
             instanceId: instance.instanceId,
+            ip: instance.primaryPrivateIpAddress,
             asgName: this.scalingGroupName,
-            nextHeartBeatTime: nextHeartBeatTime,
+            nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
             heartBeatLossCount: 0,
+            heartBeatInterval: heartBeatInterval,
             syncState: 'in-sync',
             masterIp: masterIp
         };
@@ -900,38 +1033,281 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     async handleGetLicense(context, event) {
-        // TODO: this function is for Poc only for now
+        // for a consideration of a large volume of license files:
+        // could use Azure Event Gridsubscription to update the license file list in the db
+        // but since the volume of files is so small, there's no big impact on performance.
+        // in conclusion, no need to use Event Grid.
+        // for a small amount of license file (such as less than 10 files):
+        // could list all file whenever comes a get-license request.
         try {
             await this.platform.init();
             // authenticate the calling instance
-            const instanceId = this.getCallingInstanceId(event);
-            if (!instanceId) {
+            const requestInfo = this.platform.extractRequestInfo(event);
+            if (!requestInfo.instanceId) {
                 context.res = this.proxyResponse(403, 'Instance id not provided.');
                 return;
             }
+            await this.parseInstanceInfo(requestInfo.instanceId);
+
+            if (!(this._selfInstance && this.scalingGroupName)) {
+                throw new Error('Unauthorized calling instance ' +
+                `(vmid: ${requestInfo.instanceId}). Instance not found in scale set.`);
+            }
+
+            let [licenseFiles, stockRecords, usageRecords] = await Promise.all([
+                this.platform.listLicenseFiles(),// expect it to return a map
+                this.platform.listLicenseStock(),// expect it to return a map
+                this.platform.listLicenseUsage() // expect it to return a map
+            ]);
+
+            // update the license stock records on db if any change in file storage
+            // this returns the newest stockRecords on the db
+            stockRecords = await this.updateLicenseStockRecord(licenseFiles, stockRecords);
+
+            let availStockItem,
+                updateUsage = true;
+
+            let itemKey, itemValue;
+
+            // TODO: remove the workaround if mantis item: #0534971 is consumed
+            // a workaround for dobule get call:
+            // check if a license is already assigned to one fgt, if it makes a second get call
+            // for license, returns the tracked usage record.
+
+            for ([itemKey, itemValue] of usageRecords.entries()) {
+                if (itemValue.asgName === this.scalingGroupName &&
+                    itemValue.instanceId === this._selfInstance.instanceId) {
+                    availStockItem = itemValue;
+                    updateUsage = false;
+                    break;
+                }
+            }
+
+            // this is a greedy approach
+            // try to find one available license and use it.
+            // if none availabe, try to check if any used one could be recycled.
+            // if none recyclable, throw an error.
+
+            if (!availStockItem) {
+                for ([itemKey, itemValue] of stockRecords.entries()) {
+                    if (itemKey && !usageRecords.has(itemKey)) {
+                        availStockItem = itemValue;
+                        break;
+                    }
+                }
+
+                // if not found available license file
+                if (!availStockItem) {
+                    [availStockItem] = await this.findRecycleableLicense(stockRecords,
+                        usageRecords, 1);
+                }
+            }
+
+            if (!availStockItem) {
+                throw new Error('No license available.');
+            }
+
             let licenseFile = await this.platform.getBlobFromStorage({
-                path: 'fgt-asg-license',
-                fileName: 'license.lic'
+                path: availStockItem.filePath,
+                fileName: availStockItem.fileName
             });
-            context.res = this.proxyResponse(200, licenseFile);
+
+            // license file found
+            // update usage records
+            if (updateUsage) {
+                await this.platform.updateLicenseUsage({
+                    stockItem: availStockItem,
+                    asgName: this.scalingGroupName,
+                    instanceId: this._selfInstance.instanceId
+                });
+            }
+            context.res = this.proxyResponse(200, licenseFile.content);
         } catch (error) {
             logger.error(error);
             context.res = this.proxyResponse(500, error);
         }
     }
 
+    async updateLicenseStockRecord(licenseFiles, stockRecords) {
+        if (licenseFiles instanceof Map && stockRecords instanceof Map) {
+            let fileQueries = [],
+                untrackedFiles = new Map(licenseFiles.entries());// copy the map
+            try {
+                if (stockRecords.size > 0) {
+                    // filter out tracked license files
+                    stockRecords.forEach(item => {
+                        let licenseFileKey =
+                            this.platform.genLicenseFileSimpleKey(item.fileName, item.fileETag);
+                        if (licenseFiles.has(licenseFileKey)) {
+                            untrackedFiles.delete(licenseFileKey);
+                        }
+                    }, this);
+                }
+                untrackedFiles.forEach(item => {
+                    fileQueries.push(this.platform.getBlobFromStorage({
+                        path: 'fgt-asg-license',
+                        fileName: item.name,
+                        getProperties: true
+                    }).catch(() => {
+                        return null;
+                    }));
+                }, this);
+                let fileObjects = await Promise.all(fileQueries);
+                let updateTasks = [];
+                fileObjects.forEach(item => {
+                    if (item) {
+                        let algorithm = 'sha1',
+                            checksum = AutoScaleCore.calStringChecksum(item.content, algorithm);
+                        // duplicate license
+                        if (stockRecords.has(checksum)) {
+                            logger.warn('updateLicenseStockRecord > warning: duplicate' +
+                                    ` license found: filename: ${item.properties.name}`);
+                        } else {
+                            updateTasks.push((function(fileItem, ref) {
+                                return ref.platform.updateLicenseStock(
+                                    {
+                                        item: fileItem,
+                                        checksum: checksum,
+                                        algorithm: algorithm,
+                                        replace: false}
+                                ).catch(error => {
+                                    logger.error(error);
+                                });
+                            })(item, this));
+                        }
+                    }
+                }, this);
+                await Promise.all(updateTasks);
+                return updateTasks.length > 0 ? this.platform.listLicenseStock() : stockRecords;
+            } catch (error) {
+                logger.error(error);
+            }
+        } else {
+            return stockRecords;
+        }
+    }
+
+    async findRecycleableLicense(stockRecords, usageRecords, limit = 'all') {
+        if (stockRecords instanceof Map && usageRecords instanceof Map) {
+            let gracePeriod = 600; // seconds
+            if (process.env.GET_LICENSE_GRACE_PERIOD &&
+                !isNaN(process.env.GET_LICENSE_GRACE_PERIOD)) {
+                gracePeriod = parseInt(process.env.GET_LICENSE_GRACE_PERIOD);
+            }
+            // do health check on each item
+            let queries = [], healthCheckResults, recyclableRecords = [], count = 0, maxCount;
+            if (limit === 'all' || isNaN(limit) || parseInt(limit) <= 0) {
+                maxCount = -1; // set a negative max count to indicate no limit
+            } else {
+                maxCount = parseInt(limit); // set a positive maxcount
+            }
+            usageRecords.forEach(item => {
+                if (item.instanceId && item.asgName) {
+                    queries.push(async function(rec, ref) {
+                        // get instance health check and instance info
+                        let tasks = [];
+                        tasks.push(
+                            ref.platform.getInstanceHealthCheck({
+                                instanceId: rec.instanceId,
+                                asgName: rec.asgName
+                            }, 3600000).catch(() => null));
+                        tasks.push(
+                            ref.platform.describeInstance({
+                                instanceId: item.instanceId,
+                                scaleSetName: item.asgName,
+                                readCache: false
+                            }).catch(() => null));
+                        let [healthCheck, instance] = await Promise.all(tasks);
+                        return {
+                            checksum: rec['sha1-checksum'],
+                            usageRecord: rec,
+                            healthCheck: healthCheck,
+                            instance: instance
+                        };
+                    }(item, this));
+                }
+            }, this);
+            healthCheckResults = await Promise.all(queries);
+            for (let result of healthCheckResults) {
+                // recycle this stock record if checksum (of a license file) exists and the
+                // corresponding instance which used this license doesn't exist or is unhealthy
+                // there's a situation when one fgt was assigned one license, the fgt need time
+                // to get config, boot up, become available, and start to send hb.
+                // until then the healch check of that fgt won't be available. therefore, here
+                // the script sets a grace period for the fgt to complete the whole process.
+                // if the fgt instance exists, but no healthcheck record, if the grace period has
+                // passed, recycle the license.
+                if (stockRecords.has(result.checksum)) {
+                    let recyclable = false;
+                    // if instance is gone? recycle the license
+                    if (!result.instance) {
+                        recyclable = true;
+                    } else if (result.instance && result.healthCheck &&
+                        !result.healthCheck.healthy) {
+                        // if instance exists but instance is unhealth? recycle the license
+                        recyclable = true;
+                    } else if (result.instance && !result.healthCheck && result.usageRecord &&
+                        Date.now() > result.usageRecord.assignedTime + gracePeriod * 1000) {
+                        // if instance exists but no healthcheck and grace period has passed?
+                        recyclable = true;
+                    }
+                    // recycle the recyclable license
+                    if (recyclable) {
+                        count ++;
+                        if (maxCount < 0 || count <= maxCount) {
+                            recyclableRecords.push(stockRecords.get(result.checksum));
+                            if (count === maxCount) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            return recyclableRecords;
+        }
+    }
+
     async handleGetCustomLog(context, event) {
-        // TODO: this function is for Poc only for now
+        // TODO: this function should be inaccessible on production
         try {
-            let psksecret;
+            let psksecret, proxyMethod = 'method' in event && event.method, result = '';
+            let timeFrom, timeTo;
             await this.platform.init();
-            if (event && event.headers && event.headers.psksecret) {
-                psksecret = event.headers.psksecret;
+            if (event && event.headers) {
+                if (event.headers.psksecret) {
+                    psksecret = event.headers.psksecret;
+                }
+                timeFrom = event.headers.timefrom ? event.headers.timefrom : 0;
+                timeTo = event.headers.timeto ? event.headers.timeto : null;
             }
             if (!(psksecret && psksecret === process.env.FORTIGATE_PSKSECRET)) {
                 return;
             }
-            context.res = this.proxyResponse(200, await this.platform.listLogFromDb(-1, 'html'));
+            switch (proxyMethod && proxyMethod.toUpperCase()) {
+                case 'GET':
+                    result = await this.platform.listLogFromDb(-1, 'html');
+                    break;
+                case 'DELETE':
+                    if (timeFrom && isNaN(timeFrom)) {
+                        try {
+                            timeFrom = new Date(timeFrom).getTime();
+                        } catch (error) {
+                            timeFrom = 0;
+                        }
+                    }
+                    if (timeTo && isNaN(timeTo)) {
+                        try {
+                            timeTo = new Date(timeTo).getTime();
+                        } catch (error) {
+                            timeTo = null;
+                        }
+                    }
+                    result = await this.platform.deleteLogFromDb(timeFrom, timeTo);
+                    break;
+                default:
+                    break;
+            }
+            context.res = this.proxyResponse(200, result);
             // context.res = this.proxyResponse(200, licenseFile);
         } catch (error) {
             logger.error(error);
@@ -941,70 +1317,35 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async parseInstanceInfo(instanceId) {
         // look for this vm in both byol and payg vmss
-        let cachedInfo = null;
-        if (!this._selfInstance) {
-            // look from cache first (if cache enabled){
-            if (process.env.VM_INFO_CACHE_ENABLED) {
-                // look from BYOL scaling group
-                cachedInfo =
-                    await this.platform.getVmInfoCache(
-                            process.env.SCALING_GROUP_NAME_BYOL,
-                            isNaN(instanceId) ? null : instanceId,
-                            isNaN(instanceId) ? instanceId : null
-                    );
-                // found in BYOL
-                if (cachedInfo) {
-                    this.setScalingGroup(
-                        process.env.MASTER_SCALING_GROUP_NAME,
-                        process.env.SCALING_GROUP_NAME_BYOL
-                    );
-                } else {
-                    // look from PAYG scaling group
-                    cachedInfo =
-                    await this.platform.getVmInfoCache(
-                            process.env.SCALING_GROUP_NAME_PAYG,
-                            isNaN(instanceId) ? null : instanceId,
-                            isNaN(instanceId) ? instanceId : null
-                    );
-                    if (cachedInfo) {
-                        this.setScalingGroup(
-                            process.env.MASTER_SCALING_GROUP_NAME,
-                            process.env.SCALING_GROUP_NAME_PAYG
-                        );
-                    }
-                }
-            }
-
-            // if no instance info cache found, get instance info from platform
-            if (!cachedInfo) {
-                // look from byol first
-                this._selfInstance = this._selfInstance || await this.platform.describeInstance({
-                    instanceId: instanceId,
-                    scaleSetName: process.env.SCALING_GROUP_NAME_BYOL,
-                    readCache: false
-                });
-                if (this._selfInstance) {
-                    this.setScalingGroup(
+        // look from byol first
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance({
+            instanceId: instanceId,
+            scaleSetName: process.env.SCALING_GROUP_NAME_BYOL
+        });
+        if (this._selfInstance) {
+            this.setScalingGroup(
+                process.env.MASTER_SCALING_GROUP_NAME,
+                process.env.SCALING_GROUP_NAME_BYOL
+            );
+        } else { // not found in byol vmss, look from payg
+            this._selfInstance = await this.platform.describeInstance({
+                instanceId: instanceId,
+                scaleSetName: process.env.SCALING_GROUP_NAME_PAYG
+            });
+            if (this._selfInstance) {
+                this.setScalingGroup(
                     process.env.MASTER_SCALING_GROUP_NAME,
-                    process.env.SCALING_GROUP_NAME_BYOL
-                    );
-                } else { // not found in byol vmss, look from payg
-                    this._selfInstance = await this.platform.describeInstance({
-                        instanceId: instanceId,
-                        scaleSetName: process.env.SCALING_GROUP_NAME_PAYG,
-                        readCache: false
-                    });
-                    if (this._selfInstance) {
-                        this.setScalingGroup(
-                        process.env.MASTER_SCALING_GROUP_NAME,
-                        process.env.SCALING_GROUP_NAME_PAYG
-                        );
-                    }
-                }
+                    process.env.SCALING_GROUP_NAME_PAYG
+                );
             }
         }
+        if (this._selfInstance) {
+            logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
+        `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
+        } else {
+            logger.warn(`cannot identify instance: vmid:(${instanceId})`);
+        }
     }
-
     // end of AzureAutoscaleHandler class
 }
 
@@ -1043,7 +1384,7 @@ exports.handle = async (context, req) => {
     // now the script timeout is set to 200 seconds which is 30 seconds earlier.
     // Leave it some time for function finishing up.
     let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
-        parseInt(process.env.SCRIPT_TIMEOUT) : 200000;
+        parseInt(process.env.SCRIPT_TIMEOUT) * 1000 : 200000;
     if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
         scriptTimeOut = 200000;
     }
@@ -1073,7 +1414,7 @@ exports.handleGetLicense = async (context, req) => {
     // now the script timeout is set to 200 seconds which is 30 seconds earlier.
     // Leave it some time for function finishing up.
     let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
-        parseInt(process.env.SCRIPT_TIMEOUT) : 200000;
+        parseInt(process.env.SCRIPT_TIMEOUT) * 1000 : 200000;
     if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
         scriptTimeOut = 200000;
     }

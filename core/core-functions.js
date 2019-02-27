@@ -22,6 +22,7 @@ Author: Fortinet
 
 const uuidv5 = require('uuid/v5');
 const Logger = require('./logger');
+const crypto = require('crypto');
 const uuidGenerator = inStr => uuidv5(inStr, uuidv5.URL);
 
 class DefaultLogger extends Logger {
@@ -189,9 +190,20 @@ const waitFor = async (promiseEmitter, validator, interval = 5000, counter = nul
     return Promise.resolve(result);
 };
 
+/**
+ * calculate a string checksum
+ * @param {String} str a string to calculate the checksum
+ * @param {String} algorithm an algorithm to calculate the checksum
+ * @returns {String} checksum
+ */
+function calStringChecksum(str, algorithm = 'sha1') {
+    return crypto.createHash(algorithm).update(str, 'utf8').digest('hex');
+}
+
 
 exports.DefaultLogger = DefaultLogger;
 exports.moduleRuntimeId = () => moduleId;
 exports.uuidGenerator = uuidGenerator;
 exports.sleep = sleep;
 exports.waitFor = waitFor;
+exports.calStringChecksum = calStringChecksum;

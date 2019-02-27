@@ -1,14 +1,14 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
+    "contentVersion": "1.0.0.2",
     "parameters": {
         "FuncAppName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the function app that you wish to create."
+                "description": "The name of the Function App created."
             }
         },
-        "DbName": {
+        "CosmosDBName": {
             "type": "string",
             "metadata": {
                 "description": "The name of the Cosmos DB that you wish to create. The field can contain only lowercase letters, numbers and the '-' character, and must be between 3 and 31 characters."
@@ -23,87 +23,88 @@
                 "Standard_RAGRS"
             ],
             "metadata": {
-                "description": "Storage Account type"
+                "description": "The Storage Account Type."
             }
         },
-        "TenantId": {
+        "TenantID": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Azure Account Directory ID"
+                "description": "Azure Directory ID."
             }
         },
-        "SubscriptionId": {
+        "SubscriptionID": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Azure Subscription ID"
+                "description": "Azure Subscription ID."
             }
         },
         "RestAppId": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Application ID of the registered App"
+                "description": "The Application ID for the Registered app. This is under Azure Active Directory > App registrations > {your app}."
+            }
+        },
+        "RestAppSecret": {
+            "type": "string",
+            "metadata": {
+                "description": "This is the password for the Registered app."
             }
         },
         "HeartBeatLossCount": {
             "type": "string",
             "defaultValue": "3",
             "metadata": {
-                "description": "HeartBeat loss threshold when the FortiGate vm becomes unhealthy"
-            }
-        },
-        "RestAppSecret": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Application secret of the registered App"
+                "description": "Heart Beat Interval Count."
             }
         },
         "ScalingGroupResourceGroupName": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Name of the resource group of FGT autoscale is deployed in"
+                "description": "The name of the Resource Group that the deploy_scaleset.json will be deployed into."
             }
         },
         "ScalingGroupNamePrefix": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Prefix Name of the VMSS Name(vmssName) that is given when deploying FGT autoscale template"
+                "description": "Prefix Name of the VMSS Name(VMSSName) that is given when deploying FGT autoscale template."
             }
         },
-        "ScriptTimeOut": {
+        "ScriptTimeout": {
             "type": "string",
             "defaultValue": "230",
             "metadata": {
-                "description": "Timeout value for the azure function script"
+                "description": "The timeout value for the Azure function script. The default value is 230."
             }
         },
-        "PskSecret": {
+        "LicenseGracePeriod": {
+            "type": "string",
+            "defaultValue": "600",
+            "metadata": {
+                "description": "The minimum time between a license is distributed and recycled to re-distribute. Unit is second."
+            }
+        },
+        "ElectionWaitTime": {
+            "type": "string",
+            "defaultValue": "90",
+            "metadata": {
+                "description": "The maximum time to wait for a master election to complete. Unit is second."
+            }
+        },
+        "PSKSecret": {
             "type": "securestring",
             "metadata": {
-                "description": "Preshare key password for autoscaling configuration"
+                "description": "Preshare key password for autoscaling configuration."
             }
         },
         "PackageResUrl": {
             "type": "string",
-            "defaultValue": "https://github.com/mobilesuitzero/autoscale/raw/master/fortigate-autoscale-azure-funcapp-5.zip",
             "metadata": {
-                "description": "The public URL of package zip which contains the resource used to deploy the Function App."
-            }
-        },
-        "ResourceGroupLocation": {
-            "type": "string",
-            "defaultValue": "[resourceGroup().location]",
-            "metadata": {
-                "description": "Location for all resources."
+                "description": "The public URL of the deployment package zip file that contains the resource used to deploy the Function App. This URL must be accessible by Azure."
             }
         }
     },
     "variables": {
+        "location": "[resourceGroup().location]",
         "functionAppName": "[parameters('FuncAppName')]",
         "hostingPlanName": "[parameters('FuncAppName')]",
         "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
@@ -112,10 +113,10 @@
     "resources": [{
             "apiVersion": "2015-04-08",
             "type": "Microsoft.DocumentDb/databaseAccounts",
-            "name": "[parameters('DbName')]",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "name": "[parameters('CosmosDBName')]",
+            "location": "[variables('location')]",
             "properties": {
-                "name": "[parameters('DbName')]",
+                "name": "[parameters('CosmosDBName')]",
                 "databaseAccountOfferType": "Standard"
             }
         },
@@ -123,17 +124,35 @@
             "type": "Microsoft.Storage/storageAccounts",
             "name": "[variables('storageAccountName')]",
             "apiVersion": "2016-12-01",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "location": "[variables('location')]",
             "kind": "Storage",
             "sku": {
                 "name": "[parameters('StorageAccountType')]"
-            }
+            },
+            "resources": [{
+                    "name": "default/configset",
+                    "type": "blobServices/containers",
+                    "apiVersion": "2018-03-01-preview",
+                    "dependsOn": [
+                        "[variables('storageAccountName')]"
+                    ]
+                },
+                {
+                    "name": "default/fgt-asg-license",
+                    "type": "blobServices/containers",
+                    "apiVersion": "2018-03-01-preview",
+                    "dependsOn": [
+                        "[variables('storageAccountName')]"
+                    ]
+                }
+
+            ]
         },
         {
             "apiVersion": "2015-04-01",
             "type": "Microsoft.Web/serverfarms",
             "name": "[variables('hostingPlanName')]",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "location": "[variables('location')]",
             "properties": {
                 "name": "[variables('hostingPlanName')]",
                 "computeMode": "Dynamic",
@@ -145,10 +164,10 @@
             "type": "Microsoft.Web/sites",
             "name": "[variables('functionAppName')]",
             "kind": "functionapp",
-            "location": "[parameters('ResourceGroupLocation')]",
+            "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('DbName'))]",
+                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosmosDBName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {
@@ -196,7 +215,7 @@
                         },
                         {
                             "name": "SCALESET_DB_ACCOUNT",
-                            "value": "[parameters('DbName')]"
+                            "value": "[parameters('CosmosDBName')]"
                         },
                         {
                             "name": "SCALING_GROUP_NAME_PAYG",
@@ -212,7 +231,7 @@
                         },
                         {
                             "name": "TENANT_ID",
-                            "value": "[parameters('TenantId')]"
+                            "value": "[parameters('TenantID')]"
                         },
                         {
                             "name": "HEART_BEAT_LOSS_COUNT",
@@ -220,15 +239,11 @@
                         },
                         {
                             "name": "REST_API_MASTER_KEY",
-                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('DbName')), '2015-04-08').primaryMasterKey]"
+                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosmosDBName')), '2015-04-08').primaryMasterKey]"
                         },
                         {
                             "name": "REQUIRED_CONFIG_SET",
-                            "value": ""
-                        },
-                        {
-                            "name": "VM_INFO_CACHE_ENABLED",
-                            "value": "true"
+                            "value": "extraports-yes, extrastaticroutes-yes"
                         },
                         {
                             "name": "UNIQUE_ID",
@@ -240,11 +255,19 @@
                         },
                         {
                             "name": "FORTIGATE_PSKSECRET",
-                            "value": "[parameters('PskSecret')]"
+                            "value": "[parameters('PSKSecret')]"
                         },
                         {
                             "name": "SCRIPT_TIMEOUT",
-                            "value": "[parameters('ScriptTimeOut')]"
+                            "value": "[parameters('ScriptTimeout')]"
+                        },
+                        {
+                            "name": "GET_LICENSE_GRACE_PERIOD",
+                            "value": "[parameters('LicenseGracePeriod')]"
+                        },
+                        {
+                            "name": "ELECTION_WAIT_TIME",
+                            "value": "[parameters('ElectionWaitTime')]"
                         },
                         {
                             "name": "AZURE_STORAGE_ACCOUNT",
@@ -256,7 +279,15 @@
                         },
                         {
                             "name": "SUBSCRIPTION_ID",
-                            "value": "[parameters('SubscriptionId')]"
+                            "value": "[parameters('SubscriptionID')]"
+                        },
+                        {
+                            "name": "DEBUG_SAVE_CUSTOM_LOG",
+                            "value": "true"
+                        },
+                        {
+                            "name": "DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED",
+                            "value": "true"
                         }
                     ]
                 }

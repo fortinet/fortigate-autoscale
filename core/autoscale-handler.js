@@ -66,7 +66,8 @@ module.exports = class AutoscaleHandler {
                 path: 'configset',
                 fileName: configName
             };
-            return await this.platform.getBlobFromStorage(parameters);
+            let blob = await this.platform.getBlobFromStorage(parameters);
+            return blob.content;
         } catch (error) {
             this.logger.warn(`called getConfigSet > error: ${error}`);
             throw error;
@@ -103,6 +104,12 @@ module.exports = class AutoscaleHandler {
                             fazIp = await this.getFazIp();
                             configContent += fazConfig.replace(
                                 new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
+                            break;
+                        case 'extrastaticroutes':
+                            configContent += await this.getConfigSet('extrastaticroutes');
+                            break;
+                        case 'extraports':
+                            configContent += await this.getConfigSet('extraports');
                             break;
                         default:
                             break;
@@ -306,7 +313,7 @@ module.exports = class AutoscaleHandler {
         // status), add this instance to monitor
         if (!this._selfHealthCheck && this._masterInfo) {
             await this.addInstanceToMonitor(this._selfInstance, interval,
-                Date.now() + interval * 1000, this._masterInfo.primaryPrivateIpAddress);
+                this._masterInfo.primaryPrivateIpAddress);
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
                 `ip: ${this._selfInstance.primaryPrivateIpAddress}) is added to monitor.`);
             // if this newly come-up instance is the new master, save its instance id as the
@@ -341,6 +348,8 @@ module.exports = class AutoscaleHandler {
                 'master-ip': this._masterInfo.primaryPrivateIpAddress
             } : '';
         } else {
+            this.logger.info('instance is unhealthy. need to remove it. healthcheck record:',
+                JSON.stringify(this._selfHealthCheck));
             // for unhealthy instances
             // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script will stop
             // keeping it in sync and stop doing any other logics for it any longer.
@@ -421,6 +430,7 @@ module.exports = class AutoscaleHandler {
                     instanceId: this._masterInfo.instanceId
                 });
             }
+            this.logger.info('master healthcheck:', masterHealthCheck);
             // if master is unhealthy, we need a new election
             if (!masterHealthCheck || !masterHealthCheck.healthy || !masterHealthCheck.inSync) {
                 purgeMaster = needElection = true;

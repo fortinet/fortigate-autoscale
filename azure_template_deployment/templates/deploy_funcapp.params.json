@@ -1,44 +1,51 @@
 {
-    "FuncAppName": {
-        "value": ""
-    },
-    "DbName": {
-        "value": ""
-    },
-    "StorageAccountType": {
-        "value": "Standard_LRS"
-    },
-    "TenantId": {
-        "value": ""
-    },
-    "SubscriptionId": {
-        "value": ""
-    },
-    "RestAppId": {
-        "value": ""
-    },
-    "HeartBeatLossCount": {
-        "value": "3"
-    },
-    "RestAppSecret": {
-        "value": ""
-    },
-    "ScalingGroupResourceGroupName": {
-        "value": ""
-    },
-    "ScalingGroupNamePrefix": {
-        "value": ""
-    },
-    "ScriptTimeOut": {
-        "value": "230"
-    },
-    "PskSecret": {
-        "value": ""
-    },
-    "PackageResUrl": {
-        "value": ""
-    },
-    "ResourceGroupLocation": {
-        "value": "[resourceGroup().location]"
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.3",
+    "parameters": {
+        "FuncAppName": {
+            "value": ""
+        },
+        "CosmosDBName": {
+            "value": ""
+        },
+        "StorageAccountType": {
+            "value": "Standard_LRS"
+        },
+        "TenantID": {
+            "value": ""
+        },
+        "SubscriptionID": {
+            "value": ""
+        },
+        "RestAppId": {
+            "value": ""
+        },
+        "RestAppSecret": {
+            "value": ""
+        },
+        "HeartBeatLossCount": {
+            "value": "3"
+        },
+        "ScalingGroupResourceGroupName": {
+            "value": ""
+        },
+        "ScalingGroupNamePrefix": {
+            "value": ""
+        },
+        "ScriptTimeOut": {
+            "value": "230"
+        },
+        "LicenseGracePeriod": {
+            "value": "600"
+        },
+        "ElectionWaitTime": {
+            "value": "90"
+        },
+        "PSKSecret": {
+            "value": ""
+        },
+        "PackageResUrl": {
+            "value": ""
+        }
     }
 }

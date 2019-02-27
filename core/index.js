@@ -18,3 +18,4 @@ exports.moduleRuntimeId = () => CoreFunctions.moduleId;
 exports.uuidGenerator = CoreFunctions.uuidGenerator;
 exports.sleep = CoreFunctions.sleep;
 exports.waitFor = CoreFunctions.waitFor;
+exports.calStringChecksum = CoreFunctions.calStringChecksum;
