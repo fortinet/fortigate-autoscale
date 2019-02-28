@@ -817,7 +817,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 parameters.fileName)
         }).promise();
 
-        let content = data && data.Body && data.Body.toString('ascii');
+        let content = data && data.Body && data.Body.toString('utf8');
         return {content: content};
     }
 
