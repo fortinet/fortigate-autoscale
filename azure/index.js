@@ -641,15 +641,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     }
                 });
             if (!Array.isArray(items) || items.length === 0) {
-                return [];
+                return '';
             }
-            let logContent = '';
-            items.forEach(item => {
-                logContent += item.logContent;
-            });
-            return logContent;
+            return items.join('');
         } catch (error) {
-            return [];
+            return '';
         }
     }
 

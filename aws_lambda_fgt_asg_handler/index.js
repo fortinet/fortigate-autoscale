@@ -8,6 +8,13 @@ Author: Fortinet
 const ftgtAutoscaleAws = require('fortigate-autoscale-aws');
 const logger = new ftgtAutoscaleAws.AutoScaleCore.DefaultLogger(console);
 const autoscaleHandler = new ftgtAutoscaleAws.AwsAutoscaleHandler();
+if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+    process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+    logger.outputQueue = true;
+    if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
+        logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
+    }
+}
 autoscaleHandler.useLogger(logger);
 ftgtAutoscaleAws.initModule();
 

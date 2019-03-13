@@ -27,12 +27,14 @@ const
     ec2 = new AWS.EC2(),
     apiGateway = new AWS.APIGateway(),
     s3 = new AWS.S3(),
-    unique_id = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '',
-    custom_id = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '',
+    UNIQUE_ID = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '',
+    CUSTOM_ID = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '',
     SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
-    DB = AutoScaleCore.dbDefinitions.getTables(custom_id, unique_id),
+    DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID),
     moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
-    settingItems = AutoScaleCore.settingItems;
+    settingItems = AutoScaleCore.settingItems,
+    DEFAULT_HEART_BEAT_INTERVAL = 3600,
+    HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
 
 let logger = new AutoScaleCore.DefaultLogger(console);
 /**
@@ -40,28 +42,21 @@ let logger = new AutoScaleCore.DefaultLogger(console);
  */
 class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async init() {
-        let noError = true;
-        try {
-
-            await Promise.all([
-                this.tableExists(DB.AUTOSCALE).catch(() => { noError = false }),
-                this.tableExists(DB.ELECTION).catch(() => { noError = false }),
-                this.tableExists(DB.LIFECYCLEITEM).catch(() => { noError = false }),
-                this.tableExists(DB.FORTIANALYZER).catch(() => { noError = false }),
-                this.tableExists(DB.SETTINGS).catch(() => { noError = false }),
-                this.tableExists(DB.NICATTACHMENT).catch(() => { noError = false }),
-                this.tableExists(DB.CUSTOMLOG).catch(() => { noError = false })
-            ]);
-        } catch (ex) {
-            logger.error(ex);
-            noError = false;
-        }
-        return noError;
+        let errors = [];
+        await Promise.all([
+            DB.AUTOSCALE, DB.ELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
+            DB.NICATTACHMENT, DB.CUSTOMLOG]
+            .map(table => this.tableExists(table).catch(err => errors.push(err)))
+        );
+        errors.forEach(err => logger.error(err));
+        return errors.length === 0;
     }
 
     async createTable(schema) {
         try {
-            await dynamodb.describeTable({ TableName: schema.TableName }).promise();
+            await dynamodb.describeTable({
+                TableName: schema.TableName
+            }).promise();
             logger.log(`table ${schema.TableName} exists, no need to create.`);
         } catch (ex) {
             try {
@@ -73,12 +68,16 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 throw new Error(`table ${schema.TableName} not created!`);
             }
         }
-        await dynamodb.waitFor('tableExists', { TableName: schema.TableName }).promise();
+        await dynamodb.waitFor('tableExists', {
+            TableName: schema.TableName
+        }).promise();
     }
 
     async tableExists(schema) {
         try {
-            await dynamodb.describeTable({ TableName: schema.TableName }).promise();
+            await dynamodb.describeTable({
+                TableName: schema.TableName
+            }).promise();
             logger.log('found table', schema.TableName);
             return true;
         } catch (ex) {
@@ -89,23 +88,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     }
 
     async createTables() {
-        let noError = true;
-        try {
-            await Promise.all([
-                this.createTable(DB.AUTOSCALE).catch(() => { noError = false }),
-                this.createTable(DB.ELECTION).catch(() => { noError = false }),
-                this.createTable(DB.LIFECYCLEITEM).catch(() => { noError = false }),
-                this.createTable(DB.FORTIANALYZER).catch(() => { noError = false }),
-                this.createTable(DB.SETTINGS).catch(() => { noError = false }),
-                this.createTable(DB.NICATTACHMENT).catch(() => { noError = false }),
-                this.createTable(DB.CUSTOMLOG).catch(() => { noError = false })
-            ]);
-            return true;
-        } catch (ex) {
-            logger.error(ex);
-            noError = false;
-        }
-        return noError;
+        let errors = [];
+        await Promise.all([
+            DB.AUTOSCALE, DB.ELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
+            DB.NICATTACHMENT, DB.CUSTOMLOG]
+            .map(table => this.createTable(table).catch(err => errors.push(err)))
+        );
+        errors.forEach(err => logger.error(err));
+        return errors.length === 0;
     }
 
     /** @override */
@@ -200,7 +190,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         TableName: tableName,
                         Limit: 5
                     })
-                        .promise();
+                    .promise();
                 items = response.Items;
                 if (Array.isArray(items) && items.length) {
                     return await this.cleanUpDbLifeCycleActions(items);
@@ -309,7 +299,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // race condition
         const params = {
             TableName: DB.ELECTION.TableName,
-            Key: { asgName: this.scalingGroupName },
+            Key: {
+                asgName: this.scalingGroupName
+            },
             ConditionExpression: '#AsgName = :asgName',
             ExpressionAttributeNames: {
                 '#AsgName': 'asgName'
@@ -367,20 +359,24 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 // to get a more accurate heart beat elapsed time, the script execution time so far
                 // is compensated.
                 compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
-                healthy = compensatedScriptTime < data.Item.nextHeartBeatTime;
                 interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
                     heartBeatInterval : data.Item.heartBeatInterval;
-                if (compensatedScriptTime < data.Item.nextHeartBeatTime) {
-                    // reset hb loss cound if instance sends hb within its interval
+                // based on the test results, network delay brought more significant side effects
+                // to the heart beat monitoring checking than we thought. we have to expand the
+                // checking time to reasonably offset the delay.
+                // HEART_BEAT_DELAY_ALLOWANCE is used for this purpose
+                if (compensatedScriptTime <
+                    data.Item.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE) {
+                    // reset hb loss count if instance sends hb within its interval
                     healthy = true;
                     heartBeatLossCount = 0;
                 } else {
                     // if the current sync heartbeat is late, the instance is still considered
                     // healthy unless 3 times of heartBeatInterval amount of time has passed.
-                    // where the instance have 0% chance to catch up with a heartbeat sync
-
+                    // in other words, the instance totally lost the time of 3 hb syncing
+                    // network delay allowance also applies to the case here.
                     healthy = data.Item.heartBeatLossCount < 3 &&
-                    Date.now() < data.Item.nextHeartBeatTime +
+                        Date.now() < data.Item.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE +
                         interval * 1000 * (2 - data.Item.heartBeatLossCount);
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
                 }
@@ -413,14 +409,16 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.error('updateInstanceHealthCheck > error: no instanceId property found' +
                 ` on healthCheckObject: ${JSON.stringify(healthCheckObject)}`);
             return Promise.reject('invalid healthCheckObject: ' +
-            `${JSON.stringify(healthCheckObject)}`);
+                `${JSON.stringify(healthCheckObject)}`);
         }
         try {
             let params = {
-                Key: {instanceId: healthCheckObject.instanceId},
+                Key: {
+                    instanceId: healthCheckObject.instanceId
+                },
                 TableName: DB.AUTOSCALE.TableName,
                 UpdateExpression: 'set heartBeatLossCount = :HeartBeatLossCount, ' +
-                'heartBeatInterval = :heartBeatInterval, ' +
+                    'heartBeatInterval = :heartBeatInterval, ' +
                     'nextHeartBeatTime = :NextHeartBeatTime, ' +
                     'masterIp = :MasterIp, syncState = :SyncState',
                 ExpressionAttributeValues: {
@@ -428,8 +426,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     ':heartBeatInterval': heartBeatInterval,
                     ':NextHeartBeatTime': checkPointTime + heartBeatInterval * 1000,
                     ':MasterIp': masterIp ? masterIp : 'null',
-                    ':SyncState': healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' :
-                        'out-of-sync'
+                    ':SyncState': healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync'
                 },
                 ConditionExpression: 'attribute_exists(instanceId)'
             };
@@ -451,7 +448,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         try {
             let params = {
                 TableName: DB.AUTOSCALE.TableName,
-                Key: { instanceId: instanceId }
+                Key: {
+                    instanceId: instanceId
+                }
             };
             let result = await docClient.delete(params).promise();
             return !!result;
@@ -491,7 +490,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     /* eslint-enable max-len */
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
-        let params = { Filters: [] }, instanceId;
+        let params = {
+                Filters: []
+            },
+            instanceId;
         // check if instance is in scaling group
         if (parameters.scalingGroupName) {
             // describe the instance in auto scaling group
@@ -548,7 +550,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      */
     extractRequestInfo(request) {
         let instanceId = null,
-            interval = 3600,
+            interval = DEFAULT_HEART_BEAT_INTERVAL,
             status = null;
 
         if (request && request.headers && request.headers['Fos-instance-id']) {
@@ -570,7 +572,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
         logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
             `interval(${interval}), status(${status})`);
-        return { instanceId, interval, status };
+        return {
+            instanceId,
+            interval,
+            status
+        };
     }
 
     async createNetworkInterface(parameters) {
@@ -583,12 +589,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     Resources: [
                         result.NetworkInterface.NetworkInterfaceId
                     ],
-                    Tags: [
-                        {
-                            Key: 'FortiGateAutoScaleNicAttachment',
-                            Value: `${custom_id}-NicAttachment-${unique_id}`
-                        }
-                    ]
+                    Tags: [{
+                        Key: 'FortiGateAutoScaleNicAttachment',
+                        Value: `${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`
+                    }]
                 };
                 await ec2.createTags(params).promise();
             }
@@ -616,7 +620,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             return result && result.NetworkInterfaces && result.NetworkInterfaces[0];
         } catch (error) {
             logger.warn('called describeNetworkInterface. ' +
-            `failed.(error: ${JSON.stringify(error)})`);
+                `failed.(error: ${JSON.stringify(error)})`);
             return false;
         }
     }
@@ -628,7 +632,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             return result && result.NetworkInterfaces;
         } catch (error) {
             logger.warn('called listNetworkInterfaces. ' +
-            `failed.(error: ${JSON.stringify(error)})`);
+                `failed.(error: ${JSON.stringify(error)})`);
             return false;
         }
     }
@@ -699,8 +703,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 },
                 validator = result => {
                     return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
-                    result.NetworkInterfaces[0] &&
-                    result.NetworkInterfaces[0].Status === 'available';
+                        result.NetworkInterfaces[0] &&
+                        result.NetworkInterfaces[0].Status === 'available';
                 };
             let result = await AutoScaleCore.waitFor(promiseEmitter, validator);
             logger.info('called detachNetworkInterface. ' +
@@ -718,7 +722,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 response = await docClient.scan({
                     TableName: DB.NICATTACHMENT.TableName
                 }).promise();
-            let recordCount = 0, records = [];
+            let recordCount = 0,
+                records = [];
             if (response && response.Items) {
                 recordCount = response.Items.length;
                 records = response.Items;
@@ -734,7 +739,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async getNicAttachmentRecord(instanceId) {
         let params = {
             TableName: DB.NICATTACHMENT.TableName,
-            Key: { instanceId: instanceId }
+            Key: {
+                instanceId: instanceId
+            }
         };
         try {
             let result = await docClient.get(params).promise();
@@ -746,7 +753,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     async updateNicAttachmentRecord(instanceId, nicId, state, conditionState = null) {
         let params = {
-            Key: {instanceId: instanceId},
+            Key: {
+                instanceId: instanceId
+            },
             TableName: DB.NICATTACHMENT.TableName
         };
         if (conditionState) {
@@ -770,11 +779,15 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async deleteNicAttachmentRecord(instanceId, conditionState = null) {
         let params = {
             TableName: DB.NICATTACHMENT.TableName,
-            Key: { instanceId: instanceId }
+            Key: {
+                instanceId: instanceId
+            }
         };
         if (conditionState) {
             params.ConditionExpression = 'attachmentState = :State';
-            params.ExpressionAttributeValues = { ':State': conditionState };
+            params.ExpressionAttributeValues = {
+                ':State': conditionState
+            };
         }
         try {
             return await docClient.delete(params).promise();
@@ -786,7 +799,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async getSettingItem(key) {
         let params = {
             TableName: DB.SETTINGS.TableName,
-            Key: { settingKey: key }
+            Key: {
+                settingKey: key
+            }
         };
         try {
             let result = await docClient.get(params).promise();
@@ -818,7 +833,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }).promise();
 
         let content = data && data.Body && data.Body.toString('utf8');
-        return {content: content};
+        return {
+            content: content
+        };
     }
 
     async terminateInstanceInAutoScalingGroup(instance) {
@@ -836,6 +853,103 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             return false;
         }
     }
+
+    async saveLogToDb(log) {
+        let timestamp = Date.now(),
+            document = {
+                id: `${CUSTOM_ID}-LOG-${UNIQUE_ID}`,
+                logContent: typeof log === 'string' ? log : JSON.stringify(log),
+                timestamp: timestamp
+            };
+        try {
+            const params = {
+                TableName: DB.CUSTOMLOG.TableName,
+                Item: document
+            };
+            return await docClient.put(params).promise(); // create new or replace existing
+        } catch (error) {
+            logger.warn('called saveLogToDb > error: ', error, 'document item:', document);
+            return false;
+        }
+    }
+
+    // eslint-disable-next-line no-unused-vars
+    async listLogFromDb(timeFrom, timeTo = null) {
+        try {
+            let query = {
+                TableName: DB.CUSTOMLOG.TableName,
+                KeyConditionExpression: '#Timestamp >= :TimeFrom',
+                ExpressionAttributeNames: {
+                    '#Timestamp': 'id'
+                },
+                ExpressionAttributeValues: {
+                    ':TimeFrom': timeFrom
+                }
+            };
+            if (timeTo) {
+                query.KeyConditionExpression += ' AND #Timestamp <= :TimeTo';
+                query.ExpressionAttributeValues[':TimeTo'] = timeTo;
+            }
+            let response = await docClient.query(query).promise();
+            if (!Array.isArray(response.Items) || response.Items.length === 0) {
+                return '';
+            }
+            return response.Items.join('');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    async deleteLogFromDb(timeFrom, timeTo = null) {
+        try {
+            let query = {
+                TableName: DB.CUSTOMLOG.TableName,
+                KeyConditionExpression: '#Timestamp >= :TimeFrom',
+                ExpressionAttributeNames: {
+                    '#Timestamp': 'id'
+                },
+                ExpressionAttributeValues: {
+                    ':TimeFrom': timeFrom
+                }
+            };
+            if (timeTo) {
+                query.KeyConditionExpression += ' AND #Timestamp <= :TimeTo';
+                query.ExpressionAttributeValues[':TimeTo'] = timeTo;
+            }
+
+            let response = await docClient.query(query).promise();
+            if (!Array.isArray(response.Items) || response.Items.length === 0) {
+                return false;
+            }
+            let deletionTasks = [],
+                errorTasks = [],
+                baseParams = {
+                    Key: {},
+                    TableName: DB.CUSTOMLOG.TableName,
+                    ConditionExpression: '#Timestamp = :Timestamp',
+                    ExpressionAttributeNames: {
+                        '#Timestamp': 'id'
+                    }
+                };
+            response.Items.forEach(item => {
+                let params;
+                Object.assign(params, baseParams);
+                params.ExpressionAttributeValues = {
+                    ':Timestamp': item.timestamp
+                };
+                deletionTasks.push(docClient.delete(params).promise().catch(() => {
+                    errorTasks.push(item);
+                }));
+            });
+
+            await Promise.all(deletionTasks);
+            return `${deletionTasks.length} rows deleted. ${errorTasks.length} error rows.`;
+
+        } catch (error) {
+            return false;
+        }
+    }
+
     // end of awsPlatform class
 }
 
@@ -858,6 +972,31 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /* eslint-disable max-len */
     /**
+     * Proxy the response to AWS API Gateway call
+     * @param {Number} statusCode status code for the HTTP resonse
+     * @param {String | Object} res the response body
+     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+     * @return {Object} the response to AWS API Gateway call
+     */
+    /* eslint-enable max-len */
+    proxyResponse(statusCode, res) {
+        let log = logger.log(`(${statusCode}) response body:`, JSON.stringify(res)).flush();
+        if (process.env.DEBUG_SAVE_CUSTOM_LOG && (!process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR ||
+                process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR &&
+                logger.errorCount > 0) && log !== '') {
+            this.platform.saveLogToDb(log);
+        }
+        const response = {
+            statusCode,
+            headers: {},
+            body: typeof res === 'string' ? res : JSON.stringify(res),
+            isBase64Encoded: false
+        };
+        return response;
+    }
+
+    /* eslint-disable max-len */
+    /**
      *
      * @param {AWS.ProxyIntegrationEvent} event Event from the api-gateway.
      * @param {*} context the runtime context of this function call from AWS Lambda service
@@ -867,34 +1006,35 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-enable max-len */
     async handle(event, context, callback) {
         this._step = 'initializing';
-        let proxyMethod = 'httpMethod' in event && event.httpMethod, result;
+        let proxyMethod = 'httpMethod' in event && event.httpMethod,
+            result;
         try {
             const platformInitSuccess = await this.init();
             // enter instance termination process if cannot init for any reason
             if (!platformInitSuccess) {
                 result = 'fatal error, cannot initialize.';
                 logger.error(result);
-                callback(null, proxyResponse(500, result));
+                callback(null, this.proxyResponse(500, result));
             } else if (event.source === 'aws.autoscaling') {
                 this._step = 'aws.autoscaling';
                 result = await this.handleAutoScalingEvent(event);
-                callback(null, proxyResponse(200, result));
+                callback(null, this.proxyResponse(200, result));
             } else {
                 // authenticate the calling instance
                 const instanceId = this.platform.extractRequestInfo(event).instanceId;
                 if (!instanceId) {
-                    callback(null, proxyResponse(403, 'Instance id not provided.'));
+                    callback(null, this.proxyResponse(403, 'Instance id not provided.'));
                     return;
                 }
                 await this.parseInstanceInfo(instanceId);
                 if (proxyMethod === 'POST') {
                     this._step = 'fortigate:handleSyncedCallback';
                     result = await this.handleSyncedCallback(event);
-                    callback(null, proxyResponse(200, result));
+                    callback(null, this.proxyResponse(200, result));
                 } else if (proxyMethod === 'GET') {
                     this._step = 'fortigate:getConfig';
                     result = await this.handleGetConfig(event);
-                    callback(null, proxyResponse(200, result));
+                    callback(null, this.proxyResponse(200, result));
                 } else {
                     this._step = '¯\\_(ツ)_/¯';
 
@@ -915,7 +1055,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
             if (proxyMethod) {
                 callback(null,
-                    proxyResponse(500, {
+                    this.proxyResponse(500, {
                         message: ex.message,
                         stack: ex.stack
                     }));
@@ -923,32 +1063,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 callback(ex);
             }
         }
-
-        /* eslint-disable max-len */
-        /**
-         * Proxy the response to AWS API Gateway call
-         * @param {Number} statusCode status code for the HTTP resonse
-         * @param {String | Object} res the response body
-         * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
-         * @return {Object} the response to AWS API Gateway call
-         */
-        /* eslint-enable max-len */
-        function proxyResponse(statusCode, res) {
-            let log = logger.log(`(${statusCode}) response body:`, res).flush();
-            if (process.env.DEBUG_SAVE_CUSTOM_LOG && (!process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR ||
-                process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR &&
-                logger.errorCount > 0) && log !== '') {
-                this.platform.saveLogToDb(log);
-            }
-            const response = {
-                statusCode,
-                headers: {},
-                body: typeof res === 'string' ? res : JSON.stringify(res),
-                isBase64Encoded: false
-            };
-            return response;
-        }
-
     }
     async getFazIp() {
         try {
@@ -1006,12 +1120,23 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             case 'EC2 Instance Launch Successful':
                 // attach nic2
                 this._selfInstance = this._selfInstance ||
-                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
+                    await this.platform.describeInstance({
+                        instanceId: event.detail.EC2InstanceId
+                    });
                 this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME,
                     event.detail.AutoScalingGroupName);
                 result = await this.handleNicAttachment(event);
                 break;
             case 'EC2 Instance Terminate Successful':
+                // remove master record if this instance is the elected master
+                this._selfInstance = this._selfInstance ||
+                    await this.platform.describeInstance({
+                        instanceId: event.detail.EC2InstanceId
+                    });
+                this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
+                if (this._masterRecord.instanceId === event.detail.EC2InstanceId) {
+                    await this.platform.removeMasterRecord();
+                }
                 // attach nic2
                 result = await this.handleNicDetachment(event);
                 // remove monitor record
@@ -1048,10 +1173,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         if (result) {
             const instanceId = event.detail.EC2InstanceId,
                 item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
+                    AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
             result = await this.platform.updateLifecycleItem(item);
             logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
-            `lifecyclehook(${event.detail.LifecycleActionToken})`);
+                `lifecyclehook(${event.detail.LifecycleActionToken})`);
         }
         return result;
     }
@@ -1065,17 +1190,26 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // force updating this instance sync state to 'out-of-sync' so the script can treat
             // it as an unhealthy instance
             let instance = this._selfInstance ||
-                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
-            this._selfHealthCheck = await this.platform.getInstanceHealthCheck({
-                instanceId: instance.instanceId
-            }, 0);
-            await this.platform.updateInstanceHealthCheck(this._selfHealthCheck,
-                0, this._selfHealthCheck ? this._selfHealthCheck.masterIp : null, Date.now(), true);
+                await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
+            this._selfHealthCheck = this._selfHealthCheck ||
+                await this.platform.getInstanceHealthCheck({
+                    instanceId: instance.instanceId
+                }, 0);
+            if (this._selfHealthCheck && this._selfHealthCheck.inSync) {
+                await this.platform.updateInstanceHealthCheck(this._selfHealthCheck,
+                    DEFAULT_HEART_BEAT_INTERVAL, this._selfHealthCheck.masterIp, Date.now(), true);
+            }
             // check if master
             let masterInfo = await this.getMasterInfo();
             logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
             if (masterInfo && masterInfo.instanceId === instance.instanceId) {
-                await this.deregisterMasterInstance(masterInfo);
+                // remove master record so it will trigger a new master election
+                let masterRecord = await this.platform.getMasterRecord();
+                if (masterRecord) {
+                    await this.platform.removeMasterRecord();
+                }
             }
             // complete its lifecycle
             let lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
@@ -1112,8 +1246,34 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /** @override */
     async purgeMaster() {
-        let result = await this.platform.removeMasterRecord();
-        return !!result;
+        // TODO: double check that the work flow of terminating the master instance here
+        // is appropriate
+        try {
+            let asyncTasks = [],
+                masterHealthCheck, masterInfo = await this.getMasterInfo();
+            // get current master heart beat record
+            if (masterInfo) {
+                masterHealthCheck =
+                    await this.platform.getInstanceHealthCheck({
+                        instanceId: masterInfo.instanceId
+                    });
+            }
+            // if has master health check record, make it out-of-sync
+            if (masterInfo && masterHealthCheck) {
+                asyncTasks.push(this.platform.updateInstanceHealthCheck(masterHealthCheck,
+                    DEFAULT_HEART_BEAT_INTERVAL, masterInfo.primaryPrivateIpAddress,
+                    Date.now(), true));
+            }
+            asyncTasks.push(
+                this.platform.removeMasterRecord(),
+                this.removeInstance(masterInfo)
+            );
+            let result = await Promise.all(asyncTasks);
+            return !!result;
+        } catch (error) {
+            logger.error('called purgeMaster > error: ', JSON.stringify(error));
+            return false;
+        }
     }
 
     async deregisterMasterInstance(instance) {
@@ -1183,7 +1343,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
             await this.removeInstance(this._selfInstance);
             throw new Error('Failed to determine the master instance. This instance is unable' +
-            ' to bootstrap. Please report this to' +
+                ' to bootstrap. Please report this to' +
                 ' administrators.');
         }
 
@@ -1216,7 +1376,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         try {
             let params, result, nic;
             this._selfInstance = this._selfInstance ||
-                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
+                await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
             // create a nic
             let description = `Addtional nic for instance(id:${this._selfInstance.instanceId}) ` +
                 `in auto-scaling group: ${this.scalingGroupName}`;
@@ -1261,8 +1423,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     nic.NetworkInterfaceId, 'attached', 'pending_attach');
                 // reload the instance info
                 this._selfInstance =
-                    await this.platform.describeInstance(
-                        { instanceId: event.detail.EC2InstanceId });
+                    await this.platform.describeInstance({
+                        instanceId: event.detail.EC2InstanceId
+                    });
                 return true;
             } else {
                 logger.info(`instance (id: ${attachmentRecord.instanceId}) has been in ` +
@@ -1285,14 +1448,18 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
         try {
             this._selfInstance = this._selfInstance ||
-                await this.platform.describeInstance({ instanceId: event.detail.EC2InstanceId });
+                await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
             attachmentRecord =
                 await this.platform.getNicAttachmentRecord(this._selfInstance.instanceId);
             if (attachmentRecord && attachmentRecord.attachmentState === 'attached') {
                 // get nic
-                nic = await this.platform.describeNetworkInterface({NetworkInterfaceIds: [
-                    attachmentRecord.nicId
-                ]});
+                nic = await this.platform.describeNetworkInterface({
+                    NetworkInterfaceIds: [
+                        attachmentRecord.nicId
+                    ]
+                });
                 // updete attachment record for in transition
                 await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
                     attachmentRecord.nicId, 'pending_detach', 'attached');
@@ -1307,29 +1474,32 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     attachmentRecord.instanceId, 'pending_detach');
                 // reload the instance info
                 this._selfInstance =
-                    await this.platform.describeInstance(
-                        { instanceId: event.detail.EC2InstanceId });
+                    await this.platform.describeInstance({
+                        instanceId: event.detail.EC2InstanceId
+                    });
             } else if (!attachmentRecord) {
                 logger.info('no tracking record of network interface attached to instance ' +
-                `(id: ${this._selfInstance.instanceId})`);
+                    `(id: ${this._selfInstance.instanceId})`);
             } else {
                 logger.info(`instance (id: ${attachmentRecord.instanceId}) with nic ` +
-                `(id: ${attachmentRecord.nicId}) is not in in the 'attached' state ` +
-                `(${attachmentRecord.attachmentState})`);
+                    `(id: ${attachmentRecord.nicId}) is not in in the 'attached' state ` +
+                    `(${attachmentRecord.attachmentState})`);
             }
             return true;
         } catch (error) {
             // rollback attachment record to attached state
             if (attachmentRecord) {
                 // reload nic info
-                nic = await this.platform.describeNetworkInterface({NetworkInterfaceIds: [
-                    attachmentRecord.nicId
-                ]});
+                nic = await this.platform.describeNetworkInterface({
+                    NetworkInterfaceIds: [
+                        attachmentRecord.nicId
+                    ]
+                });
                 // if nic is still attached to the same instance
                 if (nic && nic.Attachment &&
-                        nic.Attachment.InstanceId === attachmentRecord.instanceId) {
+                    nic.Attachment.InstanceId === attachmentRecord.instanceId) {
                     await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
-                    attachmentRecord.nicId, 'attached', 'pending_detach');
+                        attachmentRecord.nicId, 'attached', 'pending_detach');
                 }
             }
             logger.warn(`called handleNicDetachment with error: ${JSON.stringify(error)}`);
@@ -1376,7 +1546,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             );
             if (!groupCheck) {
                 throw new Error(`auto scaling group (${this.scalingGroupName})` +
-                'not exist.');
+                    'does not exist.');
             }
             // check if capacity set to (desired:0, minSize: 0, maxSize: any number)
             if (groupCheck.DesiredCapacity === 0 && groupCheck.MinSize === 0) {
@@ -1387,7 +1557,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 instanceInService = false;
                 noInstance = true;
             }
-            groupCheck.Instances.some(instance => {
+            groupCheck.Instances.forEach(instance => {
                 if (instance.LifecycleState !== 'InService') {
                     instanceInService = false;
                 }
@@ -1436,23 +1606,20 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async cleanUpAdditionalNics() {
         logger.info('calling cleanUpAdditionalNics');
         // list all nics with tag: {key: 'FortiGateAutoScaleNicAttachment', value:
-        // `${custom_id}-NicAttachment-${unique_id}`}
+        // `${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`}
         let nics = await this.platform.listNetworkInterfaces({
-            Filters: [
-                {
-                    Name: 'tag:FortiGateAutoScaleNicAttachment',
-                    Values: [`${custom_id}-NicAttachment-${unique_id}`]
-                }
-            ]});
+            Filters: [{
+                Name: 'tag:FortiGateAutoScaleNicAttachment',
+                Values: [`${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`]
+            }]
+        });
         let tasks = [];
         // delete them
         if (Array.isArray(nics) && nics.length > 0) {
             nics.forEach(element => {
-                tasks.push(this.platform.deleteNetworkInterface(
-                    {
-                        NetworkInterfaceId: element.NetworkInterfaceId
-                    }
-                ));
+                tasks.push(this.platform.deleteNetworkInterface({
+                    NetworkInterfaceId: element.NetworkInterfaceId
+                }));
             });
             try {
                 await Promise.all(tasks);
@@ -1496,7 +1663,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
         if (this._selfInstance) {
             logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
-        `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
+                `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
         } else {
             logger.warn(`cannot identify instance: vmid:(${instanceId})`);
         }
@@ -1532,15 +1699,22 @@ exports.handler = async (event, context, callback) => {
     process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + context.getRemainingTimeInMillis();
     logger = new AutoScaleCore.DefaultLogger(console);
     const handler = new AwsAutoscaleHandler();
+    if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+        logger.outputQueue = true;
+        if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
+            logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
+        }
+    }
     handler.useLogger(logger);
     initModule();
     await handler.handle(event, context, callback);
 };
 
 /**
-     * expose the module runtime id
-     * @returns {String} a unique id.
-     */
+ * expose the module runtime id
+ * @returns {String} a unique id.
+ */
 exports.moduleRuntimeId = () => moduleId;
 exports.initModule = initModule;
 exports.AutoScaleCore = AutoScaleCore; // get a reference to the core

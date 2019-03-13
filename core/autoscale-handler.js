@@ -98,7 +98,7 @@ module.exports = class AutoscaleHandler {
                             configContent += await this.getConfigSet('internalelbweb');
                             configContent += await this.getConfigSet(name);
                             break;
-                        // handle fortianalyzer logging config
+                            // handle fortianalyzer logging config
                         case 'storelogtofaz':
                             fazConfig = await this.getConfigSet(name);
                             fazIp = await this.getFazIp();
@@ -141,12 +141,17 @@ module.exports = class AutoscaleHandler {
      * @param {*} event event from the handling call. structure varies per platform.
      */
     async handleSyncedCallback(event) {
-        const { instanceId, interval, status } =
-            this.platform.extractRequestInfo(event),
+        const {
+                instanceId,
+                interval,
+                status
+            } =
+        this.platform.extractRequestInfo(event),
             statusSuccess = status && status === 'success' || false;
         // if fortigate is sending callback in response to obtaining config, this is a state
         // message
-        let parameters = {}, masterHealthCheck, lifecycleShouldAbandon = false;
+        let parameters = {},
+            masterHealthCheck, lifecycleShouldAbandon = false;
 
         parameters.instanceId = instanceId;
         parameters.scalingGroupName = this.scalingGroupName;
@@ -156,14 +161,14 @@ module.exports = class AutoscaleHandler {
         if (!this._selfInstance) {
             // not trusted
             throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). ` +
-            'Instance not found in scale set.');
+                'Instance not found in scale set.');
         }
         // handle hb monitor
         // get self health check
         this._selfHealthCheck = this._selfHealthCheck ||
-        await this.platform.getInstanceHealthCheck({
-            instanceId: this._selfInstance.instanceId
-        }, interval);
+            await this.platform.getInstanceHealthCheck({
+                instanceId: this._selfInstance.instanceId
+            }, interval);
         // if self is already out-of-sync, skip the monitoring logics
         if (this._selfHealthCheck && !this._selfHealthCheck.inSync) {
             return {};
@@ -197,7 +202,7 @@ module.exports = class AutoscaleHandler {
                     // should return yes to end the waiting.
                     if (masterInfo &&
                         masterInfo.primaryPrivateIpAddress ===
-                            this._selfInstance.primaryPrivateIpAddress) {
+                        this._selfInstance.primaryPrivateIpAddress) {
                         return true;
                     } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
                         // if i am not the new master, and the new master hasn't come up to
@@ -264,17 +269,17 @@ module.exports = class AutoscaleHandler {
                 }
                 await this.removeInstance(this._selfInstance);
                 throw new Error('Failed to determine the master instance within ' +
-                `${process.env.SCRIPT_EXECUTION_EXPIRE_TIME} seconds. This instance is unable` +
-                ' to bootstrap. Please report this to administrators.');
+                    `${process.env.SCRIPT_EXECUTION_EXPIRE_TIME} seconds. This instance is unable` +
+                    ' to bootstrap. Please report this to administrators.');
             }
         }
 
         // check if myself is under health check monitoring
         // (master instance itself may have got its healthcheck result in some code blocks above)
         this._selfHealthCheck = this._selfHealthCheck ||
-        await this.platform.getInstanceHealthCheck({
-            instanceId: this._selfInstance.instanceId
-        }, interval);
+            await this.platform.getInstanceHealthCheck({
+                instanceId: this._selfInstance.instanceId
+            }, interval);
 
         // if this instance is the master instance and the master record is still pending, finalize
         // the master election only in these two condition:
@@ -284,7 +289,7 @@ module.exports = class AutoscaleHandler {
 
         if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
             this.scalingGroupName === this.masterScalingGroupName &&
-        this._masterRecord && this._masterRecord.voteState === 'pending') {
+            this._masterRecord && this._masterRecord.voteState === 'pending') {
             if (this._selfHealthCheck && this._selfHealthCheck.healthy ||
                 !this._selfHealthCheck && statusSuccess) {
                 // if election couldn't be finalized, remove the current election so someone else
@@ -304,7 +309,14 @@ module.exports = class AutoscaleHandler {
         // complete its lifecycle action in response to its call with 'status: success'
         if (statusSuccess) {
             await this.completeGetConfigLifecycleAction(this._selfInstance.instanceId,
-                    statusSuccess && !lifecycleShouldAbandon);
+                statusSuccess && !lifecycleShouldAbandon);
+            // TODO: remove the workaround if mantis item: #0534971 is consumed
+            // workaround comes in here:
+            // if the second get call comes, remove the healcheck monitor record created by
+            // the 1st get call. The 2nd get call will add it back again so don't worry.
+            if (this._selfHealthCheck) {
+                this.removeInstanceFromMonitor(this._selfInstance.instanceId);
+            }
         }
 
         // if no self healthcheck record found, this instance not under monitor. should make sure
@@ -312,21 +324,34 @@ module.exports = class AutoscaleHandler {
         // for instance not yet in monitor and there's a master instance (regarless its health
         // status), add this instance to monitor
         if (!this._selfHealthCheck && this._masterInfo) {
-            await this.addInstanceToMonitor(this._selfInstance, interval,
-                this._masterInfo.primaryPrivateIpAddress);
-            this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
-                `ip: ${this._selfInstance.primaryPrivateIpAddress}) is added to monitor.`);
-            // if this newly come-up instance is the new master, save its instance id as the
-            // default password into settings because all other instance will sync password from
-            // the master there's a case if users never changed the master's password, when the
-            // master was torn-down, there will be no way to retrieve this original password.
-            // so in this case, should keep track of the update of default password.
-            if (this._selfInstance.instanceId === this._masterInfo.instanceId &&
-                this.scalingGroupName === this.masterScalingGroupName) {
-                await this.platform.setSettingItem('fortigate-default-password', {
-                    value: this._selfInstance.instanceId,
-                    description: 'default password comes from the new elected master.'
-                });
+            // according to some investigations, in some cases FortiGate may not send the
+            // status:success callback right after it consumed the config from GET. Instead,
+            // regular heart beat callbacks were sent first, whereas the regular work flow expects
+            // that the FortiGate sends a callback with status:success in the immediate following
+            // POST request.
+            // In order to impose a strict monitoring work flow, all those unexpected heart beat
+            // callback requests (POST) will be bypassed.
+            if (statusSuccess) {
+                await this.addInstanceToMonitor(this._selfInstance, interval,
+                    this._masterInfo.primaryPrivateIpAddress);
+                this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
+                    `ip: ${this._selfInstance.primaryPrivateIpAddress}) is added to monitor.`);
+                // if this newly come-up instance is the new master, save its instance id as the
+                // default password into settings because all other instance will sync password from
+                // the master there's a case if users never changed the master's password, when the
+                // master was torn-down, there will be no way to retrieve this original password.
+                // so in this case, should keep track of the update of default password.
+                if (this._selfInstance.instanceId === this._masterInfo.instanceId &&
+                    this.scalingGroupName === this.masterScalingGroupName) {
+                    await this.platform.setSettingItem('fortigate-default-password', {
+                        value: this._selfInstance.instanceId,
+                        description: 'default password comes from the new elected master.'
+                    });
+                }
+            } else {
+                this.logger.warn('Unexpected heart beat callback request found because status:' +
+                    'success request hasn\'t been received yet. Not add instance to monitor. ' +
+                    'Bypass this request.');
             }
             return '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy && this._masterInfo) {
@@ -339,11 +364,11 @@ module.exports = class AutoscaleHandler {
             await this.platform.updateInstanceHealthCheck(this._selfHealthCheck, interval, masterIp,
                 Date.now());
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
-            `ip: ${this._selfInstance.primaryPrivateIpAddress}) health check ` +
-            `(${this._selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
-            `heartBeatLossCount: ${this._selfHealthCheck.heartBeatLossCount}, ` +
-            `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
-            `syncState: ${this._selfHealthCheck.syncState}).`);
+                `ip: ${this._selfInstance.primaryPrivateIpAddress}) health check ` +
+                `(${this._selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
+                `heartBeatLossCount: ${this._selfHealthCheck.heartBeatLossCount}, ` +
+                `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
+                `syncState: ${this._selfHealthCheck.syncState}).`);
             return this._selfHealthCheck.masterIp !== masterIp ? {
                 'master-ip': this._masterInfo.primaryPrivateIpAddress
             } : '';
@@ -402,9 +427,9 @@ module.exports = class AutoscaleHandler {
                     pskSecret: pskSecret && typeof pskSecret
                 })}`);
         }
-        return await this._baseConfig.replace(new RegExp('set role master','gm'),
-        `set role slave\n    set master-ip ${masterIp}`)
-        .replace(new RegExp('{CALLBACK_URL}','gm'), callbackUrl);
+        return await this._baseConfig.replace(new RegExp('set role master', 'gm'),
+                `set role slave\n    set master-ip ${masterIp}`)
+            .replace(new RegExp('{CALLBACK_URL}', 'gm'), callbackUrl);
     }
 
     async checkMasterElection() {
@@ -421,14 +446,14 @@ module.exports = class AutoscaleHandler {
 
         // if there's a complete election, get master health check
         if (this._masterRecord && this._masterRecord.voteState === 'done') {
-        // get the current master info
+            // get the current master info
             this._masterInfo = this._masterInfo || await this.getMasterInfo();
             // get current master heart beat record
             if (this._masterInfo) {
                 masterHealthCheck =
-                await this.platform.getInstanceHealthCheck({
-                    instanceId: this._masterInfo.instanceId
-                });
+                    await this.platform.getInstanceHealthCheck({
+                        instanceId: this._masterInfo.instanceId
+                    });
             }
             this.logger.info('master healthcheck:', masterHealthCheck);
             // if master is unhealthy, we need a new election
@@ -452,15 +477,15 @@ module.exports = class AutoscaleHandler {
         // only instance comes from the masterScalingGroup can start an election
         // all other instances have to wait
         if (needElection && this.scalingGroupName === this.masterScalingGroupName) {
-        // can I run the election? (diagram: anyone's holding master election?)
-        // try to put myself as the master candidate
+            // can I run the election? (diagram: anyone's holding master election?)
+            // try to put myself as the master candidate
             electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);
             if (electionLock) {
-            // yes, you run it!
+                // yes, you run it!
                 this.logger.info(`This instance (id: ${this._selfInstance.instanceId})` +
-            ' is running an election.');
+                    ' is running an election.');
                 try {
-                // (diagram: elect new master from queue (existing instances))
+                    // (diagram: elect new master from queue (existing instances))
                     electionComplete = await this.electMaster();
                     this.logger.info(`Election completed: ${electionComplete}`);
                     // (diagram: master exists?)
@@ -486,8 +511,9 @@ module.exports = class AutoscaleHandler {
         } catch (ex) {
             this.logger.error(ex);
         }
-        return this._masterRecord && await this.platform.describeInstance(
-            { instanceId: instanceId });
+        return this._masterRecord && await this.platform.describeInstance({
+            instanceId: instanceId
+        });
     }
 
     /**

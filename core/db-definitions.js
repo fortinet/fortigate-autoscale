@@ -316,23 +316,25 @@ const DB = {
     CUSTOMLOG: {
         AttributeDefinitions: [
             {
-                AttributeName: 'timestamp',
+                AttributeName: 'id',
                 AttributeType: 'S'
+            },{
+                AttributeName: 'timestamp',
+                AttributeType: 'N'
             }
         ],
         KeySchema: [
             {
-                AttributeName: 'timestamp',
+                AttributeName: 'id',
                 KeyType: 'HASH'
+            },{
+                AttributeName: 'timestamp',
+                KeyType: 'RANGE'
             }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'CustomLog',
         AdditionalAttributeDefinitions: [
-            {
-                AttributeName: 'timestamp',
-                AttributeType: 'S'
-            },
             {
                 AttributeName: 'logContent',
                 AttributeType: 'S'
