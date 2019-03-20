@@ -157,7 +157,7 @@
             "Default": "add a new internal load balancer",
             "AllowedValues": [
                 "add a new internal load balancer",
-                "use a load balancer specified below",
+                "use an existing load balancer",
                 "do not need one"
             ],
             "ConstraintDescription": "must choose from the provided options.",
