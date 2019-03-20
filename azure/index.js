@@ -1369,7 +1369,7 @@ function initModule() {
 }
 
 /**
- * Handle the auto-scaling
+ * Handle the autoscaling
  * @param {Object} context the Azure function app runtime context.
  * @param {*} req the request object to the Azure function app.
  */

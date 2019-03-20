@@ -42,7 +42,7 @@ Curly braces - including the capitalized label between - in ARN examples are jus
 | Action | Effect | Resource (in ARN format) |
 | ------ | ------ | ------ |
 | dynamodb:CreateTable, dynamodb:DescribeTable, dynamodb:Scan, dynamodb:Query, dynamodb:DeleteItem, dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem | Allow | The DynamoDB tables created in the solution stack using Cloud Formation templates. ARN example: arn:aws:dynamodb:***{AWS_REGION}***:***{AWS_ACCOUNT_ID}***:table/***{TABLE_NAME}***|
-| autoscaling:CompleteLifecycleAction, autoscaling:SetDesiredCapacity, autoscaling:SetInstanceProtection | Allow | The Auto-Scaling Group created in the solution stack using Cloud Formation templates. ARN example: arn:aws:autoscaling:***{AWS_REGION}***:***{AWS_ACCOUNT_ID}***:autoScalingGroup:*:autoScalingGroupName/***{GROUP_NAME}***|
+| autoscaling:CompleteLifecycleAction, autoscaling:SetDesiredCapacity, autoscaling:SetInstanceProtection | Allow | The Auto Scaling Group created in the solution stack using Cloud Formation templates. ARN example: arn:aws:autoscaling:***{AWS_REGION}***:***{AWS_ACCOUNT_ID}***:autoScalingGroup:*:autoScalingGroupName/***{GROUP_NAME}***|
 | autoscaling:DescribeAutoScalingInstances, ec2:DescribeInstances, ec2:DescribeVpcs, ec2:DescribeInstanceAttribute | Allow | * |
 | apigateway:GET | Allow | All API Gateway in a curtain region. ARN example: arn:aws:apigateway:***{AWS_REGION}***::* |
 |s3:GetObject | Allow | Files under assets folder in the solution related S3 bucket. ARN example: arn:aws:s3:::***{BUCKET_NAME}***/***{KEY_PREFIX}***assets/configset/* |

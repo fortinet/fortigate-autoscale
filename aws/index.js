@@ -236,7 +236,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             await this.removeLifecycleItem(lifecycleItem);
             logger.info(
                 `[${params.LifecycleActionResult}] applied to hook[${params.LifecycleHookName}] with
-            token[${params.LifecycleActionToken}] in auto-scaling group
+            token[${params.LifecycleActionToken}] in auto scaling group
             [${params.AutoScalingGroupName}]`);
             return true;
         } catch (error) {
@@ -1381,7 +1381,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 });
             // create a nic
             let description = `Addtional nic for instance(id:${this._selfInstance.instanceId}) ` +
-                `in auto-scaling group: ${this.scalingGroupName}`;
+                `in auto scaling group: ${this.scalingGroupName}`;
             let securityGroups = [];
             this._selfInstance.securityGroups.forEach(sgItem => {
                 securityGroups.push(sgItem.GroupId);
@@ -1690,7 +1690,7 @@ function initModule() {
 }
 
 /**
- * Handle the auto-scaling
+ * Handle the auto scaling
  * @param {Object} event The event been passed to
  * @param {Object} context The Lambda function runtime context
  * @param {Function} callback a callback function been triggered by AWS Lambda mechanism

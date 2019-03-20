@@ -177,7 +177,7 @@ module.exports = class CloudPlatform {
      * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
      * getInstanceHealthCheck
      * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
-     * @param {String} masterIp the current master ip in auto-scaling group
+     * @param {String} masterIp the current master ip in autoscaling group
      * @param {Number} checkPointTime the check point time of when the health check is performed.
      * @param {bool} forceOutOfSync whether force to update this record as 'out-of-sync'
      * @returns {bool} resul: true or false

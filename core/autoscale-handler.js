@@ -390,7 +390,7 @@ module.exports = class AutoscaleHandler {
                 await this.platform.updateInstanceHealthCheck(this._selfHealthCheck, interval,
                     this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null,
                     Date.now(), true);
-                // terminate it from auto-scaling group
+                // terminate it from autoscaling group
                 await this.removeInstance(this._selfInstance);
             }
             // for unhealthy instances, keep responding with action 'shutdown'

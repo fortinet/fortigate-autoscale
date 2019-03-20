@@ -13,15 +13,15 @@
         "QSS3BucketName": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
-            "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Default": "aws-quickstart",
+            "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Description": "S3 bucket name for the Quick Start assets. Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
         "QSS3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
-            "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
             "Default": "quickstart-fortinet-fortigate/",
+            "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
             "Description": "S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
         },
         "AvailabilityZones": {
@@ -91,7 +91,7 @@
             "MinValue": 60,
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
-            "Description": "Auto-Scaling group waits for the cooldown period (in seconds) to complete before resuming scaling activities. Minimum is 60. Maximum is 3600."
+            "Description": "Auto Scaling group waits for the cooldown period (in seconds) to complete before resuming scaling activities. Minimum is 60. Maximum is 3600."
         },
         "FortiGateAsgDesiredCapacity": {
             "Type": "Number",
@@ -105,21 +105,21 @@
             "Default": 2,
             "MinValue": 2,
             "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "Minimum number of FortiGate instances in the Auto-Scaling Group. Minimum is 2."
+            "Description": "Minimum number of FortiGate instances in the Auto Scaling Group. Minimum is 2."
         },
         "FortiGateAsgMaxSize": {
             "Type": "Number",
             "Default": 4,
             "MinValue": 2,
             "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "Maximum number of FortiGate instances in the Auto-Scaling Group. Minimum is 2."
+            "Description": "Maximum number of FortiGate instances in the Auto Scaling Group. Minimum is 2."
         },
         "FortiGateAsgHealthCheckGracePeriod": {
             "Type": "Number",
             "Default": 300,
             "MinValue": 60,
             "ConstraintDescription": "must be a valid number not less than 60.",
-            "Description": "The length of time (in seconds) that Auto-Scaling waits before checking an instance's health status. Minimum is 60."
+            "Description": "The length of time (in seconds) that Auto Scaling waits before checking an instance's health status. Minimum is 60."
         },
         "FortiGateAsgScaleInThreshold": {
             "Type": "Number",
@@ -127,7 +127,7 @@
             "MinValue": 1,
             "MaxValue": 100,
             "ConstraintDescription": "must be a valid number between 1 and 100.",
-            "Description": "The threshold (in percentage) for the FortiGate Auto-Scaling group to scale-in (remove) 1 instance. Minimum is 1. Maximum is 100."
+            "Description": "The threshold (in percentage) for the FortiGate Auto Scaling group to scale-in (remove) 1 instance. Minimum is 1. Maximum is 100."
         },
         "FortiGateAsgScaleOutThreshold": {
             "Type": "Number",
@@ -135,7 +135,7 @@
             "MinValue": 1,
             "MaxValue": 100,
             "ConstraintDescription": "must be a valid number between 1 and 100.",
-            "Description": "The threshold (in percentage) for the FortiGate Auto-Scaling group to scale-out (add) 1 instance. Minimum is 1. Maximum is 100."
+            "Description": "The threshold (in percentage) for the FortiGate Auto Scaling group to scale-out (add) 1 instance. Minimum is 1. Maximum is 100."
         },
         "FortiGateElbTgHealthyThreshold": {
             "Type": "Number",
@@ -420,7 +420,7 @@
                 },
                 {
                     "Label": {
-                        "default": "FortiGate auto-scaling group configuration"
+                        "default": "FortiGate auto scaling group configuration"
                     },
                     "Parameters": [
                         "ExpireLifecycleEntry",

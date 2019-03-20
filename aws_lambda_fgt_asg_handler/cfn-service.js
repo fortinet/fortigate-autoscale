@@ -2,9 +2,9 @@
 
 /*
 FortiGate Autoscale Project - CloudFormation Custom Service Script:
-auto-scaling group (1.0.0-beta)
+auto scaling group (1.0.0-beta)
 
-This module alllows for actions on the given auto-scaling group. Actions includes:
+This module alllows for actions on the given auto scaling group. Actions includes:
 - updateCapacity
 
 Author: Fortinet
@@ -98,7 +98,7 @@ exports.handler = async (event, context) => {
                         if (Date.now() < scriptExecutionExpireTime - 5000) {
                             return false;
                         }
-                        throw new Error('cannot wait for auto-scaling group status because ' +
+                        throw new Error('cannot wait for auto scaling group status because ' +
                     'script execution is about to expire');
                     };
                 // this may take a significantly long time to wait for its fully stop
