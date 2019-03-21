@@ -893,16 +893,18 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     masterIp = this._masterRecord.ip;
                     return true;
                 }
+                // if i am the master, don't wait, continue, if not, wait
                 if (result &&
                 result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
+                    return true;
+                } else if (result && this._masterRecord &&
+                        this._masterRecord.voteState === 'done') {
+                    // master election done
                     return true;
                 } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
                 // master election not done, wait for a moment
                 // clear the current master record cache and get a new one in the next call
                     this._masterRecord = null;
-                } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
-                // master election done
-                    return true;
                 }
                 return false;
             },
@@ -1326,7 +1328,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } else { // not found in byol vmss, look from payg
             this._selfInstance = await this.platform.describeInstance({
                 instanceId: instanceId,
-                scaleSscalingGroupNameetName: process.env.SCALING_GROUP_NAME_PAYG
+                scalingGroupName: process.env.SCALING_GROUP_NAME_PAYG
             });
             if (this._selfInstance) {
                 this.setScalingGroup(

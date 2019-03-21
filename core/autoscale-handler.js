@@ -24,7 +24,7 @@ const Logger = require('./logger');
 const CoreFunctions = require('./core-functions');
 const
     AUTOSCALE_SECTION_EXPR =
-    /(?:^|\n)\s*config?\s*system?\s*auto-scale[\s\n]*((?:.|\n)*)\bend\b/;
+    /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/;
 
 module.exports = class AutoscaleHandler {
 
@@ -67,7 +67,14 @@ module.exports = class AutoscaleHandler {
                 fileName: configName
             };
             let blob = await this.platform.getBlobFromStorage(parameters);
-            return blob.content;
+            // replace Windows line feed \r\n with \n to normalize the config set
+            if (blob.content && typeof blob.content === 'string' &&
+                blob.content.indexOf('\r') >= 0) {
+                // eslint-disable-next-line no-control-regex
+                return blob.content.replace(new RegExp('\r', 'g', ''));
+            } else {
+                return blob.content;
+            }
         } catch (error) {
             this.logger.warn(`called getConfigSet > error: ${error}`);
             throw error;
@@ -476,24 +483,31 @@ module.exports = class AutoscaleHandler {
         // 2019/01/14 add support for cross-scaling groups election
         // only instance comes from the masterScalingGroup can start an election
         // all other instances have to wait
-        if (needElection && this.scalingGroupName === this.masterScalingGroupName) {
-            // can I run the election? (diagram: anyone's holding master election?)
-            // try to put myself as the master candidate
-            electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);
-            if (electionLock) {
-                // yes, you run it!
-                this.logger.info(`This instance (id: ${this._selfInstance.instanceId})` +
-                    ' is running an election.');
-                try {
-                    // (diagram: elect new master from queue (existing instances))
-                    electionComplete = await this.electMaster();
-                    this.logger.info(`Election completed: ${electionComplete}`);
-                    // (diagram: master exists?)
-                    this._masterRecord = null;
-                    this._masterInfo = electionComplete && await this.getMasterInfo();
-                } catch (error) {
-                    this.logger.error('Something went wrong in the master election.');
+        if (needElection) {
+            // if i am in the master group, i can hold a master election
+            if (this.scalingGroupName === this.masterScalingGroupName) {
+                // can I run the election? (diagram: anyone's holding master election?)
+                // try to put myself as the master candidate
+                electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);
+                if (electionLock) {
+                    // yes, you run it!
+                    this.logger.info(`This instance (id: ${this._selfInstance.instanceId})` +
+                        ' is running an election.');
+                    try {
+                        // (diagram: elect new master from queue (existing instances))
+                        electionComplete = await this.electMaster();
+                        this.logger.info(`Election completed: ${electionComplete}`);
+                        // (diagram: master exists?)
+                        this._masterRecord = null;
+                        this._masterInfo = electionComplete && await this.getMasterInfo();
+                    } catch (error) {
+                        this.logger.error('Something went wrong in the master election.');
+                    }
                 }
+            } else { // i am not in the master group, i am not allowed to hold a master election
+                this.logger.info(`This instance (id: ${this._selfInstance.instanceId}) not in ` +
+                'the master group, cannot hold election but wait for someone else to hold ' +
+                'an election.');
             }
         }
         return Promise.resolve(this._masterInfo); // return the new master
