@@ -2802,5 +2802,39 @@
                 }
             }
         }
+    },
+    "Outputs": {
+        "CustomIdentifier": {
+            "Description": "A custom identifier as a resource name prefix.",
+            "Value": {
+                "Ref": "CustomIdentifier"
+            }
+        },
+        "UniqueID": {
+            "Description": "A globally unique ID for your stack.",
+            "Value": {
+                "Fn::Select": [
+                    0,
+                    {
+                        "Fn::Split": [
+                            "-",
+                            {
+                                "Fn::Select": [
+                                    2,
+                                    {
+                                        "Fn::Split": [
+                                            "/",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
     }
 }
