@@ -19,6 +19,7 @@ const DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
+const HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
 
 var logger = new AutoScaleCore.DefaultLogger();
 var dbClient, computeClient, storageClient;
@@ -145,9 +146,12 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     let available = await checkDatabaseAvailability();
                     if (!available) {
                         await createDatabase();
-                        let collectionNames = Object.keys(DB).map(element => {
-                            return DB[element].TableName;
-                        });
+                        // filter out those irrelevant DB
+                        const irrelevantDBNames = ['LIFECYCLEITEM', 'NICATTACHMENT',
+                            'LICENSESTOCK', 'LICENSEUSAGE'];
+                        let collectionNames = Object.keys(DB).filter(element => {
+                            return !irrelevantDBNames.includes(element);
+                        }).map(tableName => DB[tableName].TableName);
                         await createCollections(collectionNames);
                     }
                     return true;
@@ -332,10 +336,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             // to get a more accurate heart beat elapsed time, the script execution time so far
             // is compensated.
             compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
-            healthy = compensatedScriptTime < healthCheckRecord.nextHeartBeatTime;
             interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
                 heartBeatInterval : healthCheckRecord.heartBeatInterval;
-            if (compensatedScriptTime < healthCheckRecord.nextHeartBeatTime) {
+            if (compensatedScriptTime <
+                healthCheckRecord.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE) {
                 // reset hb loss cound if instance sends hb within its interval
                 healthy = true;
                 heartBeatLossCount = 0;
@@ -344,7 +348,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 // healthy unless 3 times of heartBeatInterval amount of time has passed.
                 // where the instance have 0% chance to catch up with a heartbeat sync
                 healthy = healthCheckRecord.heartBeatLossCount < 3 &&
-                    Date.now() < healthCheckRecord.nextHeartBeatTime +
+                    Date.now() < healthCheckRecord.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE +
                         interval * 1000 * (2 - healthCheckRecord.heartBeatLossCount);
                 heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
             }
