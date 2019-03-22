@@ -331,6 +331,7 @@ class CosmosDbApiClient {
             'x-ms-version': '2017-02-22',
             'x-ms-date': date,
             'x-ms-documentdb-isquery': 'True',
+            'x-ms-max-item-count': -1,
             'Content-Type': 'application/query+json'
         };
             // see: https://docs.microsoft.com/en-us/azure/cosmos-db/partitioning-overview
