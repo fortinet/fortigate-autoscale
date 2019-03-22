@@ -19,6 +19,7 @@ const DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
+const DEFAULT_HEART_BEAT_INTERVAL = 3600;
 const HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
 
 var logger = new AutoScaleCore.DefaultLogger();
@@ -996,8 +997,35 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /** @override */
     async purgeMaster() {
-        let result = await this.platform.removeMasterRecord();
-        return !!result;
+        // TODO: double check that the work flow of terminating the master instance here
+        // is appropriate
+        try {
+            let asyncTasks = [],
+                masterHealthCheck, masterInfo = await this.getMasterInfo();
+            // get current master heart beat record
+            if (masterInfo) {
+                masterHealthCheck =
+                    await this.platform.getInstanceHealthCheck({
+                        instanceId: masterInfo.instanceId,
+                        asgName: this.masterScalingGroupName
+                    });
+            }
+            // if has master health check record, make it out-of-sync
+            if (masterInfo && masterHealthCheck) {
+                asyncTasks.push(this.platform.updateInstanceHealthCheck(masterHealthCheck,
+                    DEFAULT_HEART_BEAT_INTERVAL, masterInfo.primaryPrivateIpAddress,
+                    Date.now(), true));
+            }
+            asyncTasks.push(
+                this.platform.removeMasterRecord(),
+                this.removeInstance(masterInfo)
+            );
+            let result = await Promise.all(asyncTasks);
+            return !!result;
+        } catch (error) {
+            logger.error('called purgeMaster > error: ', JSON.stringify(error));
+            return false;
+        }
     }
 
     /**
