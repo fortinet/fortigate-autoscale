@@ -38,10 +38,10 @@
         "MaxPAYGInstanceCount": {
             "value": 0
         },
-        "ScaleUpThreshold": {
+        "ScaleOutThreshold": {
             "value": 80
         },
-        "ScaleDownThreshold": {
+        "ScaleInThreshold": {
             "value": 20
         },
         "AdminUsername": {
