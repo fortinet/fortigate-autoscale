@@ -317,13 +317,6 @@ module.exports = class AutoscaleHandler {
         if (statusSuccess) {
             await this.completeGetConfigLifecycleAction(this._selfInstance.instanceId,
                 statusSuccess && !lifecycleShouldAbandon);
-            // TODO: remove the workaround if mantis item: #0534971 is consumed
-            // workaround comes in here:
-            // if the second get call comes, remove the healcheck monitor record created by
-            // the 1st get call. The 2nd get call will add it back again so don't worry.
-            if (this._selfHealthCheck) {
-                this.removeInstanceFromMonitor(this._selfInstance.instanceId);
-            }
         }
 
         // if no self healthcheck record found, this instance not under monitor. should make sure
