@@ -922,6 +922,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling handleGetConfig');
         let config,
             masterInfo;
+        let duplicatedGetConfigCall = false, masterIp;
 
         // FortiGate actually returns its vmId instead of instanceid
         const instanceId = this._requestInfo.instanceId;
@@ -941,6 +942,17 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // let result = await this.checkMasterElection();
         let promiseEmitter = this.checkMasterElection.bind(this),
             validator = result => {
+                // TODO: remove the workaround if mantis item: #0534971 is resolved
+                // if i am the master, don't wait, continue, if not, wait
+                // this if-condition is to work around the double GET config calls.
+                if (this._masterRecord && this._masterRecord.voteState === 'pending' &&
+                this._selfInstance &&
+                this._masterRecord.instanceId === this._selfInstance.instanceId &&
+                this._masterRecord.asgName === this.scalingGroupName) {
+                    duplicatedGetConfigCall = true;
+                    masterIp = this._masterRecord.ip;
+                    return true;
+                }
                 // if i am the master, don't wait, continue, if not, wait
                 if (result &&
                 result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
@@ -981,13 +993,17 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
         // the master ip same as mine? (diagram: master IP same as mine?)
-        if (masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
+        // this checking for 'duplicatedGetConfigCall' is to work around
+        // the double GET config calls.
+        // TODO: remove the workaround if mantis item: #0534971 is resolved
+        if (duplicatedGetConfigCall ||
+            masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
             config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl(event));
             logger.info('called handleGetConfig: returning master config' +
-                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${masterIp || masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
@@ -1108,6 +1124,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
             let itemKey, itemValue;
 
+            // TODO: remove the workaround if mantis item: #0534971 is resolved
+            // a workaround for double get call:
             // check if a license is already assigned to one fgt, if it makes a second get call
             // for license, returns the tracked usage record.
 
