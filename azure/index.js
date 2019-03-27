@@ -190,7 +190,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
      */
     extractRequestInfo(request) {
         let instanceId = null,
-            interval = 120,
+            interval = null,
             status = null,
             scaleSetName = null;
         try {
@@ -225,8 +225,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             logger.error('invalid JSON format in request body');
             logger.error(error);
         }
+
         logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
-        `interval(${interval}), status(${status})`);
+            `interval(${interval}), status(${status})`);
         return {instanceId, interval, status, scaleSetName};
     }
 
@@ -828,25 +829,30 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             result;
         try {
             await this.init();
-            const instanceId = this.platform.extractRequestInfo(event).instanceId;
+            this.parseRequestInfo(event);
             // authenticate the calling instance
-            if (!instanceId) {
+            if (!this._requestInfo.instanceId) {
                 context.res = this.proxyResponse(403, 'Instance id not provided.');
                 return;
             }
-            await this.parseInstanceInfo(instanceId);
+            await this.parseInstanceInfo(this._requestInfo.instanceId);
 
             if (!this.scalingGroupName) {
                 // not trusted
-                throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). ` +
-                'Instance not found in scale set.');
+                throw new Error('Unauthorized calling instance (vmid: ' +
+                `${this._requestInfo.instanceId}). Instance not found in scale set.`);
             }
             if (proxyMethod === 'GET') {
                 // handle get config
                 result = await this.handleGetConfig(event);
                 context.res = this.proxyResponse(200, result);
             } else if (proxyMethod === 'POST') {
-                result = await this.handleSyncedCallback(event);
+                // handle status message
+                if (this._requestInfo.status) {
+                    result = await this.handleStatusMessage(event);
+                } else {
+                    result = await this.handleSyncedCallback();
+                }
                 context.res = this.proxyResponse(200, result);
             }
         } catch (error) {
@@ -870,7 +876,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             masterInfo;
 
         // FortiGate actually returns its vmId instead of instanceid
-        let instanceId = this.platform.extractRequestInfo(event).instanceId;
+        const instanceId = this._requestInfo.instanceId;
 
         // verify the caller (diagram: trusted source?)
         // get instance object from platform
@@ -945,10 +951,6 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    getCallingInstanceId(request) {
-        return this.platform.extractRequestInfo(request).instanceId;
-    }
-
     /** @override */
     async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
         logger.info('calling addInstanceToMonitor');
@@ -976,39 +978,6 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
         } catch (error) {
             logger.error('addInstanceToMonitor > error', error);
-            return false;
-        }
-    }
-
-    /** @override */
-    async purgeMaster() {
-        // TODO: double check that the work flow of terminating the master instance here
-        // is appropriate
-        try {
-            let asyncTasks = [],
-                masterHealthCheck, masterInfo = await this.getMasterInfo();
-            // get current master heart beat record
-            if (masterInfo) {
-                masterHealthCheck =
-                    await this.platform.getInstanceHealthCheck({
-                        instanceId: masterInfo.instanceId,
-                        asgName: this.masterScalingGroupName
-                    });
-            }
-            // if has master health check record, make it out-of-sync
-            if (masterInfo && masterHealthCheck) {
-                asyncTasks.push(this.platform.updateInstanceHealthCheck(masterHealthCheck,
-                    DEFAULT_HEART_BEAT_INTERVAL, masterInfo.primaryPrivateIpAddress,
-                    Date.now(), true));
-            }
-            asyncTasks.push(
-                this.platform.removeMasterRecord(),
-                this.removeInstance(masterInfo)
-            );
-            let result = await Promise.all(asyncTasks);
-            return !!result;
-        } catch (error) {
-            logger.error('called purgeMaster > error: ', JSON.stringify(error));
             return false;
         }
     }
@@ -1047,7 +1016,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    async handleGetLicense(context, event) {
+    async handleGetLicense(context, event) { // eslint-disable-line no-unused-vars
         // for a consideration of a large volume of license files:
         // could use Azure Event Gridsubscription to update the license file list in the db
         // but since the volume of files is so small, there's no big impact on performance.
@@ -1057,16 +1026,15 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         try {
             await this.platform.init();
             // authenticate the calling instance
-            const requestInfo = this.platform.extractRequestInfo(event);
-            if (!requestInfo.instanceId) {
+            if (!this._requestInfo.instanceId) {
                 context.res = this.proxyResponse(403, 'Instance id not provided.');
                 return;
             }
-            await this.parseInstanceInfo(requestInfo.instanceId);
+            await this.parseInstanceInfo(this._requestInfo.instanceId);
 
             if (!(this._selfInstance && this.scalingGroupName)) {
                 throw new Error('Unauthorized calling instance ' +
-                `(vmid: ${requestInfo.instanceId}). Instance not found in scale set.`);
+                `(vmid: ${this._requestInfo.instanceId}). Instance not found in scale set.`);
             }
 
             let [licenseFiles, stockRecords, usageRecords] = await Promise.all([

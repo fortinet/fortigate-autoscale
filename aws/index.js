@@ -380,7 +380,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         interval * 1000 * (2 - data.Item.heartBeatLossCount);
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
                 }
-                logger.info('called getInstanceHealthCheck');
+                logger.info('called getInstanceHealthCheck. (timestamp: ' +
+                `${compensatedScriptTime},  interval:${heartBeatInterval}) healthcheck record:`,
+                JSON.stringify(data.Item));
                 return {
                     instanceId: instance.instanceId,
                     healthy: healthy,
@@ -426,7 +428,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     ':heartBeatInterval': heartBeatInterval,
                     ':NextHeartBeatTime': checkPointTime + heartBeatInterval * 1000,
                     ':MasterIp': masterIp ? masterIp : 'null',
-                    ':SyncState': healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync'
+                    ':SyncState': healthCheckObject.healthy && !forceOutOfSync ?
+                        'in-sync' : 'out-of-sync'
                 },
                 ConditionExpression: 'attribute_exists(instanceId)'
             };
@@ -550,7 +553,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      */
     extractRequestInfo(request) {
         let instanceId = null,
-            interval = DEFAULT_HEART_BEAT_INTERVAL,
+            interval = null,
             status = null;
 
         if (request && request.headers && request.headers['Fos-instance-id']) {
@@ -570,6 +573,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         } else {
             logger.error('calling extractRequestInfo: no request body found.');
         }
+
         logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
             `interval(${interval}), status(${status})`);
         return {
@@ -1021,19 +1025,24 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 callback(null, this.proxyResponse(200, result));
             } else {
                 // authenticate the calling instance
-                const instanceId = this.platform.extractRequestInfo(event).instanceId;
-                if (!instanceId) {
+                this.parseRequestInfo(event);
+                if (!this._requestInfo.instanceId) {
                     callback(null, this.proxyResponse(403, 'Instance id not provided.'));
                     return;
                 }
-                await this.parseInstanceInfo(instanceId);
+                await this.parseInstanceInfo(this._requestInfo.instanceId);
                 if (proxyMethod === 'POST') {
                     this._step = 'fortigate:handleSyncedCallback';
-                    result = await this.handleSyncedCallback(event);
+                    // handle status messages
+                    if (this._requestInfo.status) {
+                        result = await this.handleStatusMessage(event);
+                    } else {
+                        result = await this.handleSyncedCallback();
+                    }
                     callback(null, this.proxyResponse(200, result));
                 } else if (proxyMethod === 'GET') {
                     this._step = 'fortigate:getConfig';
-                    result = await this.handleGetConfig(event);
+                    result = await this.handleGetConfig();
                     callback(null, this.proxyResponse(200, result));
                 } else {
                     this._step = '¯\\_(ツ)_/¯';
@@ -1134,7 +1143,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         instanceId: event.detail.EC2InstanceId
                     });
                 this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-                if (this._masterRecord.instanceId === event.detail.EC2InstanceId) {
+                if (this._masterRecord &&
+                    this._masterRecord.instanceId === event.detail.EC2InstanceId) {
                     await this.platform.removeMasterRecord();
                 }
                 // attach nic2
@@ -1199,7 +1209,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 }, 0);
             if (this._selfHealthCheck && this._selfHealthCheck.inSync) {
                 await this.platform.updateInstanceHealthCheck(this._selfHealthCheck,
-                    DEFAULT_HEART_BEAT_INTERVAL, this._selfHealthCheck.masterIp, Date.now(), true);
+                    AutoScaleCore.AutoscaleHandler.NO_HEART_BEAT_INTERVAL_SPECIFIED,
+                    this._selfHealthCheck.masterIp, Date.now(), true);
             }
             // check if master
             let masterInfo = await this.getMasterInfo();
@@ -1244,38 +1255,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await docClient.put(params).promise();
     }
 
-    /** @override */
-    async purgeMaster() {
-        // TODO: double check that the work flow of terminating the master instance here
-        // is appropriate
-        try {
-            let asyncTasks = [],
-                masterHealthCheck, masterInfo = await this.getMasterInfo();
-            // get current master heart beat record
-            if (masterInfo) {
-                masterHealthCheck =
-                    await this.platform.getInstanceHealthCheck({
-                        instanceId: masterInfo.instanceId
-                    });
-            }
-            // if has master health check record, make it out-of-sync
-            if (masterInfo && masterHealthCheck) {
-                asyncTasks.push(this.platform.updateInstanceHealthCheck(masterHealthCheck,
-                    DEFAULT_HEART_BEAT_INTERVAL, masterInfo.primaryPrivateIpAddress,
-                    Date.now(), true));
-            }
-            asyncTasks.push(
-                this.platform.removeMasterRecord(),
-                this.removeInstance(masterInfo)
-            );
-            let result = await Promise.all(asyncTasks);
-            return !!result;
-        } catch (error) {
-            logger.error('called purgeMaster > error: ', JSON.stringify(error));
-            return false;
-        }
-    }
-
     async deregisterMasterInstance(instance) {
         logger.info('calling deregisterMasterInstance', JSON.stringify(instance));
         return await this.purgeMaster();
@@ -1288,12 +1267,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format // eslint-disable-line max-len
      */
     /* eslint-enable max-len */
-    async handleGetConfig(event) {
+    async handleGetConfig() {
         logger.info('calling handleGetConfig');
         let
             config,
             masterInfo,
-            instanceId = this.platform.extractRequestInfo(event).instanceId;
+            instanceId = this._requestInfo.instanceId;
 
         // get instance object from platform
         this._selfInstance = this._selfInstance ||
@@ -1663,12 +1642,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
         if (this._selfInstance) {
             logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
-                `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
+                `scaling group self: ${this.scalingGroupName}, ` +
+                `master: ${this.masterScalingGroupName})`);
         } else {
             logger.warn(`cannot identify instance: vmid:(${instanceId})`);
         }
     }
-
     // end of AwsAutoscaleHandler class
 
 }
