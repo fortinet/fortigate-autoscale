@@ -1,19 +1,19 @@
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-    "contentVersion": "1.0.0.4",
+    "contentVersion": "1.0.0.5",
     "parameters": {
         "InstanceType": {
             "defaultValue": "Standard_F2",
             "type": "String",
             "metadata": {
-                "description": "Size of VMs in the VM Scale Set."
+                "description": "Size of the VMs in the VM Scale Set. The default is Standard_F2."
             }
         },
         "FOSVersion": {
             "defaultValue": "6.0.4",
             "type": "String",
             "metadata": {
-                "description": "FOS Version supported for auto-scaling."
+                "description": "FOS Version supported for autoscaling."
             },
             "allowedValues": [
                 "6.0.02",
@@ -29,70 +29,70 @@
             ],
             "type": "String",
             "metadata": {
-                "description": "Identify whether to use a new or existing vnet."
+                "description": "Create a new Virtual Network or use an existing one."
             }
         },
         "VNetName": {
             "defaultValue": "autoscalevnet",
             "type": "String",
             "metadata": {
-                "description": "Name of the Azure virtual network."
+                "description": "Azure virtual network name."
             }
         },
         "SubnetAddressPrefix": {
             "defaultValue": "10.0.0.0/16",
             "type": "String",
             "metadata": {
-                "description": "Prefix for the Private Subnet. Example 10.0.0.0/16."
+                "description": "Prefix for IP addresses in the virtual network in CIDR notation. Example 10.0.0.0/16."
             }
         },
         "Subnet1Name": {
             "defaultValue": "EntrySubnet",
             "type": "String",
             "metadata": {
-                "description": "Subnet 1 Name"
+                "description": "Public facing subnet 1 name."
             }
         },
         "Subnet1Prefix": {
             "defaultValue": "10.0.1.0/24",
             "type": "String",
             "metadata": {
-                "description": "Prefix for the Subnet1. Example 10.0.1.0/24.  Public Facing."
+                "description": "Subnet 1 prefix in CIDR notation. Ex: 10.0.1.0/24."
             }
         },
         "Subnet2Name": {
             "defaultValue": "TransitSubnet",
             "type": "String",
             "metadata": {
-                "description": "Subnet 2 Name"
+                "description": "Protected subnet 2 name."
             }
         },
         "Subnet2Prefix": {
             "defaultValue": "10.0.2.0/24",
             "type": "String",
             "metadata": {
-                "description": "Prefix of the Subnet2. Example 10.0.2.0/24.  Private Facing."
+                "description": "Subnet 2 prefix in CIDR notation. Ex: 10.0.2.0/24."
             }
         },
         "Subnet2LoadBalancerIP": {
             "defaultValue": "10.0.2.10",
             "type": "String",
             "metadata": {
-                "description": "Static IP for protected network facing frontend of the internal load balancer."
+                "description": "Static IP address of the load balancer of the internal load balancer on subnet2."
             }
         },
         "Subnet3Name": {
             "defaultValue": "ProtectedSubnet",
             "type": "String",
             "metadata": {
-                "description": "Subnet 3 Name"
+                "description": "Private subnet 3 name."
             }
         },
         "Subnet3Prefix": {
             "defaultValue": "10.0.3.0/24",
             "type": "String",
             "metadata": {
-                "description": "Prefix of the Subnet3. Example 10.0.3.0/24.  Private Facing."
+                "description": "Subnet 3 prefix in CIDER notation. Ex: 10.0.3.0/24."
             }
         },
         "PublicIPNewOrExisting": {
@@ -103,14 +103,14 @@
             ],
             "type": "String",
             "metadata": {
-                "description": "Identify if to use a public IP, and if so whether it's new"
+                "description": "Creating a new public IP address or use an existing one."
             }
         },
         "PublicIPAddressName": {
             "defaultValue": "autoscalepip",
             "type": "String",
             "metadata": {
-                "description": "Name of Public IP address element."
+                "description": "Public IP address name."
             }
         },
         "ScalingGroupNamePrefix": {
@@ -123,58 +123,57 @@
         },
         "InitialCapacity": {
             "defaultValue": 1,
-            "maxValue": 20,
             "type": "Int",
             "metadata": {
-                "description": "Initial Number of VM instances(less than maxcapacity)."
+                "description": "The initial number of VM instances in the VMSS Ranges from MinCapacity to MaxCapacity."
             }
         },
         "MinCapacity": {
             "defaultValue": 1,
             "type": "Int",
             "metadata": {
-                "description": "Minimum Number of VM instances (Greater than capacity and less than maxcapacity)."
+                "description": "Minimum number of VM instances in the VMSS (less than or equal to MaxCapacity)."
             }
         },
         "MaxCapacity": {
-            "defaultValue": 20,
+            "defaultValue": 2,
             "type": "Int",
             "metadata": {
-                "description": "Number of VM instances (20 or less)."
+                "description": "Maximum number of VM instances in the VMSS."
             }
         },
         "ScaleOutThreshold": {
             "defaultValue": 80,
             "type": "Int",
             "metadata": {
-                "description": "percentage at which scaleup should occur"
+                "description": "Percentage of CPU utilization at which scale-out should occur."
             }
         },
         "ScaleInThreshold": {
             "defaultValue": 20,
             "type": "Int",
             "metadata": {
-                "description": "percentage at which scaledown should occur"
+                "description": "Percentage of CPU utilization at which scale-in should occur."
             }
         },
         "AdminUsername": {
             "defaultValue": "azureadmin",
             "type": "String",
             "metadata": {
-                "description": "Admin username on all VMs."
+                "description": "FortiGate administrator username on all VMs."
             }
         },
         "AdminPassword": {
             "type": "SecureString",
             "metadata": {
-                "description": "Admin password on all VMs."
+                "description": "FortiGate administrator password on all VMs. This must include at least one uppercase letter, one lowercase letter, one digit, and one special character such as (! @ # $ %). The password must be between 11 and 26 characters in length."
             }
         },
         "EndPoints": {
             "defaultValue": "",
             "type": "String",
             "metadata": {
-                "description": "Function App Endpoint URL to handle autoscaling."
+                "description": "Function App public URL."
             }
         }
     },
