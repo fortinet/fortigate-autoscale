@@ -1,7 +1,12 @@
-# FortiGate Autoscale - AWS Lambda
-This folder contains source code for the FortiGate Autoscale handler for the AWS Cloud Platform. A 'simple' autoscaling setup which takes advantage of the FortiGate 6.0.3 `auto-scale` callback feature to automate synchronization of the autoscaling group configuration.
+# FortiGate Autoscale for AWS Lambda
+This folder contains source code for the FortiGate Autoscale handler for the AWS Cloud Platform. A 'simple' autoscaling setup which takes advantage of the FortiOS `auto-scale` callback feature to automate synchronization of the autoscaling group configuration.
 
 The entry point of this AWS Lambda function is **index.AutoscaleHandler**.
+
+# Requirements
+This function requires:
+* FortiOS 6.0.3 or higher
+* An AWS account
 
 ## Deployment Package
 To generate a local deployment package:
@@ -25,7 +30,7 @@ This Lambda function has the following configurable environment variables.
 | EXPIRE_LIFECYCLE_ENTRY | Integer | The Lifecycle item expiry time in seconds. The default value is 300. |
 | FORTIGATE_ADMIN_PORT | Text | The FortiGate admin port. Each new FortiGate instance will have this added to the FortiGate bootstrapping configuration. |
 | FORTIGATE_INTERNAL_ELB_DNS | Text | (Optional) The internal elastic load balancer name tied to this Lambda function. The default value is an empty string.|
-| FORTIGATE_PSKSECRET | Text | The FortiGate PSK secret for the HA feature. Each new FortiGate instance will have this added to the FortiGate bootstrapping configuration. |
+| FORTIGATE_PSKSECRET | Text | The FortiGate PSK secret for the HA feature. Each new FortiGate instance will have this added to the FortiGate bootstrapping configuration.<br>**Note:** Changes to the PSK Secret after FortiGate Autoscale has been deployed are not reflected in the <cloud> function. For new instances to be spawned with the changed PSK Secret, the environment variable FORTIGATE_PSKSECRET will need to be manually updated.|
 | STACK_ASSETS_S3_BUCKET_NAME | Text | The S3 Bucket that stores the solution related assets. For example, the S3 Bucket where you uploaded the configset.|
 | STACK_ASSETS_S3_KEY_PREFIX | Text | The S3 Bucket key to the *assets* folder in the S3 Bucket defined in ***STACK_ASSETS_S3_BUCKET_NAME***.|
 | UNIQUE_ID | Text | An AWS-regionally unique ID for solution resources such as the DynamoDB name. This ID is used to look for specific solution resources.|
@@ -48,7 +53,7 @@ This AWS Lambda function requires the policies listed below.
 | dynamodb:CreateTable, dynamodb:DescribeTable, dynamodb:Scan, dynamodb:Query, dynamodb:DeleteItem, dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem | Allow | The DynamoDB tables created in the solution stack using CloudFormation templates.<br>ARN example: arn:aws:dynamodb:***AWS_REGION***:***AWS_ACCOUNT_ID***:table/***TABLE_NAME***|
 | autoscaling:CompleteLifecycleAction, autoscaling:SetDesiredCapacity, autoscaling:SetInstanceProtection | Allow | The autoscaling group created in the solution stack using CloudFormation templates.<br>ARN example: arn:aws:autoscaling:***AWS_REGION***:***AWS_ACCOUNT_ID***:autoScalingGroup:\*:autoScalingGroupName/***AUTO_SCALING_GROUP_NAME***|
 | autoscaling:DescribeAutoScalingInstances, ec2:DescribeInstances, ec2:DescribeVpcs, ec2:DescribeInstanceAttribute | Allow | \* |
-| apigateway:GET | Allow | All API Gateways in a curtain region.<br>ARN example: arn:aws:apigateway:***AWS_REGION***::\* |
+| apigateway:GET | Allow | All API Gateways in a certain region.<br>ARN example: arn:aws:apigateway:***AWS_REGION***::\* |
 | s3:GetObject | Allow | Contents of the **assets** folder for a particular solution in an S3 Bucket, as specified by the **STACK_ASSETS_S3_KEY_PREFIX**.<br>ARN example: arn:aws:s3:::***STACK_ASSETS_S3_BUCKET_NAME***/***STACK_ASSETS_S3_KEY_PREFIX***/assets/configset/* |
 
 ## Scope and Limits
