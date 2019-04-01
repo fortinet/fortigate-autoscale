@@ -302,16 +302,28 @@ class CosmosDbApiClient {
             });
         }
         if (Array.isArray(filterExp) && filterExp.length > 0) {
+            let expressions = [];
             filterExp.forEach(exp => {
                 if (queryObject.parameters.length > 0) {
                     queryObject.query += ' AND';
                 }
-                queryObject.query += ` c.${exp.name} = @${exp.name}Value`;
-                queryObject.parameters.push({
-                    name: `@${exp.name}Value`,
-                    value: exp.value
-                });
+                if (exp.name) {
+                    queryObject.query += ` c.${exp.name} = @${exp.name}Value`;
+                    queryObject.parameters.push({
+                        name: `@${exp.name}Value`,
+                        value: exp.value
+                    });
+                } else if (exp.keys && exp.exp) {
+                    let expression = exp.exp;
+                    exp.keys.forEach(key => {
+                        expression = expression.replace(new RegExp(`:${key}`, 'g'), `c.${key}`);
+                    });
+                    expressions.push(expression);
+                }
             });
+            if (expressions.length > 0) {
+                queryObject.query += ` ${expressions.join(' AND ')}`;
+            }
         }
         if (options && options.order && options.order.by && options.order.direction) {
             let direction = options.order.direction.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
@@ -331,7 +343,7 @@ class CosmosDbApiClient {
             'x-ms-version': '2017-02-22',
             'x-ms-date': date,
             'x-ms-documentdb-isquery': 'True',
-            'x-ms-max-item-count': -1,
+            'x-ms-max-item-count': options && options.itemCount ? options.itemCount : -1,
             'Content-Type': 'application/query+json'
         };
             // see: https://docs.microsoft.com/en-us/azure/cosmos-db/partitioning-overview

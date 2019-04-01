@@ -639,17 +639,56 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     // eslint-disable-next-line no-unused-vars
     async listLogFromDb(timeFrom, timeTo = null) {
         try {
-            let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
-                null, null, null, {
-                    order: {
-                        by: 'timestamp',
-                        direction: 'asc'
+            let logContent = '', queryDone = false,
+                rowCount = 0, currentCount = 0,
+                logTimeFrom, logTimeTo;
+            while (!queryDone) {
+                let filterExp = [];
+                if (timeFrom) {
+                    filterExp.push({
+                        keys: ['timestamp'],
+                        exp: `:timestamp > ${(new Date(timeFrom)).getTime()}`
+                    });
+                }
+                if (timeTo) {
+                    filterExp.push({
+                        keys: ['timestamp'],
+                        exp: `:timestamp < ${(new Date(timeTo)).getTime()}`
+                    });
+                }
+                console.info(`fetching from ${(new Date(timeFrom))} to ${timeTo}`); // local debug console
+                let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
+                    DB.CUSTOMLOG.TableName,
+                    null, filterExp, null, {
+                        order: {
+                            by: 'timestamp',
+                            direction: 'asc'
+                        }
+                    });
+                if (!Array.isArray(items)) {
+                    return '';
+                }
+                currentCount = 0;
+                items.forEach(item => {
+                    currentCount++;
+                    if (!logTimeFrom || item.timestamp < logTimeFrom) {
+                        logTimeFrom = item.timestamp;
                     }
+                    if (!logTimeTo || item.timestamp > logTimeTo) {
+                        logTimeTo = item.timestamp;
+                    }
+                    logContent += item.logContent;
                 });
-            if (!Array.isArray(items) || items.length === 0) {
-                return '';
+                rowCount += currentCount;
+                if (timeTo && ((new Date(timeTo)).getTime() > logTimeTo) && currentCount > 0) {
+                    timeFrom = logTimeTo;
+                } else {
+                    queryDone = true;
+                }
             }
-            return items.join('');
+
+            return `Log count:${rowCount}, Time from: ${new Date(logTimeFrom)} to: ` +
+            `${new Date(logTimeTo)}\n${logContent}`;
         } catch (error) {
             return '';
         }
@@ -1266,7 +1305,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
             switch (proxyMethod && proxyMethod.toUpperCase()) {
                 case 'GET':
-                    result = await this.platform.listLogFromDb(-1, 'html');
+                    result = await this.platform.listLogFromDb(timeFrom, timeTo);
                     break;
                 case 'DELETE':
                     if (timeFrom && isNaN(timeFrom)) {
