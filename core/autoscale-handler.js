@@ -321,7 +321,7 @@ module.exports = class AutoscaleHandler {
             masterIp = this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null;
             await this.addInstanceToMonitor(this._selfInstance, interval, masterIp);
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
-                    `ip: ${masterIp}) is added to monitor at timestamp: ${Date.now()}.`);
+                    `master-ip: ${masterIp}) is added to monitor at timestamp: ${Date.now()}.`);
             // if this newly come-up instance is the new master, save its instance id as the
             // default password into settings because all other instance will sync password from
             // the master there's a case if users never changed the master's password, when the
@@ -437,7 +437,7 @@ module.exports = class AutoscaleHandler {
 
         // reload the master
         await this.retrieveMaster(null, true);
-        this.logger.info('current master healthcheck:', this._masterHealthCheck);
+        this.logger.info('current master healthcheck:', JSON.stringify(this._masterHealthCheck));
         // is there a master election done?
         // check the master record and its voteState
         // if there's a complete election, get master health check
