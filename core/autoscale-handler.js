@@ -385,6 +385,7 @@ module.exports = class AutoscaleHandler {
     handleStatusMessage(event) {
         this.logger.info('calling handleStatusMessage.');
         // do not process status messages till further requriements (Mar 27, 2019)
+        this.logger.info(JSON.stringify(event));
         this.logger.info(`Status: ${this._requestInfo.status}`);
         return '';
     }

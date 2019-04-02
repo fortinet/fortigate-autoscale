@@ -19,7 +19,6 @@ const DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
-const DEFAULT_HEART_BEAT_INTERVAL = 3600;
 const HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
 
 var logger = new AutoScaleCore.DefaultLogger();
@@ -49,33 +48,43 @@ class AzureLogger extends AutoScaleCore.DefaultLogger {
 class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async init() {
         let checkDatabaseAvailability = async function() {
-                try {
-                    let result = await dbClient.listDataBases();
-                    if (result && result.body && result.body.Databases &&
+                let attempts = 0, maxAttempts = 3, done = false, error;
+                while (attempts < maxAttempts) {
+                    try {
+                        attempts ++;
+                        logger.info(`calling checkDatabaseAvailability (attempts: ${attempts})`);
+                        let result = await dbClient.listDataBases();
+                        if (result && result.body && result.body.Databases &&
                         Array.isArray(result.body.Databases)) {
-                        let arr = result.body.Databases.filter(element => {
-                            return element.id === DATABASE_NAME;
-                        });
-                        if (arr.length === 1) {
-                            logger.info('called checkDatabaseAvailability. DB ' +
+                            let arr = result.body.Databases.filter(element => {
+                                return element.id === DATABASE_NAME;
+                            });
+                            if (arr.length === 1) {
+                                logger.info('called checkDatabaseAvailability. DB ' +
                             `(${DATABASE_NAME}) found.`);
-                            return true;
-                        } else {
+                                done = true;
+                            } else {
+                                logger.info('called checkDatabaseAvailability. DB ' +
+                            `(${DATABASE_NAME}) not found.`);
+                            }
+                            break;
+                        }
+                    } catch (e) {
+                        if (e.statusCode && e.statusCode === 404) {
                             logger.info('called checkDatabaseAvailability. DB ' +
                             `(${DATABASE_NAME}) not found.`);
-                            return false;
+                            break;
+                        } else {
+                            error = e;
+                            logger.info('called checkDatabaseAvailability. DB > error:');
+                            logger.error(e);
                         }
                     }
-                } catch (error) {
-                    if (error.statusCode && error.statusCode === 404) {
-                        logger.info('called checkDatabaseAvailability. DB ' +
-                    `(${DATABASE_NAME}) not found.`);
-                        return false;
-                    } else {
-                        throw error;
-                    }
                 }
-
+                if (error) {
+                    throw error;
+                }
+                return done;
             },
             createDatabase = async function() {
                 // any error here is intended to be thrown but not caught in this function
@@ -158,8 +167,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     return true;
                 } catch (error) {
                     logger.error(error);
-                    logger.warn('some tables are missing, ' +
-                    'script enters instance termination process');
+                    logger.warn('some tables are missing, script stops running.');
                     return false;
                 }
             },
@@ -656,7 +664,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                         exp: `:timestamp < ${(new Date(timeTo)).getTime()}`
                     });
                 }
-                console.info(`fetching from ${(new Date(timeFrom))} to ${timeTo}`); // local debug console
+                // local debug console
+                console.info(`fetching from ${(new Date(timeFrom))} to ${timeTo}`);
                 let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
                     DB.CUSTOMLOG.TableName,
                     null, filterExp, null, {

@@ -33,7 +33,6 @@ const
     DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID),
     moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems,
-    DEFAULT_HEART_BEAT_INTERVAL = 3600,
     HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
 
 let logger = new AutoScaleCore.DefaultLogger(console);
@@ -42,14 +41,25 @@ let logger = new AutoScaleCore.DefaultLogger(console);
  */
 class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async init() {
-        let errors = [];
-        await Promise.all([
-            DB.AUTOSCALE, DB.ELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
-            DB.NICATTACHMENT, DB.CUSTOMLOG]
-            .map(table => this.tableExists(table).catch(err => errors.push(err)))
-        );
-        errors.forEach(err => logger.error(err));
-        return errors.length === 0;
+        let attempts = 0, maxAttempts = 3, done = false, errors;
+        while (attempts < maxAttempts) {
+            errors = [];
+            attempts ++;
+            await Promise.all([
+                DB.AUTOSCALE, DB.ELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
+                DB.NICATTACHMENT, DB.CUSTOMLOG]
+                .map(table => this.tableExists(table).catch(err => errors.push(err)))
+            );
+            errors.forEach(err => logger.error(err));
+            if (errors.length === 0) {
+                done = true;
+                break;
+            }
+        }
+        if (Array.isArray(errors) && errors.length > 0) {
+            throw new Error(errors.pop());
+        }
+        return done;
     }
 
     async createTable(schema) {
@@ -1014,7 +1024,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             result;
         try {
             const platformInitSuccess = await this.init();
-            // enter instance termination process if cannot init for any reason
+            // return 500 error if script cannot finish the initialization.
             if (!platformInitSuccess) {
                 result = 'fatal error, cannot initialize.';
                 logger.error(result);
