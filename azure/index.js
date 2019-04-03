@@ -1055,8 +1055,16 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      */
     async removeInstance(instance) {
         try {
+            // should not remove the instance health check monitor record because based on
+            // observation, once Azure accepts the command to remove the vm instance from vmss,
+            // Azure won't run this operation right away. The instance remains running for a while
+            // so it keeps sending hb periodically. If remove the health check monitor,
+            // the instance would be accepted into monitor as a new one with a healthy state.
+            // The potential problem here is it becomes eligible for a master election again
+            // where it should not be.
+            // So a better solution is the health check monitor record will be intentionally kept
+            // in the db with an 'out-of-sync' state as the result.
             await this.platform.terminateInstanceInAutoScalingGroup(instance);
-            await this.removeInstanceFromMonitor(instance.instanceId);
             return true;
         } catch (error) {
             logger.error('called removeInstance > error:', error);
