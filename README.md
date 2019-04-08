@@ -28,7 +28,7 @@ Deployment packages as well as source code will be available in the **dist** dir
 | fortigate-autoscale-aws-cloudformation.zip | Use Cloud Formation template to deploy the complete solution on AWS platform.|
 | fortigate-autoscale-aws-lambda.zip | The source code of the FortiGate autoscaling handler - AWS Lambda function.|
 | fortigate-autoscale-azure-funcapp.zip | The source code of the FortiGate autoscaling handler - Azure function app.|
-| fortigate-autoscale-azure-quickstart.zip | Use Azure template deployment service to deploy the complete solution on Azure platform.|
+| fortigate-autoscale-azure-template_deployment.zip | Use Azure template deployment service to deploy the complete solution on Azure platform.|
 
 Installation Guides are available from the Fortinet Document Library:
 

@@ -1,17 +1,17 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.3",
+    "contentVersion": "1.0.0.7",
     "parameters": {
-        "FuncAppName": {
+        "FunctionAppName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the Function App created."
+                "description": "Name of the Function App that will be created."
             }
         },
         "CosmosDBName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the Cosmos DB that you wish to create. The field can contain only lowercase letters, numbers and the '-' character, and must be between 3 and 31 characters."
+                "description": "Name of the Cosmos DB that will be created. This field must be between 3 and 31 characters and can contain only lowercase letters, numbers and the '-' character."
             }
         },
         "StorageAccountType": {
@@ -23,73 +23,74 @@
                 "Standard_RAGRS"
             ],
             "metadata": {
-                "description": "The Storage Account Type."
+                "description": "Storage Account Type."
             }
         },
         "TenantID": {
             "type": "string",
             "metadata": {
-                "description": "Azure Directory ID."
+                "description": "Your Azure Directory ID."
             }
         },
         "SubscriptionID": {
             "type": "string",
             "metadata": {
-                "description": "Azure Subscription ID."
+                "description": "Your Azure Subscription ID."
             }
         },
-        "RestAppId": {
+        "RestAppID": {
             "type": "string",
             "metadata": {
-                "description": "The Application ID for the Registered app. This is under Azure Active Directory > App registrations > {your app}."
+                "description": "Application ID for the Registered app. This is under Azure Active Directory > App registrations > {your app}."
             }
         },
         "RestAppSecret": {
             "type": "string",
             "metadata": {
-                "description": "This is the password for the Registered app."
+                "description": "Password for the Registered app."
             }
         },
         "HeartBeatLossCount": {
             "type": "string",
             "defaultValue": "3",
             "metadata": {
-                "description": "Number of consecutively lost heartbeats. When the Heartbeat Loss Count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
+                "description": "Number of consecutively lost heartbeats. When the Heartbeat Loss Count has been reached, the VM is deemed unhealthy and failover activities will commence."
             }
         },
         "ScalingGroupResourceGroupName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the Resource Group that the deploy_scaleset.json will be deployed into."
+                "description": "Name of the resource group that the Scale Set and its components will be deployed in."
             }
         },
         "ScalingGroupNamePrefix": {
             "type": "string",
+            "maxLength": 10,
             "metadata": {
-                "description": "Prefix Name of the VMSS Name(VMSSName) that is given when deploying FGT autoscale template."
+                "description": "The prefix each VMSS Name is given when deploying the FortiGate autoscale template. The value must be between 1 and 10 characters long. The value of this parameter should be the same as for deploy_scaleset.json. The prefix cannot contain special characters \\/\"\"[]:|<>+=;,?*@& or begin with '_' or end with '.' or '-'."
             }
         },
         "ScriptTimeout": {
             "type": "string",
             "defaultValue": "230",
             "metadata": {
-                "description": "The timeout value for the Azure function script. The default value is 230."
+                "description": "Timeout value (in seconds) for the Azure function script. The default value is 230."
             }
         },
         "ElectionWaitTime": {
             "type": "string",
             "defaultValue": "90",
             "metadata": {
-                "description": "The maximum time to wait for a master election to complete. Unit is second."
+                "description": "The maximum time (in seconds) to wait for a master election to complete."
             }
         },
         "PSKSecret": {
             "type": "securestring",
             "metadata": {
-                "description": "Preshare key password for autoscaling configuration."
+                "description": "The pre-shared key used by FortiGates in the scale set to synchronize configuration items."
             }
         },
-        "PackageResUrl": {
+        "PackageResURL": {
             "type": "string",
             "metadata": {
                 "description": "The public URL of the deployment package zip file that contains the resource used to deploy the Function App. This URL must be accessible by Azure."
@@ -98,8 +99,8 @@
     },
     "variables": {
         "location": "[resourceGroup().location]",
-        "functionAppName": "[parameters('FuncAppName')]",
-        "hostingPlanName": "[parameters('FuncAppName')]",
+        "functionAppName": "[parameters('FunctionAppName')]",
+        "hostingPlanName": "[parameters('FunctionAppName')]",
         "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
         "storageAccountid": "[concat(resourceGroup().id,'/providers/','Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
     },
@@ -196,7 +197,7 @@
                         },
                         {
                             "name": "REST_APP_ID",
-                            "value": "[parameters('RestAppId')]"
+                            "value": "[parameters('RestAppID')]"
                         },
                         {
                             "name": "REST_APP_SECRET",
@@ -204,7 +205,7 @@
                         },
                         {
                             "name": "WEBSITE_RUN_FROM_ZIP",
-                            "value": "[parameters('PackageResUrl')]"
+                            "value": "[parameters('PackageResURL')]"
                         },
                         {
                             "name": "SCALESET_DB_ACCOUNT",

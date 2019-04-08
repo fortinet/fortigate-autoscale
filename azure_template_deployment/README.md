@@ -1,4 +1,4 @@
-# FortiGate Autoscale Azure QuickStart Template
+# FortiGate Autoscale for Azure Deployment Package
 
 This folder contains a set of necessary resources to deploy FortiGate Autoscale using Azure.
 

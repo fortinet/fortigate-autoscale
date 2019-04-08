@@ -1,8 +1,8 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
-    "contentVersion": "1.0.0.3",
+    "contentVersion": "1.0.0.7",
     "parameters": {
-        "FuncAppName": {
+        "FunctionAppName": {
             "value": ""
         },
         "CosmosDBName": {
@@ -17,7 +17,7 @@
         "SubscriptionID": {
             "value": ""
         },
-        "RestAppId": {
+        "RestAppID": {
             "value": ""
         },
         "RestAppSecret": {
@@ -41,7 +41,7 @@
         "PSKSecret": {
             "value": ""
         },
-        "PackageResUrl": {
+        "PackageResURL": {
             "value": ""
         }
     }

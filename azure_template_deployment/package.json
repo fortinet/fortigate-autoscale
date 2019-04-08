@@ -1,7 +1,7 @@
 {
-  "name": "fortigate-autoscale-azure-quickstart",
+  "name": "fortigate-autoscale-azure-template-deployment",
   "version": "1.0.0-beta",
-  "description": "FortiGate Autoscale Azure QuickStart Template.",
+  "description": "FortiGate Autoscale for Azure deployment package.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

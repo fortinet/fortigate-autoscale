@@ -1,42 +1,60 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
-    "contentVersion": "1.0.0.3",
+    "contentVersion": "1.0.0.7",
     "parameters": {
         "InstanceType": {
-            "value": "Standard_F4"
+            "value": "Standard_F2"
         },
         "FOSVersion": {
             "value": "6.0.3"
         },
-        "ScalingGroupNamePrefix": {
-            "value": ""
+        "VNetNewOrExisting": {
+            "value": "new"
+        },
+        "VNetName": {
+            "value": "autoscalevnet"
         },
         "SubnetAddressPrefix": {
             "value": "10.0.0.0/16"
         },
-        "PublicsubnetPrefix": {
-            "value": "10.0.0.0/24"
+        "Subnet1Name": {
+            "value": "subnet1"
         },
-        "PrivateSubnet2Prefix": {
+        "Subnet1Prefix": {
             "value": "10.0.1.0/24"
         },
-        "PrivateSubnet3Prefix": {
+        "Subnet2Name": {
+            "value": "subnet2"
+        },
+        "Subnet2Prefix": {
             "value": "10.0.2.0/24"
         },
-        "PrivateSubnet4Prefix": {
-            "value": "10.0.2.0/24"
+        "Subnet2LoadBalancerIP": {
+            "value": "10.0.2.10"
         },
-        "LoadBalancerIP": {
-            "value": "10"
+        "Subnet3Name": {
+            "value": "subnet3"
         },
-        "BYOLInstanceCount": {
+        "Subnet3Prefix": {
+            "value": "10.0.3.0/24"
+        },
+        "PublicIPNewOrExisting": {
+            "value": "new"
+        },
+        "PublicIPAddressName": {
+            "value": "autoscalepip"
+        },
+        "ScalingGroupNamePrefix": {
+            "value": "fgtasg"
+        },
+        "InitialCapacity": {
             "value": 1
         },
-        "PAYGInstanceCount": {
-            "value": 0
+        "MinCapacity": {
+            "value": 1
         },
-        "MaxPAYGInstanceCount": {
-            "value": 0
+        "MaxCapacity": {
+            "value": 2
         },
         "ScaleOutThreshold": {
             "value": 80
@@ -48,6 +66,9 @@
             "value": "azureadmin"
         },
         "AdminPassword": {
+            "value": ""
+        },
+        "EndpointURL": {
             "value": ""
         }
     }

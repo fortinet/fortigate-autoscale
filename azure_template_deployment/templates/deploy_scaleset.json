@@ -1,6 +1,6 @@
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-    "contentVersion": "1.0.0.5",
+    "contentVersion": "1.0.0.7",
     "parameters": {
         "InstanceType": {
             "defaultValue": "Standard_F2",
@@ -10,10 +10,10 @@
             }
         },
         "FOSVersion": {
-            "defaultValue": "6.0.4",
+            "defaultValue": "6.0.3",
             "type": "String",
             "metadata": {
-                "description": "FOS Version supported for autoscaling."
+                "description": "FortiOS version supported by FortiGate autoscale for Azure."
             },
             "allowedValues": [
                 "6.0.02",
@@ -43,11 +43,11 @@
             "defaultValue": "10.0.0.0/16",
             "type": "String",
             "metadata": {
-                "description": "Prefix for IP addresses in the virtual network in CIDR notation. Example 10.0.0.0/16."
+                "description": "Prefix for IP addresses in the virtual network in CIDR notation. E.g. 10.0.0.0/16."
             }
         },
         "Subnet1Name": {
-            "defaultValue": "EntrySubnet",
+            "defaultValue": "subnet1",
             "type": "String",
             "metadata": {
                 "description": "Public facing subnet 1 name."
@@ -57,11 +57,11 @@
             "defaultValue": "10.0.1.0/24",
             "type": "String",
             "metadata": {
-                "description": "Subnet 1 prefix in CIDR notation. Ex: 10.0.1.0/24."
+                "description": "Subnet 1 prefix in CIDR notation. E.g. 10.0.1.0/24."
             }
         },
         "Subnet2Name": {
-            "defaultValue": "TransitSubnet",
+            "defaultValue": "subnet2",
             "type": "String",
             "metadata": {
                 "description": "Protected subnet 2 name."
@@ -71,18 +71,18 @@
             "defaultValue": "10.0.2.0/24",
             "type": "String",
             "metadata": {
-                "description": "Subnet 2 prefix in CIDR notation. Ex: 10.0.2.0/24."
+                "description": "Subnet 2 prefix in CIDR notation. E.g. 10.0.2.0/24."
             }
         },
         "Subnet2LoadBalancerIP": {
             "defaultValue": "10.0.2.10",
             "type": "String",
             "metadata": {
-                "description": "Static IP address of the load balancer of the internal load balancer on subnet2."
+                "description": "Static IP address of the internal load balancer on subnet2."
             }
         },
         "Subnet3Name": {
-            "defaultValue": "ProtectedSubnet",
+            "defaultValue": "subnet3",
             "type": "String",
             "metadata": {
                 "description": "Private subnet 3 name."
@@ -92,7 +92,7 @@
             "defaultValue": "10.0.3.0/24",
             "type": "String",
             "metadata": {
-                "description": "Subnet 3 prefix in CIDER notation. Ex: 10.0.3.0/24."
+                "description": "Subnet 3 prefix in CIDR notation. E.g. 10.0.3.0/24."
             }
         },
         "PublicIPNewOrExisting": {
@@ -103,7 +103,7 @@
             ],
             "type": "String",
             "metadata": {
-                "description": "Creating a new public IP address or use an existing one."
+                "description": "Create a new public IP address or use an existing one."
             }
         },
         "PublicIPAddressName": {
@@ -114,18 +114,18 @@
             }
         },
         "ScalingGroupNamePrefix": {
-            "defaultValue": "asgvmss",
+            "defaultValue": "fgtasg",
             "maxLength": 10,
             "type": "String",
             "metadata": {
-                "description": "The name prefix used on all vmss resources."
+                "description": "The prefix each VMSS Name is given when deploying the FortiGate autoscale template. The value of this parameter should be the same as for deploy_funcapp.json. The prefix cannot contain special characters \\/\"\"[]:|<>+=;,?*@& or begin with '_' or end with '.' or '-'."
             }
         },
         "InitialCapacity": {
             "defaultValue": 1,
             "type": "Int",
             "metadata": {
-                "description": "The initial number of VM instances in the VMSS Ranges from MinCapacity to MaxCapacity."
+                "description": "The initial number of VM instances in the VMSS. Ranges from MinCapacity to MaxCapacity."
             }
         },
         "MinCapacity": {
@@ -166,10 +166,10 @@
         "AdminPassword": {
             "type": "SecureString",
             "metadata": {
-                "description": "FortiGate administrator password on all VMs. This must include at least one uppercase letter, one lowercase letter, one digit, and one special character such as (! @ # $ %). The password must be between 11 and 26 characters in length."
+                "description": "FortiGate administrator password on all VMs. This field must be between 11 and 26 characters and must include at least one uppercase letter, one lowercase letter, one digit, and one special character such as (! @ # $ %)."
             }
         },
-        "EndPoints": {
+        "EndpointURL": {
             "defaultValue": "",
             "type": "String",
             "metadata": {
@@ -208,7 +208,7 @@
         "vnetID": "[resourceId(variables('namingInfix'),'Microsoft.Network/virtualNetworks', parameters('VNetName'))]",
         "subnet2Ref": "[concat(variables('vnetID'),'/subnets/', parameters('Subnet2Name'))]",
         "routeTableId": "[resourceId('Microsoft.Network/routeTables',variables('routeTableName'))]",
-        "userdata": "[concat('{\"config-url\": \"', parameters('EndPoints'), '\"}\n')]"
+        "userdata": "[concat('{\"config-url\": \"', parameters('EndpointURL'), '\"}\n')]"
     },
     "resources": [{
             "type": "Microsoft.Network/routeTables",
