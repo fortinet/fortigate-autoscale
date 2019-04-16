@@ -1,25 +1,17 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Create all necessary DynamoDB tables for FortiGate AutoScale Handler. **WARNING!** This template is designed for being called within FortiGate AutoScale Solution only but not compatible with any other Cloud Formation template. Do not directly use it anywhere else.",
+    "Description": "Create all necessary DynamoDB tables for FortiGate Autoscale Solution.",
     "Parameters": {
-        "CustomIdentifier": {
+        "ResourceTagPrefix": {
             "Type": "String",
-            "Default": "fgtASG",
-            "MaxLength": "10",
-            "AllowedPattern": "[A-Za-z0-9]+",
-            "ConstraintDescription": "must only contain uppercase and lowercase letters and digits",
-            "Description": "A custom identifier as resource name prefix to help organize your DynamoDB tables. Can only contain uppercase, lowercase letters, and digits. Max length is 10."
-        },
-        "UniqueId": {
-            "Type": "String",
-            "MaxLength": "8",
-            "AllowedPattern": "[A-Za-z0-9]+",
-            "ConstraintDescription": "must only contain uppercase and lowercase letters and digits",
-            "Description": "A random text suffix for the DynamoDB table name which can help ensure the DB table name is unique per region. Can only contain uppercase, lowercase letters, and digits. Max length is 8."
+            "AllowedPattern": "[0-9a-zA-Z@.#-]+",
+            "MaxLength": 64,
+            "ConstraintDescription": "Resource tag prefix can include numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64.",
+            "Description": "A prefix for tag key ResourceGroup on all resources. It's also used as the name prefix of all applicable resources. Can only contain numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64."
         }
     },
     "Resources": {
-        "DdbTableMasterElection": {
+        "MasterElection": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
@@ -38,18 +30,21 @@
                     "Fn::Join": [
                         "-",
                         [{
-                                "Ref": "CustomIdentifier"
+                                "Ref": "ResourceTagPrefix"
                             },
-                            "FortiGateMasterElection",
-                            {
-                                "Ref": "UniqueId"
-                            }
+                            "FortiGateMasterElection"
                         ]
                     ]
-                }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
             }
         },
-        "DdbTableLifecycleItem": {
+        "LifecycleItem": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
@@ -78,18 +73,21 @@
                     "Fn::Join": [
                         "-",
                         [{
-                                "Ref": "CustomIdentifier"
+                                "Ref": "ResourceTagPrefix"
                             },
-                            "FortiGateLifecycleItem",
-                            {
-                                "Ref": "UniqueId"
-                            }
+                            "FortiGateLifecycleItem"
                         ]
                     ]
-                }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
             }
         },
-        "DdbTableAutoscale": {
+        "Autoscale": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
@@ -108,18 +106,21 @@
                     "Fn::Join": [
                         "-",
                         [{
-                                "Ref": "CustomIdentifier"
+                                "Ref": "ResourceTagPrefix"
                             },
-                            "FortiGateAutoscale",
-                            {
-                                "Ref": "UniqueId"
-                            }
+                            "FortiGateAutoscale"
                         ]
                     ]
-                }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
             }
         },
-        "DdbTableFortiAnalyzer": {
+        "FortiAnalyzer": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
@@ -138,18 +139,21 @@
                     "Fn::Join": [
                         "-",
                         [{
-                                "Ref": "CustomIdentifier"
+                                "Ref": "ResourceTagPrefix"
                             },
-                            "FortiAnalyzer",
-                            {
-                                "Ref": "UniqueId"
-                            }
+                            "FortiAnalyzer"
                         ]
                     ]
-                }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
             }
         },
-        "DdbTableSettings": {
+        "Settings": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
@@ -168,18 +172,21 @@
                     "Fn::Join": [
                         "-",
                         [{
-                                "Ref": "CustomIdentifier"
+                                "Ref": "ResourceTagPrefix"
                             },
-                            "Settings",
-                            {
-                                "Ref": "UniqueId"
-                            }
+                            "Settings"
                         ]
                     ]
-                }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
             }
         },
-        "DdbTableNicAttachment": {
+        "NicAttachment": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
@@ -198,18 +205,21 @@
                     "Fn::Join": [
                         "-",
                         [{
-                                "Ref": "CustomIdentifier"
+                                "Ref": "ResourceTagPrefix"
                             },
-                            "NicAttachment",
-                            {
-                                "Ref": "UniqueId"
-                            }
+                            "NicAttachment"
                         ]
                     ]
-                }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
             }
         },
-        "DdbTableCustomLog": {
+        "CustomLog": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
@@ -234,63 +244,169 @@
                     "Fn::Join": [
                         "-",
                         [{
-                                "Ref": "CustomIdentifier"
+                                "Ref": "ResourceTagPrefix"
                             },
-                            "CustomLog",
-                            {
-                                "Ref": "UniqueId"
-                            }
+                            "CustomLog"
                         ]
                     ]
-                }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
+            }
+        },
+        "VpnAttachment": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "AttributeDefinitions": [{
+                    "AttributeName": "instanceId",
+                    "AttributeType": "S"
+                }],
+                "KeySchema": [{
+                    "AttributeName": "instanceId",
+                    "KeyType": "HASH"
+                }],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": "1",
+                    "WriteCapacityUnits": "1"
+                },
+                "TableName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "ResourceTagPrefix"
+                            },
+                            "VpnAttachment"
+                        ]
+                    ]
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
             }
         }
     },
     "Outputs": {
-        "DdbTableArnList": {
+        "MasterElectionTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "MasterElection",
+                    "Arn"
+                ]
+            }
+        },
+        "LifecycleItemTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "LifecycleItem",
+                    "Arn"
+                ]
+            }
+        },
+        "AutoscaleTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "Autoscale",
+                    "Arn"
+                ]
+            }
+        },
+        "FortiAnalyzerTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "FortiAnalyzer",
+                    "Arn"
+                ]
+            }
+        },
+        "SettingsTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "Settings",
+                    "Arn"
+                ]
+            }
+        },
+        "NicAttachmentTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "NicAttachment",
+                    "Arn"
+                ]
+            }
+        },
+        "CustomLogTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "CustomLog",
+                    "Arn"
+                ]
+            }
+        },
+        "VpnAttachmentTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "VpnAttachment",
+                    "Arn"
+                ]
+            }
+        },
+        "TableArnList": {
             "Description": "The comma-delimited list of arn of DynamoDB tables created in this stack.",
             "Value": {
                 "Fn::Join": [
                     ",",
                     [{
                             "Fn::GetAtt": [
-                                "DdbTableMasterElection",
+                                "MasterElection",
                                 "Arn"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "DdbTableLifecycleItem",
+                                "LifecycleItem",
                                 "Arn"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "DdbTableAutoscale",
+                                "Autoscale",
                                 "Arn"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "DdbTableFortiAnalyzer",
+                                "FortiAnalyzer",
                                 "Arn"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "DdbTableSettings",
+                                "Settings",
                                 "Arn"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "DdbTableNicAttachment",
+                                "NicAttachment",
                                 "Arn"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "DdbTableCustomLog",
+                                "CustomLog",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "VpnAttachment",
                                 "Arn"
                             ]
                         }

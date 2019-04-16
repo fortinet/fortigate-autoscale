@@ -1,0 +1,851 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This template creates a FortiGate Autoscale Handler Lambda function and an API Gateway.",
+    "Parameters": {
+        "DeploymentPackageS3BucketName": {
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
+            "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
+            "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+        },
+        "DeploymentPackageS3KeyPrefix": {
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z-/]*$",
+            "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Description": "S3 key prefix for the deployment package. Key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
+        },
+        "ResourceTagPrefix": {
+            "Type": "String",
+            "AllowedPattern": "[0-9a-zA-Z@.#-]+",
+            "MaxLength": 64,
+            "ConstraintDescription": "Resource tag prefix can include numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64.",
+            "Description": "A prefix for tag key ResourceGroup on all resources. It's also used as the name prefix of all applicable resources. Can only contain numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64."
+        },
+        "CustomIdentifier": {
+            "Type": "String",
+            "MaxLength": "10",
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "ConstraintDescription": "must only contain uppercase and lowercase letters and numbers",
+            "Description": "An alternative name prefix. This shorter version of prefix is used on a resource that Resource tag prefix cannot apply to. Must be at most 10 characters long and only contain uppercase, lowercase letters, and numbers. Max length is 10."
+        },
+        "UniqueId": {
+            "Type": "String",
+            "MaxLength": "8",
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "ConstraintDescription": "must only contain uppercase and lowercase letters and digits",
+            "Description": "A random text suffix for the DynamoDB table name which can help ensure the DB table name is unique per region. Can only contain uppercase, lowercase letters, and digits. Max length is 8."
+        },
+        "VpcEndPoint": {
+            "Type": "String",
+            "Description": "The ID of a VPC Endpoint to associate with the deployed API Gateway. This Endpoint ID is optional."
+        },
+        "DbTableArnList": {
+            "Type": "String",
+            "Description": "The ARN of the DynamoDB table which is used to keep tracks of nic attachment records."
+        },
+        "VpcId": {
+            "Type": "AWS::EC2::VPC::Id",
+            "Description": "The existing VPC IDs where you deploy the Auto Scaling group and related resources. The VPC must have the option 'DNS hostnames' enabled."
+        },
+        "FortiGatePskSecret": {
+            "Type": "String",
+            "NoEcho": true,
+            "Description": "A secret key for the FortiGate instances to securely communicate with each other. It can be of your choice of a string, such as numbers or letters or the combination of them. Max length 128."
+        },
+        "FortiGateAdminPort": {
+            "Type": "Number",
+            "Default": 8443,
+            "MinValue": 1,
+            "MaxValue": 65535,
+            "ConstraintDescription": "must be a valid port number between 1 and 65535.",
+            "Description": "A port number for FortiGate administration. Minimum is 1. Maximum is 65535. Do not use: 443, 541, 514, 703 because these are FortiGate reserved ports."
+        },
+        "LifecycleHookTimeout": {
+            "Type": "Number",
+            "Default": 400,
+            "MinValue": 60,
+            "MaxValue": 3600,
+            "ConstraintDescription": "must be a valid number between 60 and 3600.",
+            "Description": "The amount of time (in seconds) that can elapse before the FortiGate Autoscale lifecycle hook times out. Minimum is 60. Maximum is 3600."
+        },
+        "HeartBeatLossCount": {
+            "Type": "Number",
+            "Default": 3,
+            "MinValue": 1,
+            "MaxValue": 65535,
+            "ConstraintDescription": "must be a valid number between 1 and 65535.",
+            "Description": "Number of consecutively lost heartbeats. When the Heartbeat loss count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
+        },
+        "TransitGatewayId": {
+            "Type": "String",
+            "Description": "The Transit Gateway ID."
+        }
+    },
+    "Conditions": {
+        "GovCloudCondition": {
+            "Fn::Equals": [{
+                    "Ref": "AWS::Region"
+                },
+                "us-gov-west-1"
+            ]
+        },
+        "VpcEndpointIsDefined": {
+            "Fn::Not": [{
+                "Fn::Equals": [{
+                        "Ref": "VpcEndPoint"
+                    },
+                    ""
+                ]
+            }]
+        }
+    },
+    "Resources": {
+        "StackCopyLambdaSource": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "Parameters": {
+                    "S3BucketName": {
+                        "Ref": "DeploymentPackageS3BucketName"
+                    },
+                    "S3KeyPrefix": {
+                        "Ref": "DeploymentPackageS3KeyPrefix"
+                    },
+                    "ObjectPaths": "functions/packages/fgt-asg-handler.zip"
+                },
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/copy-objects.template",
+                        {
+                            "S3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            },
+                            "S3BucketName": {
+                                "Ref": "DeploymentPackageS3BucketName"
+                            },
+                            "S3KeyPrefix": {
+                                "Ref": "DeploymentPackageS3KeyPrefix"
+                            }
+                        }
+                    ]
+                },
+                "TimeoutInMinutes": "5"
+            }
+        },
+        "FgtAsgApiGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "ResourceTagPrefix"
+                            },
+                            "fortigate-autoscale-api-gateway"
+                        ]
+                    ]
+                },
+                "EndpointConfiguration": {
+                    "Types": [
+                        "PRIVATE"
+                    ]
+                },
+                "Policy": {
+                    "Fn::If": [
+                        "VpcEndpointIsDefined",
+                        {
+                            "Fn::Sub": [
+                                "{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":\\\"*\\\",\\\"Action\\\":\\\"execute-api:Invoke\\\",\\\"Resource\\\":\\\"execute-api:\\/*\\\",\\\"Condition\\\":{\\\"StringEquals\\\":{\\\"aws:sourceVpce\\\":\\\"${vpce}\\\"}}}]}",
+                                {
+                                    "vpce": {
+                                        "Ref": "VpcEndPoint"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "FgtAsgApiGatewayAsgHandlerResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "FgtAsgApiGateway"
+                },
+                "PathPart": "fgt-asg-handler",
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "FgtAsgApiGateway",
+                        "RootResourceId"
+                    ]
+                }
+            }
+        },
+        "FgtAsgApiGatewayAsgHandlerMethodGet": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "ResourceId": {
+                    "Ref": "FgtAsgApiGatewayAsgHandlerResource"
+                },
+                "RestApiId": {
+                    "Ref": "FgtAsgApiGateway"
+                },
+                "AuthorizationType": "NONE",
+                "HttpMethod": "GET",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "arn:aws:apigateway:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":lambda:path/2015-03-31/functions/",
+                                {
+                                    "Fn::GetAtt": [
+                                        "FgtAsgLambdaFunctionAsgHandler",
+                                        "Arn"
+                                    ]
+                                },
+                                "/invocations"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "FgtAsgApiGatewayAsgHandlerMethodPost": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "ResourceId": {
+                    "Ref": "FgtAsgApiGatewayAsgHandlerResource"
+                },
+                "RestApiId": {
+                    "Ref": "FgtAsgApiGateway"
+                },
+                "AuthorizationType": "NONE",
+                "HttpMethod": "POST",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "arn:aws:apigateway:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":lambda:path/2015-03-31/functions/",
+                                {
+                                    "Fn::GetAtt": [
+                                        "FgtAsgLambdaFunctionAsgHandler",
+                                        "Arn"
+                                    ]
+                                },
+                                "/invocations"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "FgtAsgApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "FgtAsgApiGateway"
+                },
+                "StageName": "prod"
+            },
+            "DependsOn": [
+                "FgtAsgApiGatewayAsgHandlerMethodGet",
+                "FgtAsgApiGatewayAsgHandlerMethodPost"
+            ]
+        },
+        "FgtAsgHandlerIamRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+                    "arn:aws:iam::aws:policy/AWSLambdaExecute"
+                ],
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "lambda.amazonaws.com"
+                            ]
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ]
+                    }]
+                },
+                "Path": "/",
+                "Policies": [{
+                    "PolicyName": "fortigate-autoscale-handler-policy",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                                "Effect": "Allow",
+                                "Action": [
+                                    "dynamodb:CreateTable",
+                                    "dynamodb:DescribeTable",
+                                    "dynamodb:Scan",
+                                    "dynamodb:Query",
+                                    "dynamodb:DeleteItem",
+                                    "dynamodb:GetItem",
+                                    "dynamodb:PutItem",
+                                    "dynamodb:UpdateItem"
+                                ],
+                                "Resource": {
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Ref": "DbTableArnList"
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "autoscaling:CompleteLifecycleAction",
+                                    "autoscaling:SetDesiredCapacity",
+                                    "autoscaling:SetInstanceProtection",
+                                    "autoscaling:ExitStandby",
+                                    "autoscaling:BatchPutScheduledUpdateGroupAction",
+                                    "autoscaling:EnterStandby",
+                                    "autoscaling:PutScheduledUpdateGroupAction",
+                                    "autoscaling:UpdateAutoScalingGroup",
+                                    "autoscaling:DeleteNotificationConfiguration",
+                                    "autoscaling:SetInstanceHealth",
+                                    "autoscaling:TerminateInstanceInAutoScalingGroup",
+                                    "autoscaling:AttachLoadBalancers",
+                                    "autoscaling:DetachLoadBalancers",
+                                    "autoscaling:BatchDeleteScheduledAction",
+                                    "autoscaling:ResumeProcesses",
+                                    "autoscaling:SetDesiredCapacity",
+                                    "autoscaling:PutLifecycleHook",
+                                    "autoscaling:DetachLoadBalancerTargetGroups",
+                                    "autoscaling:SuspendProcesses",
+                                    "autoscaling:AttachLoadBalancerTargetGroups",
+                                    "autoscaling:AttachInstances",
+                                    "autoscaling:CompleteLifecycleAction",
+                                    "autoscaling:CreateOrUpdateTags",
+                                    "autoscaling:SetInstanceProtection",
+                                    "autoscaling:DeleteAutoScalingGroup",
+                                    "autoscaling:DeleteLifecycleHook",
+                                    "autoscaling:CreateAutoScalingGroup",
+                                    "autoscaling:DeleteScheduledAction",
+                                    "autoscaling:DetachInstances",
+                                    "autoscaling:RecordLifecycleActionHeartbeat"
+                                ],
+                                "Resource": {
+                                    "Fn::Sub": [
+                                        "arn:aws:autoscaling:${AWS_REGION}:${AWS_ACCOUNT_ID}:autoScalingGroup:*:autoScalingGroupName/${ASG_NAME}",
+                                        {
+                                            "AWS_REGION": {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "AWS_ACCOUNT_ID": {
+                                                "Ref": "AWS::AccountId"
+                                            },
+                                            "ASG_NAME": {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    [{
+                                                            "Ref": "ResourceTagPrefix"
+                                                        },
+                                                        "fortigate-auto-scaling-group"
+                                                    ]
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "autoscaling:DescribeAutoScalingNotificationTypes",
+                                    "autoscaling:DescribeAutoScalingInstances",
+                                    "ec2:DescribeInstances",
+                                    "autoscaling:DescribeScalingProcessTypes",
+                                    "autoscaling:DescribeTerminationPolicyTypes",
+                                    "dynamodb:ListTables",
+                                    "autoscaling:DescribePolicies",
+                                    "ec2:DescribeInstanceAttribute",
+                                    "autoscaling:DescribeLaunchConfigurations",
+                                    "autoscaling:DescribeAdjustmentTypes",
+                                    "ec2:DescribeNetworkInterfaces",
+                                    "autoscaling:DescribeScalingActivities",
+                                    "autoscaling:DescribeAccountLimits",
+                                    "autoscaling:DescribeAutoScalingGroups",
+                                    "autoscaling:DescribeScheduledActions",
+                                    "autoscaling:DescribeLoadBalancerTargetGroups",
+                                    "autoscaling:DescribeNotificationConfigurations",
+                                    "autoscaling:DescribeLifecycleHookTypes",
+                                    "ec2:DetachNetworkInterface",
+                                    "autoscaling:DescribeTags",
+                                    "ec2:DeleteNetworkInterface",
+                                    "autoscaling:DescribeMetricCollectionTypes",
+                                    "autoscaling:DescribeLoadBalancers",
+                                    "autoscaling:DescribeLifecycleHooks",
+                                    "ec2:CreateNetworkInterface",
+                                    "ec2:DescribeVpcs",
+                                    "ec2:AttachNetworkInterface",
+                                    "ec2:DescribeNetworkInterfaces",
+                                    "ec2:CreateTags"
+                                ],
+                                "Resource": "*"
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "apigateway:GET"
+                                ],
+                                "Resource": {
+                                    "Fn::Sub": [
+                                        "arn:aws:apigateway:${AWS_REGION}::*",
+                                        {
+                                            "AWS_REGION": {
+                                                "Ref": "AWS::Region"
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": "s3:GetObject",
+                                "Resource": {
+                                    "Fn::Sub": [
+                                        "arn:aws:s3:::${bucketname}/${keyprefix}assets/configset/*",
+                                        {
+                                            "bucketname": {
+                                                "Ref": "DeploymentPackageS3BucketName"
+                                            },
+                                            "keyprefix": {
+                                                "Ref": "DeploymentPackageS3KeyPrefix"
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }]
+            }
+        },
+        "FgtAsgLambdaFunctionAsgHandler": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Description": "FortiGate Autoscale handler function.",
+                "FunctionName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "CustomIdentifier"
+                            }, {
+                                "Ref": "UniqueId"
+                            },
+                            "fortigate-autoscale-handler"
+                        ]
+                    ]
+                },
+                "Runtime": "nodejs8.10",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "FgtAsgHandlerIamRole",
+                        "Arn"
+                    ]
+                },
+                "Handler": "index.AutoscaleHandler",
+                "Timeout": 300,
+                "Code": {
+                    "S3Bucket": {
+                        "Fn::GetAtt": [
+                            "StackCopyLambdaSource",
+                            "Outputs.DestinationBucket"
+                        ]
+                    },
+                    "S3Key": {
+                        "Fn::Sub": [
+                            "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
+                            {
+                                "KeyPrefix": {
+                                    "Fn::GetAtt": [
+                                        "StackCopyLambdaSource",
+                                        "Outputs.KeyPrefix"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "Environment": {
+                    "Variables": {
+                        "EXPIRE_LIFECYCLE_ENTRY": {
+                            "Ref": "LifecycleHookTimeout"
+                        },
+                        "API_GATEWAY_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-autoscale-api-gateway"
+                                ]
+                            ]
+                        },
+                        "API_GATEWAY_STAGE_NAME": "prod",
+                        "API_GATEWAY_RESOURCE_NAME": "fgt-asg-handler",
+                        "RESOURCE_TAG_PREFIX": {
+                            "Ref": "ResourceTagPrefix"
+                        },
+                        "CUSTOM_ID": {
+                            "Ref": "ResourceTagPrefix"
+                        },
+                        "UNIQUE_ID": "",
+                        "AUTO_SCALING_GROUP_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "VPC_ID": {
+                            "Ref": "VpcId"
+                        },
+                        "STACK_ASSETS_S3_BUCKET_NAME": {
+                            "Ref": "DeploymentPackageS3BucketName"
+                        },
+                        "STACK_ASSETS_S3_KEY_PREFIX": {
+                            "Fn::Sub": [
+                                "${KeyPrefix}assets",
+                                {
+                                    "KeyPrefix": {
+                                        "Ref": "DeploymentPackageS3KeyPrefix"
+                                    }
+                                }
+                            ]
+                        },
+                        "REQUIRED_CONFIG_SET": "",
+                        "FORTIGATE_INTERNAL_ELB_DNS": "",
+                        "FORTIGATE_PSKSECRET": {
+                            "Ref": "FortiGatePskSecret"
+                        },
+                        "FORTIGATE_ADMIN_PORT": {
+                            "Ref": "FortiGateAdminPort"
+                        },
+                        "FORTIGATE_TRAFFIC_PORT": "",
+                        "FORTIGATE_SYNC_INTERFACE": "port1",
+                        "HEART_BEAT_LOSS_COUNT": {
+                            "Ref": "HeartBeatLossCount"
+                        },
+                        "SCALING_GROUP_NAME_PAYG": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "SCALING_GROUP_NAME_BYOL": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "MASTER_SCALING_GROUP_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "ENABLE_SECOND_NIC": "false",
+                        "ENABLE_TGW_VPN": "true",
+                        "TGW_ID": {
+                            "Ref": "TransitGatewayId"
+                        }
+                    }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
+            },
+            "DependsOn": [
+                "StackCopyLambdaSource"
+            ]
+        },
+        "FgtAsgLambdaFunctionCfnService": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Description": "FortiGate Autoscale service provider function for Cloud Formation stack.",
+                "FunctionName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "CustomIdentifier"
+                            }, {
+                                "Ref": "UniqueId"
+                            },
+                            "fortigate-autoscale-cloud-formation-service"
+                        ]
+                    ]
+                },
+                "Runtime": "nodejs8.10",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "FgtAsgHandlerIamRole",
+                        "Arn"
+                    ]
+                },
+                "Handler": "cfn-service.handler",
+                "Timeout": 300,
+                "Code": {
+                    "S3Bucket": {
+                        "Fn::GetAtt": [
+                            "StackCopyLambdaSource",
+                            "Outputs.DestinationBucket"
+                        ]
+                    },
+                    "S3Key": {
+                        "Fn::Sub": [
+                            "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
+                            {
+                                "KeyPrefix": {
+                                    "Fn::GetAtt": [
+                                        "StackCopyLambdaSource",
+                                        "Outputs.KeyPrefix"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "Environment": {
+                    "Variables": {
+                        "EXPIRE_LIFECYCLE_ENTRY": {
+                            "Ref": "LifecycleHookTimeout"
+                        },
+                        "API_GATEWAY_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-autoscale-api-gateway"
+                                ]
+                            ]
+                        },
+                        "API_GATEWAY_STAGE_NAME": "prod",
+                        "API_GATEWAY_RESOURCE_NAME": "fgt-asg-handler",
+                        "RESOURCE_TAG_PREFIX": {
+                            "Ref": "ResourceTagPrefix"
+                        },
+                        "CUSTOM_ID": {
+                            "Ref": "CustomIdentifier"
+                        },
+                        "UNIQUE_ID": "",
+                        "AUTO_SCALING_GROUP_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "VPC_ID": {
+                            "Ref": "VpcId"
+                        },
+                        "STACK_ASSETS_S3_BUCKET_NAME": {
+                            "Ref": "DeploymentPackageS3BucketName"
+                        },
+                        "STACK_ASSETS_S3_KEY_PREFIX": {
+                            "Fn::Sub": [
+                                "${KeyPrefix}assets",
+                                {
+                                    "KeyPrefix": {
+                                        "Ref": "DeploymentPackageS3KeyPrefix"
+                                    }
+                                }
+                            ]
+                        },
+                        "REQUIRED_CONFIG_SET": "",
+                        "FORTIGATE_INTERNAL_ELB_DNS": "",
+                        "FORTIGATE_PSKSECRET": {
+                            "Ref": "FortiGatePskSecret"
+                        },
+                        "FORTIGATE_ADMIN_PORT": {
+                            "Ref": "FortiGateAdminPort"
+                        },
+                        "FORTIGATE_TRAFFIC_PORT": "",
+                        "FORTIGATE_SYNC_INTERFACE": "port1",
+                        "HEART_BEAT_LOSS_COUNT": {
+                            "Ref": "HeartBeatLossCount"
+                        },
+                        "SCALING_GROUP_NAME_PAYG": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "SCALING_GROUP_NAME_BYOL": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "MASTER_SCALING_GROUP_NAME": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "ENABLE_SECOND_NIC": "false",
+                        "ENABLE_TGW_VPN": "true",
+                        "TGW_ID": {
+                            "Ref": "TransitGatewayId"
+                        }
+                    }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
+            },
+            "DependsOn": [
+                "StackCopyLambdaSource"
+            ]
+        },
+        "FgtAsgLambdaPermissionApiGatewayInvokation": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "FgtAsgLambdaFunctionAsgHandler",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": [
+                        "arn:aws:execute-api:${region}:${account}:${api}/*",
+                        {
+                            "region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "account": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "api": {
+                                "Ref": "FgtAsgApiGateway"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayId": {
+            "Description": "API Gateway ID",
+            "Value": {
+                "Ref": "FgtAsgApiGateway"
+            }
+        },
+        "FgtAsgHandlerFunctionName": {
+            "Description": "FortiGate Autoscale handler function Name",
+            "Value": {
+                "Ref": "FgtAsgLambdaFunctionAsgHandler"
+            }
+        },
+        "FgtAsgHandlerFunctionArn": {
+            "Description": "FortiGate Autoscale handler function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FgtAsgLambdaFunctionAsgHandler",
+                    "Arn"
+                ]
+            }
+        },
+        "FgtAsgHandlerServicName": {
+            "Description": "FortiGate Autoscale handler service function Name",
+            "Value": {
+                "Ref": "FgtAsgLambdaFunctionCfnService"
+            }
+        },
+        "FgtAsgHandlerServiceArn": {
+            "Description": "FortiGate Autoscale handler service function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FgtAsgLambdaFunctionCfnService",
+                    "Arn"
+                ]
+            }
+        },
+        "FgtAsgHandlerIamRoleName": {
+            "Description": "FortiGate Autoscale handler IAM Role name.",
+            "Value": {
+                "Ref": "FgtAsgHandlerIamRole"
+            }
+        },
+        "FgtAsgHandlerIamRoleArn": {
+            "Description": "FortiGate Autoscale handler IAM Role name.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FgtAsgHandlerIamRole",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}

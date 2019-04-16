@@ -2,13 +2,13 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Deploys a FortiAnalyzer to a selected subnet and configures all FortiGates to send logs to it.",
     "Parameters": {
-        "QSS3BucketName": {
+        "S3BucketName": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Description": "S3 bucket name for the Quick Start assets. Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
-        "QSS3KeyPrefix": {
+        "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
@@ -230,13 +230,13 @@
                             ],
                             "Resource": {
                                 "Fn::Sub": [
-                                    "arn:aws:s3:::${QSS3BucketName}/${QSS3KeyPrefix}*",
+                                    "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
                                     {
-                                        "QSS3BucketName": {
-                                            "Ref": "QSS3BucketName"
+                                        "S3BucketName": {
+                                            "Ref": "S3BucketName"
                                         },
-                                        "QSS3KeyPrefix": {
-                                            "Ref": "QSS3KeyPrefix"
+                                        "S3KeyPrefix": {
+                                            "Ref": "S3KeyPrefix"
                                         }
                                     }
                                 ]
@@ -348,19 +348,19 @@
             "Type": "AWS::CloudFormation::Stack",
             "Properties": {
                 "Parameters": {
-                    "QSS3BucketName": {
-                        "Ref": "QSS3BucketName"
+                    "S3BucketName": {
+                        "Ref": "S3BucketName"
                     },
-                    "QSS3KeyPrefix": {
-                        "Ref": "QSS3KeyPrefix"
+                    "S3KeyPrefix": {
+                        "Ref": "S3KeyPrefix"
                     },
                     "ObjectPaths": "functions/packages/faz-handler.zip"
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
-                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/copy-objects.template",
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/copy-objects.template",
                         {
-                            "QSS3Region": {
+                            "S3Region": {
                                 "Fn::If": [
                                     "GovCloudCondition",
                                     "s3-us-gov-west-1",

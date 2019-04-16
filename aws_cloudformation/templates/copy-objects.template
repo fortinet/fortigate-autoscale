@@ -2,14 +2,14 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "This template creates an S3 bucket in the same region where the stack is launched and copy a set of selected objects from original bucket to the new bucket. This is a modified and enhanced version from a source template origin: qs-1op312ie1.",
     "Parameters": {
-        "QSS3BucketName": {
+        "S3BucketName": {
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Default": "aws-quickstart",
             "Description": "S3 bucket name for the Quick Start assets. Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Type": "String"
         },
-        "QSS3KeyPrefix": {
+        "S3KeyPrefix": {
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
             "Default": "quickstart-fortinet-fortigate/",
@@ -20,7 +20,7 @@
             "AllowedPattern": "^[0-9a-zA-Z-/.,]*$",
             "ConstraintDescription": "The paths can include numbers, lowercase letters, uppercase letters, hyphens (-), forward slash (/), period (.), and comma (,).",
             "Default": "",
-            "Description": "A comma-delimited list of paths to each source file to be copied from. Each path is resolved as directly following the QSS3KeyPrefix. It can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Description": "A comma-delimited list of paths to each source file to be copied from. Each path is resolved as directly following the S3KeyPrefix. It can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
             "Type": "String"
         }
     },
@@ -45,10 +45,10 @@
                     ]
                 },
                 "SourceBucket": {
-                    "Ref": "QSS3BucketName"
+                    "Ref": "S3BucketName"
                 },
                 "Prefix": {
-                    "Ref": "QSS3KeyPrefix"
+                    "Ref": "S3KeyPrefix"
                 }
             },
             "Type": "AWS::CloudFormation::CustomResource"
@@ -173,7 +173,7 @@
                                 ],
                                 "Effect": "Allow",
                                 "Resource": [{
-                                    "Fn::Sub": "arn:aws:s3:::${QSS3BucketName}/${QSS3KeyPrefix}*"
+                                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*"
                                 }]
                             },
                             {
@@ -189,7 +189,7 @@
                                 ],
                                 "Effect": "Allow",
                                 "Resource": [{
-                                        "Fn::Sub": "arn:aws:s3:::${DestinationBucket}/${QSS3KeyPrefix}*"
+                                        "Fn::Sub": "arn:aws:s3:::${DestinationBucket}/${S3KeyPrefix}*"
                                     },
                                     {
                                         "Fn::Sub": "arn:aws:s3:::${DestinationBucket}"
@@ -400,7 +400,7 @@
         "KeyPrefix": {
             "Description": "The key prefix between bucket root and copied object paths",
             "Value": {
-                "Ref": "QSS3KeyPrefix"
+                "Ref": "S3KeyPrefix"
             }
         }
     }
