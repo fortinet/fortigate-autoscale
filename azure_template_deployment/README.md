@@ -1,11 +1,13 @@
 # FortiGate Autoscale Azure QuickStart Template
 
-Please see the [README](../README.md) on the main project for more information.
+This folder contains a set of necessary resources to deploy FortiGate Autoscale using Azure.
+
+Detailed instructions are located in the project [README](../README.md).
 
 # Support
-Note Fortinet-provided scripts (in this GitHub project and others) are not supported within regular Fortinet technical support scope.
+Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
 For direct issues, please refer to the [Issues](https://github.com/fortinet/fortigate-autoscale/issues) tab of this GitHub project.
-For other questions related to the Lambda scripts, contact [github@fortinet.com](mailto:github@fortinet.com).
+For other questions related to this project, contact [github@fortinet.com](mailto:github@fortinet.com).
 
 ## License
-See the [License](../LICENSE) on the main project. © Fortinet Technologies. All rights reserved.
+[License](../LICENSE) © Fortinet Technologies. All rights reserved.
