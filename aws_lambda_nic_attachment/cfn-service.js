@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-FortiGate Autoscale Project - CloudFormation Custom Service - nic attachment handler (1.0.0-beta)
+FortiGate Autoscale Project - CloudFormation Custom Service - nic attachment handler (1.0.0)
 This module creates / deletes a CloudFormation custom service that remove all additional
 network interface controllers attached to any ec2 instance managed by a curtain CF stack before
 the stack is deleted.

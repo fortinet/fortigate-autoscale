@@ -2,7 +2,7 @@
 
 /*
 FortiGate Autoscale Project - CloudFormation Custom Service Script:
-auto scaling group (1.0.0-beta)
+auto scaling group (1.0.0)
 
 This module alllows for actions on the given auto scaling group. Actions includes:
 - updateCapacity

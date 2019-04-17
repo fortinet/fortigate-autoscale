@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-FortiGate Autoscale AWS DynamoDB table definitions (1.0.0-beta)
+FortiGate Autoscale AWS DynamoDB table definitions (1.0.0)
 Author: Fortinet
 */
 exports = module.exports;

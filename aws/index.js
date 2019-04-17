@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-FortiGate Autoscale AWS Module (1.0.0-beta)
+FortiGate Autoscale AWS Module (1.0.0)
 Author: Fortinet
 */
 exports = module.exports;
