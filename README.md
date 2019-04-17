@@ -32,8 +32,8 @@ Deployment packages as well as source code will be available in the **dist** dir
 
 Installation Guides are available from the Fortinet Document Library:
 
-  * [ FortiGate / FortiOS Deploying Auto Scaling on Microsoft Azure](https://docs2.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
-  * [ FortiGate / FortiOS Deploying Auto Scaling on AWS](https://docs2.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0/543390/introduction)
+  * [ FortiGate / FortiOS Deploying Auto Scaling on Microsoft Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0/)
+  * [ FortiGate / FortiOS Deploying Auto Scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0/)
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
