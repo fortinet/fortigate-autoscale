@@ -1,6 +1,6 @@
 # FortiGate Autoscale - AWS CloudFormation
 
-This folder contains a set of necessary resources to deploy FortiGate Autoscale using AWS CloudFormation.
+This folder contains a set of resources to deploy FortiGate Autoscale for AWS using CloudFormation Templates.
 
 Detailed instructions are located in the project [README](https://github.com/fortinet/fortigate-autoscale/blob/master/README.md).
 

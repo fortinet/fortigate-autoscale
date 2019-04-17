@@ -1,7 +1,7 @@
-# FortiGate Autoscale - Azure
+# FortiGate Autoscale for Azure
 This is the FortiGate Autoscale module for the Azure Cloud Platform.
 
-For more information, please refer the project [README](https://github.com/fortinet/fortigate-autoscale/blob/master/README.md).
+For more information, please refer to the project [README](https://github.com/fortinet/fortigate-autoscale/blob/master/README.md).
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.

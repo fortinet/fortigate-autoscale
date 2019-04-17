@@ -1,9 +1,9 @@
-This package is a modified version of the original source code from 
+This package is a modified version of the original source code from
 AWS (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-lambda-function-code.html)
 Fortinet distributes this package for the purpose of use in Fortinet's project only, and under the license in the same package.
 Fortinet uses the source codes in compliance with the original copyright statement and license below (the "Copyright Notice" section).
 
-Copyright Notice 
+Copyright Notice
 
 [Amazon Web Services]
 

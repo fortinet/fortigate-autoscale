@@ -1,55 +1,56 @@
-# FortiGate Autoscale - AWS Lambda
-
-This is a complete FortiGate Autoscale handler script source code for AWS Cloud Platform. A 'simple' autoscaling setup which takes advantage of the 6.0.3 `auto-scale` callback feature to automate autoscaling group config syncronization.
-
-## Install
-
-To make a deployment package, go to the root directory of FortiGate Autoscale project and run `npm run build-aws-lambda`.
-
-The entry point of this Lambda function is: index.AutoscaleHandler.
-
+# FortiGate Autoscale for AWS Lambda
+This folder contains source code for the FortiGate Autoscale handler for the AWS Cloud Platform. A 'simple' autoscaling setup which takes advantage of the FortiOS `auto-scale` callback feature to automate synchronization of the autoscaling group configuration.
+The entry point of this AWS Lambda function is **index.AutoscaleHandler**.
+# Requirements
+This function requires:
+* FortiOS 6.0.3 or higher
+* An AWS account
+## Deployment Package
+To generate a local deployment package:
+  1. Clone the FortiGate Autoscale project.
+  2. Run `npm run build-aws-lambda` at the project root directory.
+The deployment package will be available in the **dist** directory.
 ## Environment Variables
+This Lambda function has the following configurable environment variables.
 
 | Variable Name | Type | Description |
 | ------ | ------ | ------ |
-| API_GATEWAY_NAME | Text | The API Gateway name tied to this lambda function.|
-| API_GATEWAY_RESOURCE_NAME | Text | A PI Gateway stage name. Additional section will be added to the API Gateway url, reflect on the ***{resource}*** part. Example: https://{api}.execute-api.{region}.amazonaws.com/{stage}/***{resource}***/get-config|
-| API_GATEWAY_STAGE_NAME | Text | A PI Gateway stage name. Additional section will be added to the API Gateway url, reflect on the ***{stage}*** part. Example: https://{api}.execute-api.{region}.amazonaws.com/***{stage}***/{resource}/get-config|
-| AWS_REGION | Text | The region that this lambda function serves for.|
-| AUTO_SCALING_GROUP_NAME | Text | The auto scaling group name tied to this lambda function.|
-| CUSTOM_ID | Text | The custom string this lambda function uses to look for resources such as DynamoDB tables.|
-| EXPIRE_LIFECYCLE_ENTRY | Integer | The Lifecycle Item expiry time in seconds. Default to 300. |
-| FORTIGATE_ADMIN_PORT | Text | FortiGate admin port. Will be put in FortiGate bootstrapping config when spinning up each new FortiGate instance. |
-| FORTIGATE_INTERNAL_ELB_DNS | Text | (Optional) The internal elastic load balancer name tied to this lambda function. Default is empty string.|
-| FORTIGATE_PSKSECRET | Text | FortiGate PSK secret for HA feature. Will be put in FortiGate bootstrapping config when spinning up each new FortiGate instance. |
-| STACK_ASSETS_S3_BUCKET_NAME | Text | The S3 bucket that stores the solution related assets. Especially the necessary configset files in ***configset*** folder|
-| STACK_ASSETS_S3_KEY_PREFIX | Text | The S3 bucket key to the assets folder in the S3 bucket defined in ***STACK_ASSETS_S3_BUCKET_NAME***.|
-| UNIQUE_ID | Text | An aws-regionally unique ID for the solution resources such as DynamoDB name, where this lambda function uses to look for those resources.|
-| VPC_ID | Text | The VPC ID tied to this lambda function and solution resources.|
-
+| API_GATEWAY_NAME | Text | The API Gateway name tied to this Lambda function.|
+| API_GATEWAY_RESOURCE_NAME | Text | The API Gateway resource name tied to this Lambda function. An additional section will be added to the API Gateway URL, and will be reflected in the ***API_GATEWAY_RESOURCE_NAME*** part of the URL.<br>Example: https://{api}.execute-api.***AWS_REGION***.amazonaws.com/***API_GATEWAY_STAGE_NAME***/***API_GATEWAY_RESOURCE_NAME***/get-config|
+| API_GATEWAY_STAGE_NAME | Text | The API Gateway stage name tied to this Lambda function. An additional section will be added to the API Gateway URL, reflected in the ***API_GATEWAY_STAGE_NAME*** part of the URL.<br>Example: https://{api}.execute-api.***AWS_REGION***.amazonaws.com/***API_GATEWAY_STAGE_NAME***/***API_GATEWAY_RESOURCE_NAME***/get-config|
+| AWS_REGION | Text | The AWS region that this Lambda function serves.|
+| AUTO_SCALING_GROUP_NAME | Text | The autoscaling group name tied to this Lambda function.|
+| CUSTOM_ID | Text | The custom string this Lambda function uses to look for resources such as DynamoDB tables.|
+| EXPIRE_LIFECYCLE_ENTRY | Integer | The Lifecycle item expiry time in seconds. The default value is 300. |
+| FORTIGATE_ADMIN_PORT | Text | The FortiGate admin port. Each new FortiGate instance will have this added to the FortiGate bootstrapping configuration. |
+| FORTIGATE_INTERNAL_ELB_DNS | Text | (Optional) The internal elastic load balancer name tied to this Lambda function. The default value is an empty string.|
+| FORTIGATE_PSKSECRET | Text | The FortiGate PSK secret for the HA feature. Each new FortiGate instance will have this added to the FortiGate bootstrapping configuration.<br>**Note:** Changes to the PSK Secret after FortiGate Autoscale has been deployed are not reflected in the <cloud> function. For new instances to be spawned with the changed PSK Secret, the environment variable FORTIGATE_PSKSECRET will need to be manually updated.|
+| STACK_ASSETS_S3_BUCKET_NAME | Text | The S3 Bucket that stores the solution related assets. For example, the S3 Bucket where you uploaded the configset.|
+| STACK_ASSETS_S3_KEY_PREFIX | Text | The S3 Bucket key to the *assets* folder in the S3 Bucket defined in ***STACK_ASSETS_S3_BUCKET_NAME***.|
+| UNIQUE_ID | Text | An AWS-regionally unique ID for solution resources such as the DynamoDB name. This ID is used to look for specific solution resources.|
+| VPC_ID | Text | The VPC ID tied to this Lambda function and its solution resources.|
 ## IAM Policies
-This lambda function requires these IAM policies to operate.
+This AWS Lambda function requires the policies listed below.
 
 ### AWS Managed Policies
 | Name | ARN |
 | ------ | ------ |
 | AmazonS3ReadOnlyAccess | arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess |
 | AWSLambdaExecute | arn:aws:iam::aws:policy/AWSLambdaExecute |
-
 ### Custom Policies
-Curly braces - including the capitalized label between - in ARN examples are just place holders and should be omitted.
-
 | Action | Effect | Resource (in ARN format) |
 | ------ | ------ | ------ |
-| dynamodb:CreateTable, dynamodb:DescribeTable, dynamodb:Scan, dynamodb:Query, dynamodb:DeleteItem, dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem | Allow | The DynamoDB tables created in the solution stack using Cloud Formation templates. ARN example: arn:aws:dynamodb:***{AWS_REGION}***:***{AWS_ACCOUNT_ID}***:table/***{TABLE_NAME}***|
-| autoscaling:CompleteLifecycleAction, autoscaling:SetDesiredCapacity, autoscaling:SetInstanceProtection | Allow | The Auto Scaling Group created in the solution stack using Cloud Formation templates. ARN example: arn:aws:autoscaling:***{AWS_REGION}***:***{AWS_ACCOUNT_ID}***:autoScalingGroup:*:autoScalingGroupName/***{GROUP_NAME}***|
-| autoscaling:DescribeAutoScalingInstances, ec2:DescribeInstances, ec2:DescribeVpcs, ec2:DescribeInstanceAttribute | Allow | * |
-| apigateway:GET | Allow | All API Gateway in a curtain region. ARN example: arn:aws:apigateway:***{AWS_REGION}***::* |
-|s3:GetObject | Allow | Files under assets folder in the solution related S3 bucket. ARN example: arn:aws:s3:::***{BUCKET_NAME}***/***{KEY_PREFIX}***assets/configset/* |
-
+| dynamodb:CreateTable, dynamodb:DescribeTable, dynamodb:Scan, dynamodb:Query, dynamodb:DeleteItem, dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem | Allow | The DynamoDB tables created in the solution stack using CloudFormation templates.<br>ARN example: arn:aws:dynamodb:***AWS_REGION***:***AWS_ACCOUNT_ID***:table/***TABLE_NAME***|
+| autoscaling:CompleteLifecycleAction, autoscaling:SetDesiredCapacity, autoscaling:SetInstanceProtection | Allow | The autoscaling group created in the solution stack using CloudFormation templates.<br>ARN example: arn:aws:autoscaling:***AWS_REGION***:***AWS_ACCOUNT_ID***:autoScalingGroup:\*:autoScalingGroupName/***AUTO_SCALING_GROUP_NAME***|
+| autoscaling:DescribeAutoScalingInstances, ec2:DescribeInstances, ec2:DescribeVpcs, ec2:DescribeInstanceAttribute | Allow | \* |
+| apigateway:GET | Allow | All API Gateways in a certain region.<br>ARN example: arn:aws:apigateway:***AWS_REGION***::\* |
+| s3:GetObject | Allow | Contents of the **assets** folder for a particular solution in an S3 Bucket, as specified by the **STACK_ASSETS_S3_KEY_PREFIX**.<br>ARN example: arn:aws:s3:::***STACK_ASSETS_S3_BUCKET_NAME***/***STACK_ASSETS_S3_KEY_PREFIX***/assets/configset/* |
 ## Scope and Limits
-
-This Lambda function is inteded to use as a component of the FortiGate Autoscale solution for AWS. Please refer to the main project at https://github.com/fortinet/fortigate-autoscale for more information.
-
+This Lambda function is intended for use as a component of the FortiGate Autoscale solution for AWS.
+For more information, please refer to the project [README](https://github.com/fortinet/fortigate-autoscale/blob/master/README.md).
+# Support
+Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
+For direct issues, please refer to the [Issues](https://github.com/fortinet/fortigate-autoscale/issues) tab of this GitHub project.
+For other questions related to this project, contact [github@fortinet.com](mailto:github@fortinet.com).
 ## License
 [License](https://github.com/fortinet/fortigate-autoscale/blob/master/LICENSE) © Fortinet Technologies. All rights reserved.

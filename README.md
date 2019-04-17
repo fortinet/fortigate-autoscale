@@ -11,7 +11,7 @@ The project also contains a deployment script which can generate packages for ea
 ## Supported Platforms
 This project supports autoscaling for the cloud platforms listed below. The version tag in parentheses refers to the autoscale module version included in this project.
 
-  * Amazon AWS Lamda (1.0.0)
+  * Amazon AWS Lambda (1.0.0)
   * Microsoft Azure (1.0.0)
 
 ## Deployment Packages
@@ -24,16 +24,16 @@ Deployment packages as well as source code will be available in the **dist** dir
 
 | Package Name | Description |
 | ------ | ------ |
-| fortigate-autoscale.zip | Source code of entire project. |
-| fortigate-autoscale-aws-cloudformation.zip | Use Cloud Formation template to deploy the complete solution on AWS platform.|
-| fortigate-autoscale-aws-lambda.zip | The source code of the FortiGate autoscaling handler - AWS Lambda function.|
-| fortigate-autoscale-azure-funcapp.zip | The source code of the FortiGate autoscaling handler - Azure function app.|
-| fortigate-autoscale-azure-template_deployment.zip | Use Azure template deployment service to deploy the complete solution on Azure platform.|
+| fortigate-autoscale.zip | Source code for the entire project. |
+| fortigate-autoscale-aws-cloudformation.zip | Cloud Formation template. Use this to deploy the solution on the AWS platform.|
+| fortigate-autoscale-aws-lambda.zip | Source code for the FortiGate Autoscale handler - AWS Lambda function.|
+| fortigate-autoscale-azure-funcapp.zip | Source code for the FortiGate Autoscale handler - Azure function.|
+| fortigate-autoscale-azure-template-deployment.zip | Azure template. Use this to deploy the solution on the Azure platform.|
 
 Installation Guides are available from the Fortinet Document Library:
 
-  * [ FortiGate / FortiOS Deploying Auto Scaling on Microsoft Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0/)
-  * [ FortiGate / FortiOS Deploying Auto Scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0/)
+  * [ FortiGate / FortiOS Deploying Auto Scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
+  * [ FortiGate / FortiOS Deploying Auto Scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.

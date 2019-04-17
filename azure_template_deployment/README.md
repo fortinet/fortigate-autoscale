@@ -1,6 +1,6 @@
 # FortiGate Autoscale for Azure Deployment Package
 
-This folder contains a set of necessary resources to deploy FortiGate Autoscale using Azure.
+This folder contains a set of resources to deploy FortiGate Autoscale for Azure.
 
 Detailed instructions are located in the project [README](https://github.com/fortinet/fortigate-autoscale/blob/master/README.md).
 
