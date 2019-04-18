@@ -4,7 +4,7 @@ config firewall vip
         set type fqdn
         set mapped-addr internal-elb-web
         set portforward enable
-        set extintf {ASSOCIATED_INTERFACE}
+        set extintf {EXTERNAL_INTERFACE}
         set extport {TRAFFIC_PORT}
         set mappedport {TRAFFIC_PORT}
     next
@@ -13,8 +13,8 @@ end
 config firewall policy
     edit 2
         set name "internal-web-https"
-        set srcintf "{ASSOCIATED_INTERFACE}"
-        set dstintf "{ASSOCIATED_INTERFACE}"
+        set srcintf "{EXTERNAL_INTERFACE}"
+        set dstintf "{INTERNAL_INTERFACE}"
         set srcaddr "all"
         set dstaddr "internal-web"
         set action accept

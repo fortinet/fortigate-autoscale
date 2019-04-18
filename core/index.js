@@ -4,60 +4,18 @@
 Author: Fortinet
 */
 
-const uuidv5 = require('uuid/v5');
-const Logger = require('./Logger');
-var LifecycleItem = require('./LifecycleItem');
-var CloudPlatform = require('./CloudPlatform');
-var AutoscaleHandler = require('./AutoscaleHandler');
-
-exports.AutoscaleHandler = AutoscaleHandler;
-exports.LifecycleItem = LifecycleItem;
-exports.CloudPlatform = CloudPlatform;
-
-const uuidGenerator = inStr => uuidv5(inStr, uuidv5.URL);
-
-class DefaultLogger extends Logger {
-    constructor(loggerObject) {
-        super(loggerObject);
-    }
-    log() {
-        if (!(this.level && this.level.log === false)) {
-            this.logger.log.apply(null, arguments);
-        }
-    }
-    debug() {
-        if (!(this.level && this.level.debug === false)) {
-            this.logger.debug.apply(null, arguments);
-        }
-    }
-    info() {
-        if (!(this.level && this.level.info === false)) {
-            this.logger.info.apply(null, arguments);
-        }
-    }
-    warn() {
-        if (!(this.level && this.level.warn === false)) {
-            this.logger.warn.apply(null, arguments);
-        }
-    }
-    error() {
-        if (!(this.level && this.level.error === false)) {
-            this.logger.error.apply(null, arguments);
-        }
-    }
-}
-
-exports.DefaultLogger = DefaultLogger;
-
-const logger = new DefaultLogger(console);
-const moduleId = uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
-const sleep = ms => {
-    return new Promise(resolve => {
-        logger.warn(`sleep for ${ms} ms`);
-        setTimeout(resolve, ms);
-    });
-};
-
-exports.moduleRuntimeId = () => moduleId;
-exports.uuidGenerator = uuidGenerator;
-exports.sleep = sleep;
+const CoreFunctions = require('./core-functions');
+exports.LifecycleItem = require('./lifecycle-item');
+exports.CloudPlatform = require('./cloud-platform');
+exports.AutoscaleHandler = require('./autoscale-handler');
+exports.dbDefinitions = require('./db-definitions');
+const {VirtualMachine, NetworkInterface} = require('./virtual-machine');
+exports.VirtualMachine = VirtualMachine;
+exports.NetworkInterface = NetworkInterface;
+exports.settingItems = require('./setting-items');
+exports.DefaultLogger = CoreFunctions.DefaultLogger;
+exports.moduleRuntimeId = () => CoreFunctions.moduleId;
+exports.uuidGenerator = CoreFunctions.uuidGenerator;
+exports.sleep = CoreFunctions.sleep;
+exports.waitFor = CoreFunctions.waitFor;
+exports.calStringChecksum = CoreFunctions.calStringChecksum;

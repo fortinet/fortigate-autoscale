@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale-azure",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "description": "FortiGate Autoscale Module - Azure",
   "main": "index.js",
   "directories": {
@@ -11,15 +11,16 @@
     "package.json"
   ],
   "dependencies": {
+    "azure-storage": "^2.10.2",
     "fortigate-autoscale-core": "file:../core",
-    "ms-rest-azure": "^2.5.7",
+    "ms-rest-azure": "^2.5.9",
     "request": "^2.87.0"
   },
   "devDependencies": {
-    "eslint": "^5.4.0",
+    "eslint": "^5.11.0",
     "eslint-plugin-mocha": "^5.2.0",
     "mocha": "^5.2.0",
-    "nyc": "^13.0.1",
+    "nyc": "^13.1.0",
     "pack-zip": "^0.2.2"
   },
   "bundledDependencies": [
@@ -28,7 +29,7 @@
   "scripts": {
     "pretest": "eslint --fix .",
     "deploy": "dpl",
-    "build": "scripts/make_dist.js",
+    "build": "scripts/make-dist.js",
     "test": "nyc mocha --recursive './test/mocha/*.js'"
   },
   "author": "fortinet",

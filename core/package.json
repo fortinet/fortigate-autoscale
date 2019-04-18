@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale-core",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "description": "FortiGate Autoscale Module - Core",
   "main": "index.js",
   "directories": {
@@ -20,7 +20,7 @@
   "scripts": {
     "pretest": "eslint --fix .",
     "deploy": "dpl",
-    "build": "scripts/make_dist.js",
+    "build": "scripts/make-dist.js",
     "test": "nyc mocha --recursive './test/mocha/*.js'"
   },
   "author": "fortinet",

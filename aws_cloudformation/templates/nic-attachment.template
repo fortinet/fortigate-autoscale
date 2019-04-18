@@ -1,0 +1,323 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "A service to handle additional network interface attachment / detachment to an EC2 instance in a given VPC.",
+    "Parameters": {
+        "QSS3BucketName": {
+            "Default": "jliang01-aws-quickstart-us-west-2",
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
+            "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
+            "Description": "S3 bucket name for the Quick Start assets. Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+        },
+        "QSS3KeyPrefix": {
+            "Default": "quickstart-fortinet-fortigate/",
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z-/]*$",
+            "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Description": "S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
+        },
+        "CustomIdentifier": {
+            "Default": "fgtasg",
+            "Type": "String",
+            "MaxLength": "10",
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "ConstraintDescription": "must only contain uppercase and lowercase letters and numbers",
+            "Description": "An identifier as resource name prefix. Must be at most 10 characters long and only contain uppercase, lowercase letters, and numbers."
+        },
+        "UniqueId": {
+            "Default": "123456",
+            "Type": "String",
+            "Description": "The unique ID assigned to DynamoDB table in this solution. This parameter should be passed down from the caller stack for consistency."
+        },
+        "VpcId": {
+            "Default": "vpc-0887b99593146b9a6",
+            "Type": "AWS::EC2::VPC::Id",
+            "Description": "Enter a valid VPC ID to deploy. The VPC must have the option 'DNS hostnames' enabled."
+        }
+    },
+    "Conditions": {
+        "GovCloudCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-gov-west-1"
+            ]
+        }
+    },
+    "Resources": {
+        "StackCopyLambda": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "Parameters": {
+                    "QSS3BucketName": {
+                        "Ref": "QSS3BucketName"
+                    },
+                    "QSS3KeyPrefix": {
+                        "Ref": "QSS3KeyPrefix"
+                    },
+                    "ObjectPaths": "functions/packages/nic-attachment.zip"
+                },
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/copy-objects.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "TimeoutInMinutes": "10"
+            }
+        },
+        "NicAttachmentCfnServiceProvider": {
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "NicAttachmentCfnServiceProviderScript",
+                        "Arn"
+                    ]
+                },
+                "CustomIdentifier": {
+                    "Ref": "CustomIdentifier"
+                },
+                "UniqueId": {
+                    "Ref": "UniqueId"
+                }
+            },
+            "Type": "AWS::CloudFormation::CustomResource"
+        },
+        "NicAttachmentCfnServiceProviderScript": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": {
+                        "Fn::GetAtt": [
+                            "StackCopyLambda",
+                            "Outputs.DestinationBucket"
+                        ]
+                    },
+                    "S3Key": {
+                        "Fn::Sub": [
+                            "${KeyPrefix}functions/packages/nic-attachment.zip",
+                            {
+                                "KeyPrefix": {
+                                    "Fn::GetAtt": [
+                                        "StackCopyLambda",
+                                        "Outputs.KeyPrefix"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "Description": "EC2 network interface attachment service - CloudFormation service provider script to create / delete the service",
+                "Handler": "cfn-service.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IamRoleNicAttachment",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "nodejs8.10",
+                "Timeout": 300,
+                "Environment": {
+                    "Variables": {
+                        "CUSTOM_ID": {
+                            "Ref": "CustomIdentifier"
+                        },
+                        "UNIQUE_ID": {
+                            "Ref": "UniqueId"
+                        },
+                        "VPC_ID": {
+                            "Ref": "VpcId"
+                        },
+                        "STACK_ID": {
+                            "Ref": "AWS::StackId"
+                        }
+                    }
+                }
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "NicAttachmentServiceScript": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": {
+                        "Fn::GetAtt": [
+                            "StackCopyLambda",
+                            "Outputs.DestinationBucket"
+                        ]
+                    },
+                    "S3Key": {
+                        "Fn::Sub": [
+                            "${KeyPrefix}functions/packages/nic-attachment.zip",
+                            {
+                                "KeyPrefix": {
+                                    "Fn::GetAtt": [
+                                        "StackCopyLambda",
+                                        "Outputs.KeyPrefix"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "Description": "Handle network interface attachment / detachment to an EC2 instance.",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IamRoleNicAttachment",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "nodejs8.10",
+                "Timeout": 300,
+                "Environment": {
+                    "Variables": {
+                        "CUSTOM_ID": {
+                            "Ref": "CustomIdentifier"
+                        },
+                        "UNIQUE_ID": {
+                            "Ref": "UniqueId"
+                        },
+                        "VPC_ID": {
+                            "Ref": "VpcId"
+                        },
+                        "STACK_ID": {
+                            "Ref": "AWS::StackId"
+                        }
+                    }
+                }
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "IamRoleNicAttachment": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": "sts:AssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": [
+                                "${customTag}-lambda-nic-attachment-${region}-${stackId}",
+                                {
+                                    "customTag": {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "region": {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    "stackId": {
+                                        "Fn::Select": [
+                                            2,
+                                            {
+                                                "Fn::Split": [
+                                                    "/",
+                                                    {
+                                                        "Ref": "AWS::StackId"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:DescribeInstances",
+                                        "ec2:DetachNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:DeleteNetworkInterface",
+                                        "ec2:AttachNetworkInterface"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeTable",
+                                        "dynamodb:CreateTable",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Scan",
+                                        "dynamodb:DeleteTable"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:dynamodb:*:${accountId}:table/${tableName}",
+                                            {
+                                                "accountId": {
+                                                    "Ref": "AWS::AccountId"
+                                                },
+                                                "tableName": {
+                                                    "Fn::Join": [
+                                                        "-",
+                                                        [
+                                                            {
+                                                                "Ref": "CustomIdentifier"
+                                                            },
+                                                            "NicAttachment",
+                                                            {
+                                                                "Ref": "UniqueId"
+                                                            }
+                                                        ]
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ],
+                            "Version": "2012-10-17"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Role"
+        }
+    },
+    "Outputs": {
+        "CfnServiceProvider": {
+            "Description": "Service provider script - EC2 network interface attachment service.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NicAttachmentCfnServiceProviderScript",
+                    "Arn"
+                ]
+            }
+        },
+        "ServiceScript": {
+            "Description": "Service script - EC2 network interface attachment service.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NicAttachmentServiceScript",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}

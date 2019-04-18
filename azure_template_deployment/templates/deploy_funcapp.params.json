@@ -1,0 +1,48 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.7",
+    "parameters": {
+        "FunctionAppName": {
+            "value": ""
+        },
+        "CosmosDBName": {
+            "value": ""
+        },
+        "StorageAccountType": {
+            "value": "Standard_LRS"
+        },
+        "TenantID": {
+            "value": ""
+        },
+        "SubscriptionID": {
+            "value": ""
+        },
+        "RestAppID": {
+            "value": ""
+        },
+        "RestAppSecret": {
+            "value": ""
+        },
+        "HeartBeatLossCount": {
+            "value": "3"
+        },
+        "ScalingGroupResourceGroupName": {
+            "value": ""
+        },
+        "ScalingGroupNamePrefix": {
+            "value": ""
+        },
+        "ScriptTimeOut": {
+            "value": "230"
+        },
+        "ElectionWaitTime": {
+            "value": "90"
+        },
+        "PSKSecret": {
+            "value": ""
+        },
+        "PackageResURL": {
+            "value": ""
+        }
+    }
+}

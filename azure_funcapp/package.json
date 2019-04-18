@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale-azure-funcapp",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "description": "FortiGate Autoscale Project - Azure Function App",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,7 @@
     "url": "git+https://github.com/fortinet/fortigate-autoscale"
   },
   "dependencies": {
-    "fortigate-autoscale-azure": "file:lib/azure"
+    "fortigate-autoscale-azure": "file:../azure"
   },
   "devDependencies": {
     "eslint": "^5.4.0",

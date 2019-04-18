@@ -1,7 +1,19 @@
-
+config sys interface
+    edit "port2"
+        set mode dhcp
+        set defaultgw disable
+        set allowaccess ping https ssh http fgfm
+        # work around for FortiOS 6.0.4 #0543036 mtu values from DNS interfere with HA checksum.
+        set mtu-override enable
+        set mtu 9001
+    next
+end
 config system dns
     unset primary
     unset secondary
+end
+config system global
+    set admin-sport {ADMIN_PORT}
 end
 config system auto-scale
     set status enable
@@ -9,8 +21,4 @@ config system auto-scale
     set role master
     set callback-url {CALLBACK_URL}
     set psksecret {PSK_SECRET}
-end
-
-config system global
-    set admin-sport {ADMIN_PORT}
 end

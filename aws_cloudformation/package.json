@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale-aws-cloudformation",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "description": "FortiGate Autoscale AWS Cloud Formation Template.",
   "main": "index.js",
   "scripts": {

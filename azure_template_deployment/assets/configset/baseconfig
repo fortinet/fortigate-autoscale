@@ -1,0 +1,24 @@
+
+config system dns
+    unset primary
+    unset secondary
+end
+config system auto-scale
+    set status enable
+    set sync-interface "{SYNC_INTERFACE}"
+    set role master
+    set callback-url {CALLBACK_URL}
+    set psksecret {PSK_SECRET}
+end
+
+config sys interface
+    edit "port2"
+        set mode dhcp
+        set defaultgw disable
+        set allowaccess ping https ssh http fgfm
+    next
+end
+
+config system global
+    set admin-sport {ADMIN_PORT}
+end

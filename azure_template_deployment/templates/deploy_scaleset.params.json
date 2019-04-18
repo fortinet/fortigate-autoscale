@@ -1,0 +1,75 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.7",
+    "parameters": {
+        "InstanceType": {
+            "value": "Standard_F2"
+        },
+        "FOSVersion": {
+            "value": "6.0.3"
+        },
+        "VNetNewOrExisting": {
+            "value": "new"
+        },
+        "VNetName": {
+            "value": "autoscalevnet"
+        },
+        "SubnetAddressPrefix": {
+            "value": "10.0.0.0/16"
+        },
+        "Subnet1Name": {
+            "value": "subnet1"
+        },
+        "Subnet1Prefix": {
+            "value": "10.0.1.0/24"
+        },
+        "Subnet2Name": {
+            "value": "subnet2"
+        },
+        "Subnet2Prefix": {
+            "value": "10.0.2.0/24"
+        },
+        "Subnet2LoadBalancerIP": {
+            "value": "10.0.2.10"
+        },
+        "Subnet3Name": {
+            "value": "subnet3"
+        },
+        "Subnet3Prefix": {
+            "value": "10.0.3.0/24"
+        },
+        "PublicIPNewOrExisting": {
+            "value": "new"
+        },
+        "PublicIPAddressName": {
+            "value": "autoscalepip"
+        },
+        "ScalingGroupNamePrefix": {
+            "value": "fgtasg"
+        },
+        "InitialCapacity": {
+            "value": 1
+        },
+        "MinCapacity": {
+            "value": 1
+        },
+        "MaxCapacity": {
+            "value": 2
+        },
+        "ScaleOutThreshold": {
+            "value": 80
+        },
+        "ScaleInThreshold": {
+            "value": 20
+        },
+        "AdminUsername": {
+            "value": "azureadmin"
+        },
+        "AdminPassword": {
+            "value": ""
+        },
+        "EndpointURL": {
+            "value": ""
+        }
+    }
+}

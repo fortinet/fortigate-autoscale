@@ -1,6 +1,6 @@
 {
   "name": "fortigate-autoscale",
-  "version": "1.0.0-beta.1.p0",
+  "version": "1.0.0",
   "description": "FortiGate Autoscale Project",
   "main": "index.js",
   "directories": {
@@ -10,18 +10,18 @@
   "scripts": {
     "pretest": "eslint --fix .",
     "deploy": "dpl",
-    "build": "scripts/make_dist.js all",
+    "build": "scripts/make-dist.js all",
     "test": "nyc mocha './{,!(node_modules|dist|scripts)/**/test/mocha/}*.js'",
-    "build-all": "scripts/make_dist.js all",
-    "build-project": "scripts/make_dist.js project",
-    "build-core": "scripts/make_dist.js core",
-    "build-azure": "scripts/make_dist.js azure",
-    "build-azure-funcapp": "scripts/make_dist.js azure-funcapp",
-    "build-azure-quickstart": "scripts/make_dist.js azure-quickstart",
-    "build-aws": "scripts/make_dist.js aws",
-    "build-aws-lambda": "scripts/make_dist.js aws-lambda",
-    "build-aws-cloudformation": "scripts/make_dist.js aws-cloudformation",
-    "build-aws-quickstart-special": "scripts/make_dist.js aws-quickstart-special"
+    "build-all": "scripts/make-dist.js all",
+    "build-project": "scripts/make-dist.js project",
+    "build-azure-funcapp": "scripts/make-dist.js azure-funcapp",
+    "build-azure-template-deployment": "scripts/make-dist.js azure-template-deployment",
+    "build-aws-lambda": "scripts/make-dist.js aws-lambda",
+    "build-aws-lambda-faz-handler": "scripts/make-dist.js aws-lambda-faz-handler",
+    "build-aws-lambda-fgt-asg-handler": "scripts/make-dist.js aws-lambda-fgt-asg-handler",
+    "build-aws-lambda-nic-attachment": "scripts/make-dist.js aws-lambda-nic-attachment",
+    "build-aws-cloudformation": "scripts/make-dist.js aws-cloudformation",
+    "build-aws-quickstart-special": "scripts/make-dist.js aws-quickstart-special"
   },
   "repository": {
     "type": "git",
@@ -30,7 +30,6 @@
   "author": "fortinet",
   "license": "MIT",
   "devDependencies": {
-    "cfn-response": "^1.0.1",
     "dpl": "^3.8.0",
     "eslint": "^5.4.0",
     "eslint-plugin-json": "^1.2.1",
