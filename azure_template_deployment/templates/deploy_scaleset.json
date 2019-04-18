@@ -16,7 +16,6 @@
                 "description": "FortiOS version supported by FortiGate autoscale for Azure."
             },
             "allowedValues": [
-                "6.0.02",
                 "6.0.3",
                 "6.0.4"
             ]
