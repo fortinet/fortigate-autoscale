@@ -110,6 +110,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     /** @override */
     async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
+        // DEBUG:
+        // if having issue in getting the remote api in local debug env, try this fake url
+        if (process.env.DEBUG_MODE === 'true') {
+            return 'http://localhost/no-where';
+        }
         let position,
             page;
         const
@@ -810,7 +815,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    async getSettingItem(key) {
+    async getSettingItem(key, valueOnly = true) {
         let params = {
             TableName: DB.SETTINGS.TableName,
             Key: {
@@ -820,22 +825,48 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         try {
             let result = await docClient.get(params).promise();
             if (result && result.Item) {
-                return JSON.parse(result.Item.settingValue);
+                let value = result.Item.jsonEncoded !== 'false' ?
+                    JSON.parse(result.Item.settingValue) : result.Item.settingValue;
+                if (valueOnly) {
+                    return value;
+                } else {
+                    return {settingKey: result.Item.settingKey, settingValue: value,
+                        description: result.Item.description};
+                }
             }
         } catch (error) {
             return null;
         }
     }
 
-    async setSettingItem(key, jsonValue) {
-        var params = {
-            Item: {
-                settingKey: key,
-                settingValue: JSON.stringify(jsonValue)
+    /**
+     * add or update a setting item with given key. If description is null, it will be kept
+     * unchanged when updating an existing item, or converted to an empty string when adding new.
+     * @param {String} key the Key
+     * @param {any} value the value
+     * @param {String} description the description
+     * @param {Boolean} jsonEncoded set to true if value needs to store as json encoded
+     */
+    async setSettingItem(key, value, description = null, jsonEncoded = false) {
+        let params = {
+            TableName: DB.SETTINGS.TableName,
+            Key: { settingKey: key},
+            ExpressionAttributeNames: {
+                '#settingValue': 'settingValue',
+                '#jsonEncoded': 'jsonEncoded'
             },
-            TableName: DB.SETTINGS.TableName
+            ExpressionAttributeValues: {
+                ':settingValue': jsonEncoded ? JSON.stringify(value) : value,
+                ':jsonEncoded': jsonEncoded ? 'true' : 'false'
+            },
+            UpdateExpression: 'SET #settingValue = :settingValue, #jsonEncoded = :jsonEncoded'
         };
-        return !!await docClient.put(params).promise();
+        if (description !== null) {
+            params.ExpressionAttributeNames['#description'] = 'description';
+            params.ExpressionAttributeValues[':description'] = description ? description : '';
+            params.UpdateExpression += ', #description = :description';
+        }
+        return !!await docClient.update(params).promise();
     }
 
     /** @override */

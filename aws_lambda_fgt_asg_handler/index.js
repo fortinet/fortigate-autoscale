@@ -31,11 +31,12 @@ exports.AutoscaleHandler = async (event, context, callback) => {
 
 async function initiate(desiredCapacity, minSize, maxSize, subnetPairs) {
     await autoscaleHandler.saveSubnetPairs(subnetPairs);
-    await autoscaleHandler.saveSettings(desiredCapacity, minSize, maxSize);
+    await autoscaleHandler.saveSettings({desiredCapacity: desiredCapacity,
+        minSize: minSize, maxSize: maxSize});
 }
 
-async function saveSettings(desiredCapacity, minSize, maxSize) {
-    await autoscaleHandler.saveSettings(desiredCapacity, minSize, maxSize);
+async function saveSettings(settings) {
+    await autoscaleHandler.saveSettings(settings);
 }
 
 async function restart() {
@@ -44,7 +45,7 @@ async function restart() {
     // delete master election result
     await autoscaleHandler.resetMasterElection();
     // set desired capacity & min size from saved setting to start auto scaling again
-    let settings = await autoscaleHandler.loadSettings();
+    let settings = await autoscaleHandler.loadAutoScalingSettings();
     await autoscaleHandler.updateCapacity(settings.desiredCapacity,
                         settings.minSize, settings.maxSize);
 }

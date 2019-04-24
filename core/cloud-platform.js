@@ -6,6 +6,7 @@ Author: Fortinet
 * @abstract
 * Class used to define the capabilities required from cloud platform.
 */
+
 module.exports = class CloudPlatform {
     throwNotImplementedException() {
         throw new Error('Not Implemented');
@@ -246,11 +247,11 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
-    async getSettingItem(key) {
+    async getSettingItem(key, valueOnly = true) {
         await this.throwNotImplementedException();
     }
 
-    async setSettingItem(key, jsonValue) {
+    async setSettingItem(key, value, description = null, jsonEncoded = false) {
         await this.throwNotImplementedException();
     }
 

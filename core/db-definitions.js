@@ -182,6 +182,14 @@ const DB = {
             {
                 AttributeName: 'settingValue',
                 AttributeType: 'S'
+            },
+            {
+                AttributeName: 'description',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'jsonEncoded',
+                AttributeType: 'S'
             }
         ]
     },

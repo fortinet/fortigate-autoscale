@@ -537,7 +537,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
-    async getSettingItem(key) {
+    async getSettingItem(key, valueOnly = true) {
         try {
             const keyExpression = {
                 name: 'settingKey',
@@ -548,18 +548,27 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             if (!Array.isArray(items) || items.length === 0) {
                 return null;
             }
-            return JSON.parse(items[0].settingValue);
+            let value = items[0].jsonEncoded && items[0].jsonEncoded !== 'false' ?
+                JSON.parse(items[0].settingValue) : items[0].settingValue;
+            if (valueOnly) {
+                return value;
+            } else {
+                return {settingKey: items[0].settingKey, settingValue: value,
+                    description: items[0].description};
+            }
         } catch (error) {
             logger.warn(`called getSettingItem (key: ${key}) > error: `, error);
             return null;
         }
     }
 
-    async setSettingItem(key, jsonValue) {
+    async setSettingItem(key, value, description = null, jsonEncoded = false) {
         let document = {
             id: key,
             settingKey: key,
-            settingValue: JSON.stringify(jsonValue)
+            settingValue: jsonEncoded ? JSON.stringify(value) : value,
+            description: description ? description : '',
+            jsonEncoded: jsonEncoded ? 'true' : 'false'
         };
         try {
             return !!await dbClient.createDocument(DATABASE_NAME, DB.SETTINGS.TableName,

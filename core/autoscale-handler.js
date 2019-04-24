@@ -329,10 +329,9 @@ module.exports = class AutoscaleHandler {
             // so in this case, should keep track of the update of default password.
             if (this._selfInstance.instanceId === this._masterInfo.instanceId &&
                     this.scalingGroupName === this.masterScalingGroupName) {
-                await this.platform.setSettingItem('fortigate-default-password', {
-                    value: this._selfInstance.instanceId,
-                    description: 'default password comes from the new elected master.'
-                });
+                await this.platform.setSettingItem('fortigate-default-password',
+                    this._selfInstance.instanceId,
+                    'default password comes from the new elected master.');
             }
             return '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
@@ -584,20 +583,160 @@ module.exports = class AutoscaleHandler {
     }
 
     async saveSubnetPairs(subnetPairs) {
-        return await this.platform.setSettingItem('subnets-pairs', subnetPairs);
+        return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true);
     }
 
-    async loadSettings() {
-        return await this.platform.getSettingItem('auto-scaling-group');
+    async loadAutoScalingSettings() {
+        let [desiredCapacity, minSize, maxSize, groupSetting] = Promise.all([
+            await this.platform.getSettingItem('scaling-group-desired-capacity'),
+            await this.platform.getSettingItem('scaling-group-min-size'),
+            await this.platform.getSettingItem('scaling-group-max-size'),
+            await this.platform.getSettingItem('auto-scaling-group')
+        ]);
+
+        if (!(desiredCapacity && minSize && maxSize) && groupSetting) {
+            return groupSetting;
+        }
+        return {desiredCapacity: desiredCapacity, minSize: minSize, maxSize: maxSize};
     }
 
-    async saveSettings(desiredCapacity, minSize, maxSize) {
-        let settingValues = {
-            desiredCapacity: desiredCapacity,
-            minSize: minSize,
-            maxSize: maxSize
-        };
-        return await this.platform.setSettingItem('auto-scaling-group', settingValues);
+    /**
+     * Save settings to DB. This function doesn't do value validation. The caller should be
+     * responsible for it.
+     * @param {Object} settings settings to save
+     */
+    async saveSettings(settings) {
+        let tasks = [], errorTasks = [];
+        for (let [key, value] of Object.entries(settings)) {
+            let keyName = null, description = null, jsonEncoded = false;
+            switch (key.toLowerCase()) {
+                case 'servicetype':
+                    // ignore service type
+                    break;
+                case 'desiredcapacity':
+                    keyName = 'scaling-group-desired-capacity';
+                    description = 'Scaling group desired capacity.';
+                    break;
+                case 'minsize':
+                    keyName = 'scaling-group-min-size';
+                    description = 'Scaling group min size.';
+                    break;
+                case 'maxsize':
+                    keyName = 'scaling-group-max-size';
+                    description = 'Scaling group max size.';
+                    break;
+                case 'resourcetagprefix':
+                    keyName = 'resource-tag-prefix';
+                    description = 'Resource tag prefix.';
+                    break;
+                case 'customidentifier':
+                    keyName = 'custom-id';
+                    description = 'Custom Identifier.';
+                    break;
+                case 'uniqueid':
+                    keyName = 'unique-id';
+                    description = 'Unique ID.';
+                    break;
+                case 'assetstoragename':
+                    keyName = 'asset-storage-name';
+                    description = 'Asset storage name.';
+                    break;
+                case 'assetstoragekeyprefix':
+                    keyName = 'asset-storage-key-prefix';
+                    description = 'Asset storage key prefix.';
+                    break;
+                case 'vpcid':
+                    keyName = 'vpc-id';
+                    description = 'VPC ID of the FortiGate Autoscale.';
+                    break;
+                case 'fortigatepsksecret':
+                    keyName = 'fortigate-psk-secret';
+                    description = 'The PSK for FortiGate Autoscale Synchronization.';
+                    break;
+                case 'fortigateadminport':
+                    keyName = 'fortigate-admin-port';
+                    description = 'The port number for administrative login to FortiGate.';
+                    break;
+                case 'fortigatesyncinterface':
+                    keyName = 'fortigate-sync-interface';
+                    description = 'The interface the FortiGate uses for configuration ' +
+                        'synchronization.';
+                    break;
+                case 'lifecyclehooktimeout':
+                    keyName = 'lifecycle-hook-timeout';
+                    description = 'The auto scaling group lifecycle hook timeout time in second.';
+                    break;
+                case 'heartbeatlosscount':
+                    keyName = 'heartbeat-loss-count';
+                    description = 'The FortiGate sync heartbeat loss count.';
+                    break;
+                case 'autoscalehandlerurl':
+                    keyName = 'autoscale-handler-url';
+                    description = 'The FortiGate Autoscale handler URL.';
+                    break;
+                case 'masterautoscalinggroupname':
+                    keyName = 'master-auto-scaling-group-name';
+                    description = 'The name of the master auto scaling group.';
+                    break;
+                case 'paygautoscalinggroupname':
+                    keyName = 'payg-auto-scaling-group-name';
+                    description = 'The name of the PAYG auto scaling group.';
+                    break;
+                case 'byolautoscalinggroupname':
+                    keyName = 'byol-auto-scaling-group-name';
+                    description = 'The name of the BYOL auto scaling group.';
+                    break;
+                case 'requiredconfigset':
+                    keyName = 'required-configset';
+                    description = 'A comma-delimited list of required configsets.';
+                    break;
+                case 'transitgatewayid':
+                    keyName = 'transit-gateway-id';
+                    description = 'The ID of the Transit Gateway the FortiGate Autoscale is ' +
+                    'attached to.';
+                    break;
+                case 'enabletransitgatewayvpn':
+                    keyName = 'enable-transit-gateway-vpn';
+                    value = value && value !== 'false' ? 'true' : 'false';
+                    description = 'Toggle ON / OFF the Transit Gateway VPN creation on each ' +
+                    'FortiGate instance';
+                    break;
+                case 'enablesecondnic':
+                    keyName = 'enable-second-nic';
+                    value = value && value !== 'false' ? 'true' : 'false';
+                    description = 'Toggle ON / OFF the secondary eni creation on each ' +
+                    'FortiGate instance';
+                    break;
+                case 'fortigateinterfacein':
+                    keyName = 'fortigate-interface-in';
+                    description = 'FortiGate interface to receive incoming traffic from Transit ' +
+                    'Gateway for security inspection.';
+                    break;
+                case 'fortigateinterfaceout':
+                    keyName = 'fortigate-interface-out';
+                    description = 'FortiGate interface to send outcoming traffic back to Transit ' +
+                    'Gateway after security inspection.';
+                    break;
+                case 'bgpasn':
+                    keyName = 'bgp-asn';
+                    description = 'The BGP Autonomous System Number of the Customer Gateway ' +
+                    'of each FortiGate instance in the Auto Scaling Group.';
+                    break;
+                default:
+                    break;
+            }
+            if (keyName) {
+                tasks.push(this.platform
+                    .setSettingItem(keyName, value, description, jsonEncoded)
+                    .catch(error => {
+                        this.logger.error(`failed to save setting for key: ${keyName}. ` +
+                            `Error: ${JSON.stringify(error)}`);
+                        errorTasks.push({key: keyName, value: value});
+                    }));
+            }
+        }
+        await Promise.all(tasks);
+        return errorTasks.length === 0;
     }
 
     async updateCapacity(desiredCapacity, minSize, maxSize) {

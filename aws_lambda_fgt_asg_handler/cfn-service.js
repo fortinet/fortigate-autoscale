@@ -32,37 +32,34 @@ exports.handler = async (event, context) => {
         logger.info('requested event:', event);
         let serviceType = event.ResourceProperties.ServiceType;
         if (event.RequestType === 'Create') {
-            let desiredCapacity = event.ResourceProperties.DesiredCapacity,
-                minSize = event.ResourceProperties.MinSize,
-                maxSize = event.ResourceProperties.MaxSize,
-                subnetPairs = [
-                    {
-                        subnetId: event.ResourceProperties.Subnet1,
-                        pairId: event.ResourceProperties.Subnet1Pair
-                    },
-                    {
-                        subnetId: event.ResourceProperties.Subnet2,
-                        pairId: event.ResourceProperties.Subnet2Pair
-                    }
-                ];
+            let subnetPairs = [];
             switch (serviceType) {
-                case 'initiate':
+                case 'initiateAutoscale':
                     // initiate
-                    await autoscaleHandler.initiate(desiredCapacity, minSize, maxSize,
+                    subnetPairs = [
+                        {
+                            subnetId: event.ResourceProperties.Subnet1,
+                            pairId: event.ResourceProperties.Subnet1Pair
+                        },
+                        {
+                            subnetId: event.ResourceProperties.Subnet2,
+                            pairId: event.ResourceProperties.Subnet2Pair
+                        }
+                    ];
+                    await autoscaleHandler.initiate(
+                        event.ResourceProperties.DesiredCapacity,
+                        event.ResourceProperties.MinSize,
+                        event.ResourceProperties.MaxSize,
                         subnetPairs);
                     await autoscaleHandler.restart();
                     break;
                 case 'saveSettings':
                     // save settings
-                    await autoscaleHandler.saveSettings(desiredCapacity, minSize, maxSize);
+                    await autoscaleHandler.saveSettings(
+                        Object.assign({}, event.ResourceProperties)
+                    );
                     break;
-                case 'saveSettingsAndRestart':
-                    // save settings
-                    await autoscaleHandler.saveSettings(desiredCapacity, minSize, maxSize);
-                    // start with saved settings
-                    await autoscaleHandler.restart();
-                    break;
-                case 'restart':
+                case 'restartAutoscale':
                     // set desired capacity & min size to 0 to terminate all existing instnaces
                     // note:
                     // elb will enter a draining state to drain its connections, this process take
@@ -74,20 +71,24 @@ exports.handler = async (event, context) => {
                     break;
                 case 'updateCapacity':
                     // manually change current desired capacity & adjust min size
-                    await autoscaleHandler.updateCapacity(desiredCapacity, minSize, maxSize);
+                    await autoscaleHandler.updateCapacity(
+                        event.ResourceProperties.DesiredCapacity,
+                        event.ResourceProperties.MinSize,
+                        event.ResourceProperties.MaxSize
+                    );
                     break;
-                case 'stop':
+                case 'stopAutoscale':
                     // do not need to respond to the stop service type while resource is creating
                     break;
                 default:
-                    throw new Error(`Unexpected request type: ${event.RequestType}`);
+                    throw new Error(`Unexpected service type: ${serviceType}`);
             }
         } else if (event.RequestType === 'Update') {
             // TODO: what actions are expected here?
         } else if (event.RequestType === 'Delete') {
             // only respond to the stop service while this resource is deleting
             // clean up the left over detached nic in case there are some
-            if (serviceType === 'stop') {
+            if (serviceType === 'stopAutoscale') {
                 let promiseEmitter = () => {
                         return Promise.resolve(autoscaleHandler.checkAutoScalingGroupState());
                     },
