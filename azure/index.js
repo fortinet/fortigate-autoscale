@@ -1098,6 +1098,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         try {
             await this.platform.init();
             // authenticate the calling instance
+            this.parseRequestInfo(event);
             if (!this._requestInfo.instanceId) {
                 context.res = this.proxyResponse(403, 'Instance id not provided.');
                 return;
