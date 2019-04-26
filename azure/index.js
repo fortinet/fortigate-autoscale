@@ -157,8 +157,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     if (!available) {
                         await createDatabase();
                         // filter out those irrelevant DB
-                        const irrelevantDBNames = ['LIFECYCLEITEM', 'NICATTACHMENT',
-                            'LICENSESTOCK', 'LICENSEUSAGE'];
+                        const irrelevantDBNames = ['LIFECYCLEITEM', 'NICATTACHMENT'];
                         let collectionNames = Object.keys(DB).filter(element => {
                             return !irrelevantDBNames.includes(element);
                         }).map(tableName => DB[tableName].TableName);
