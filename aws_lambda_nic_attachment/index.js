@@ -50,8 +50,8 @@ async function createTable(schema) {
             validator = result => {
                 return !!result;
             };
-        await ftgtAutoscaleAws.AutoScaleCore.sleep(3000);
-        await ftgtAutoscaleAws.AutoScaleCore.waitFor(promiseEmitter, validator);
+        await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(3000);
+        await ftgtAutoscaleAws.AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
         logger.info(`table (${schema.TableName}) created.`);
         return true;
     } catch (error) {

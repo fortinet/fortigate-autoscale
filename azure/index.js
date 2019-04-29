@@ -15,7 +15,8 @@ const RESOURCE_GROUP = process.env.RESOURCE_GROUP;
 const RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '';
 const DATABASE_NAME = `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
 const DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
-const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
+const moduleId = AutoScaleCore.Functions.uuidGenerator(
+    JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
 const HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
@@ -975,7 +976,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             };
 
         try {
-            masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+            masterInfo = await AutoScaleCore.Functions.waitFor(
+                    promiseEmitter, validator, 5000, counter);
         } catch (error) {
             logger.warn(error);
             // if error occurs, check who is holding a master election, if it is this instance,
@@ -1206,7 +1208,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 fileObjects.forEach(item => {
                     if (item) {
                         let algorithm = 'sha1',
-                            checksum = AutoScaleCore.calStringChecksum(item.content, algorithm);
+                            checksum = AutoScaleCore.Functions.calStringChecksum(
+                                item.content, algorithm);
                         // duplicate license
                         if (stockRecords.has(checksum)) {
                             logger.warn('updateLicenseStockRecord > warning: duplicate' +

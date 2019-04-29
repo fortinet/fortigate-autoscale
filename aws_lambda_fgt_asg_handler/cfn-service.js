@@ -105,8 +105,8 @@ exports.handler = async (event, context) => {
                 // this may take a significantly long time to wait for its fully stop
                 await autoscaleHandler.stop();
                 try {
-                    await autoscaleHandler.AutoScaleCore.waitFor(promiseEmitter, validator, 5000,
-                    counter);
+                    await autoscaleHandler.AutoScaleCore.Functions.waitFor(
+                        promiseEmitter, validator, 5000, counter);
                 } catch (error) {
                     logger.warn('error occurs while waiting for fully stop the auto scaling group',
                     error);

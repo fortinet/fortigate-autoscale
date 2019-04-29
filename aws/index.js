@@ -35,7 +35,7 @@ const
     RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '',
     SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
     DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
-    moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
+    moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems,
     HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
 
@@ -692,7 +692,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         result.NetworkInterfaces[0].Attachment &&
                         result.NetworkInterfaces[0].Attachment.Status === 'attached';
                 };
-            let result = await AutoScaleCore.waitFor(promiseEmitter, validator);
+            let result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
             logger.info('called attachNetworkInterface. ' +
                 `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`);
             return result.NetworkInterfaces[0].Attachment.AttachmentId;
@@ -735,7 +735,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         result.NetworkInterfaces[0] &&
                         result.NetworkInterfaces[0].Status === 'available';
                 };
-            let result = await AutoScaleCore.waitFor(promiseEmitter, validator);
+            let result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
             logger.info('called detachNetworkInterface. ' +
                 `done.(nic status: ${result.NetworkInterfaces[0].Status})`);
             return result.NetworkInterfaces[0].Status === 'available';
@@ -1162,7 +1162,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     };
 
                     try {
-                        data = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, 5);
+                        data = await AutoScaleCore.Functions.waitFor(
+                            promiseEmitter, validator, 5000, 5);
                     } catch (error) {
                         logger.error(JSON.stringify(error));
                         logger.warn('failed to tag the transit gateway attachment for vpn' +
@@ -1759,7 +1760,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             };
 
         try {
-            masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+            masterInfo = await AutoScaleCore.Functions.waitFor(
+                promiseEmitter, validator, 5000, counter);
         } catch (error) {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
