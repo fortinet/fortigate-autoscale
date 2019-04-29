@@ -262,11 +262,11 @@
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
-                    "AttributeName": "instanceId",
+                    "AttributeName": "id",
                     "AttributeType": "S"
                 }],
                 "KeySchema": [{
-                    "AttributeName": "instanceId",
+                    "AttributeName": "id",
                     "KeyType": "HASH"
                 }],
                 "ProvisionedThroughput": {

@@ -1,0 +1,204 @@
+#set vdom-exception for sync exclusions
+config system vdom-exception
+    edit 0
+        set object vpn.ipsec.phase1-interface
+    next
+    edit 0
+        set object vpn.ipsec.phase2-interface
+    next
+    edit 0
+        set object router.bgp
+    next
+    edit 0
+        set object router.route-map
+    next
+    edit 0
+        set object router.prefix-list
+    next
+    edit 0
+        set object firewall.ippool
+    next
+end
+
+#IPSec Tunnel #1
+#1: Internet Key Exchange (IKE) Configuration
+config vpn ipsec phase1-interface
+    edit "tgw-vpn-1"
+        set interface {@fortigate.interface.in}
+        set dhgrp 2
+        set proposal aes128-sha1
+        set keylife 28800
+        set remote-gw {ipsec_tunnel.vpn_gateway.tunnel_outside_address.ip_address}
+        set psksecret {ipsec_tunnel.ike.pre_shared_key}
+        set dpd-retryinterval 10
+    next
+end
+
+#2: IPSec Configuration
+config vpn ipsec phase2-interface
+    edit "tgw-vpn-1"
+        set phase1name "tgw-vpn-1"
+        set proposal aes128-sha1
+        set dhgrp 2
+        set keylifeseconds 3600
+    next
+end
+
+#3: Tunnel Interface Configuration
+config system interface
+    edit "tgw-vpn-1"
+        set ip {ipsec_tunnel.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
+        set allowaccess ping
+        set type tunnel
+        set tcp-mss 1379
+        set remote-ip {ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address} {ipsec_tunnel.vpn_gateway.tunnel_inside_address.network_mask}
+        set interface {@fortigate.interface.in}
+    next
+end
+
+#4: Border Gateway Protocol (BGP) Configuration
+config router bgp
+    set as {ipsec_tunnel.customer_gateway.bgp.asn}
+    set router-id {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address}
+    set ebgp-multipath enable
+    config neighbor
+        edit {ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address}
+            set capability-default-originate enable
+            set remote-as {ipsec_tunnel.vpn_gateway.bgp.asn}
+        next
+    end
+    config network
+        edit 1
+            set prefix {@vpc.CidrBlock}
+        next
+    end
+end
+
+config router prefix-list
+    edit "default_route"
+        config rule
+            edit 1
+                set prefix 0.0.0.0 0.0.0.0
+            next
+        end
+    next
+end
+
+#IPSec Tunnel #2
+#1: Internet Key Exchange (IKE) Configuration
+config vpn ipsec phase1-interface
+    edit "tgw-vpn-2"
+        set interface {@fortigate.interface.in}
+        set dhgrp 2
+        set proposal aes128-sha1
+        set keylife 28800
+        set remote-gw {ipsec_tunnel#1.vpn_gateway.tunnel_outside_address.ip_address}
+        set psksecret {ipsec_tunnel#1.ike.pre_shared_key}
+        set dpd-retryinterval 10
+    next
+end
+
+#2: IPSec Configuration
+config vpn ipsec phase2-interface
+    edit "tgw-vpn-2"
+        set phase1name "tgw-vpn-2"
+        set proposal aes128-sha1
+        set dhgrp 2
+        set keylifeseconds 3600
+    next
+end
+
+#3: Tunnel Interface Configuration
+config system interface
+    edit "tgw-vpn-1"
+        set ip {ipsec_tunnel#1.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
+        set allowaccess ping
+        set type tunnel
+        set tcp-mss 1379
+        set remote-ip {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address} {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.network_mask}
+        set interface {@fortigate.interface.in}
+    next
+end
+
+#4: Border Gateway Protocol (BGP) Configuration
+config router bgp
+    set as {ipsec_tunnel.customer_gateway.bgp.asn}
+    set router-id {ipsec_tunnel#1.customer_gateway.tunnel_outside_address.ip_address}
+    set ebgp-multipath enable
+    config neighbor
+        edit {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address}
+            set capability-default-originate enable
+            set remote-as {ipsec_tunnel#1.vpn_gateway.bgp.asn}
+        next
+    end
+    config network
+        edit 1
+            set prefix {@vpc.CidrBlock}
+        next
+    end
+end
+
+config router prefix-list
+    edit "default_route"
+        config rule
+            edit 1
+                set prefix 0.0.0.0 0.0.0.0
+            next
+        end
+    next
+end
+
+#Firewall Configuration (do this after the two tunnels have been set)
+#Firewall Address Configuration
+config firewall address
+    edit "transit-gateway-inline-10.0.0.0"
+        set subnet 10.0.0.0 255.255.0.0
+    next
+end
+
+config firewall addrgrp
+    edit "transit-gateway-inline"
+        set member "transit-gateway-inline-10.0.0.0"
+    next
+end
+
+config firewall address
+    edit "firewall-vpc-subnet-1"
+        set subnet {@vpc.subnet#0.CidrBlock}
+    next
+    edit "firewall-vpc-subnet-2"
+        set subnet {@vpc.subnet#1.CidrBlock}
+    next
+end
+
+config firewall addrgrp
+    edit "firewall-vpc-subnets"
+        set member "firewall-vpc-subnet-1" "firewall-vpc-subnet-2"
+    next
+end
+
+#Firewall Policy Configuration
+config firewall policy
+    edit 1
+        set name "from-transit-gateway-inline"
+        set srcintf "tgw-vpn-1" "tgw-vpn-2"
+        set dstintf {@fortigate.interface.in} {@fortigate.interface.out}
+        set srcaddr "transit-gateway-inline"
+        set dstaddr "firewall-vpc-subnets"
+        set action accept
+        set schedule "always"
+        set service "ALL"
+        set fsso disable
+    next
+    edit 2
+        set name "to-transit-gateway-inline"
+        set srcintf {@fortigate.interface.in} {@fortigate.interface.out}
+        set dstintf "tgw-vpn-1" "tgw-vpn-2"
+        set srcaddr "firewall-vpc-subnets"
+        set dstaddr "transit-gateway-inline"
+        set action accept
+        set schedule "always"
+        set service "ALL"
+        set fsso disable
+    next
+end

@@ -2,17 +2,17 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "This template creates a FortiGate auto scaling group and related components.",
     "Parameters": {
-        "DeploymentPackageS3BucketName": {
+        "S3BucketName": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
-        "DeploymentPackageS3KeyPrefix": {
+        "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
-"Description": "S3 key prefix for the deployment package. Key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
+            "Description": "S3 key prefix for the deployment package. Key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
         },
         "ResourceTagPrefix": {
             "Type": "String",
@@ -58,13 +58,25 @@
             "ConstraintDescription": "must be a valid EC2 instance type.",
             "Description": "Instance type to launch as FortiGate On-Demand instances. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
         },
+        "FortiOSVersion": {
+            "Type": "String",
+            "Default": "603",
+            "AllowedValues": [
+                "LATEST",
+                "620",
+                "604",
+                "603"
+            ],
+            "ConstraintDescription": "must be a valid FortiOS version from the selection.",
+            "Description": "Supported FortiOS versions."
+        },
         "KeyPairName": {
             "Type": "AWS::EC2::KeyPair::KeyName",
             "Description": "Amazon EC2 Key Pair for admin access."
         },
         "SecurityGroupId": {
             "Type": "String",
-            "Description": "The ID of the API Gateway for FortiGate to communicate with the Autoscale handling Lambda functions."
+            "Description": "The ID of the security group for each FortiGate in the auto scaling group."
         },
         "APIGatewayId": {
             "Type": "String",
@@ -142,13 +154,9 @@
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
             "Description": "The amount of time (in seconds) that can elapse before the FortiGate Autoscale lifecycle hook times out. Minimum is 60. Maximum is 3600."
         },
-        "HeartBeatLossCount": {
-            "Type": "Number",
-            "Default": 3,
-            "MinValue": 1,
-            "MaxValue": 65535,
-            "ConstraintDescription": "must be a valid number between 1 and 65535.",
-            "Description": "Number of consecutively lost heartbeats. When the Heartbeat loss count has been reached, the VM is deemed unhealthy and failover activities will commence."
+        "DependOnCondition": {
+            "Type": "String",
+            "Description": "A parameter for the parent CloudFormation stack to be able to create dependencies for the current stack on another resource. Not intended to be used in this stack."
         }
     },
     "Conditions": {
@@ -179,13 +187,17 @@
     "Mappings": {
         "FortiGateAutoScaleNameMap": {
             "FortiGateVersion": {
-                "LATEST": "FGTVM64PAYG603",
-                "603": "FGTVM64PAYG603"
+                "LATEST": "FGTVM64PAYG620",
+                "603": "FGTVM64PAYG603",
+                "604": "FGTVM64PAYG604",
+                "620": "FGTVM64PAYG620"
             }
         },
         "AWSAMIRegionMap": {
             "AMI": {
-                "FGTVM64PAYG603": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0200 (6.0.3) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-09dba22e5db2d4fb5.4"
+                "FGTVM64PAYG603": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0200 (6.0.3) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-09dba22e5db2d4fb5.4",
+                "FGTVM64PAYG604": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0231 (6.0.4) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-03aa5daa2a028ceba.4",
+                "FGTVM64PAYG620": "TODO: need to set correct info here."
             },
             "ap-northeast-1": {
                 "FGTVM64PAYG603": "ami-0bd9e6e0020928ef9"
@@ -227,10 +239,12 @@
                 "FGTVM64PAYG603": "ami-0a1f403f5e0cfa88e"
             },
             "us-west-1": {
-                "FGTVM64PAYG603": "ami-057300bd7e60ea2b2"
+                "FGTVM64PAYG603": "ami-057300bd7e60ea2b2",
+                "FGTVM64PAYG604": "ami-057300bd7e60ea2b2"
             },
             "us-west-2": {
-                "FGTVM64PAYG603": "ami-0ea3f14da73832fdc"
+                "FGTVM64PAYG603": "ami-0ea3f14da73832fdc",
+                "FGTVM64PAYG604": "ami-0ea3f14da73832fdc"
             },
             "us-gov-west-1": {
                 "FGTVM64PAYG603": "ami-ddf76dbc"
@@ -277,13 +291,13 @@
                             ],
                             "Resource": {
                                 "Fn::Sub": [
-                                    "arn:aws:s3:::${DeploymentPackageS3BucketName}/${DeploymentPackageS3KeyPrefix}*",
+                                    "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
                                     {
-                                        "DeploymentPackageS3BucketName": {
-                                            "Ref": "DeploymentPackageS3BucketName"
+                                        "S3BucketName": {
+                                            "Ref": "S3BucketName"
                                         },
-                                        "DeploymentPackageS3KeyPrefix": {
-                                            "Ref": "DeploymentPackageS3KeyPrefix"
+                                        "S3KeyPrefix": {
+                                            "Ref": "S3KeyPrefix"
                                         }
                                     }
                                 ]
@@ -354,7 +368,9 @@
                                 "Fn::FindInMap": [
                                     "FortiGateAutoScaleNameMap",
                                     "FortiGateVersion",
-                                    "LATEST"
+                                    {
+                                        "Ref": "FortiOSVersion"
+                                    }
                                 ]
                             }
                         ]
@@ -666,7 +682,7 @@
                 "ServiceToken": {
                     "Ref": "FgtAsgHandlerServiceArn"
                 },
-                "ServiceType": "stop",
+                "ServiceType": "stopAutoscale",
                 "DesiredCapacity": 0,
                 "MinSize": 0,
                 "MaxSize": 0
@@ -721,29 +737,21 @@
                 },
                 {
                     "Label": {
-                        "default": "Failover management configuration"
-                    },
-                    "Parameters": [
-                        "HeartBeatLossCount"
-                    ]
-                },
-                {
-                    "Label": {
                         "default": "Deployment package configuration"
                     },
                     "Parameters": [
-                        "DeploymentPackageS3BucketName",
-                        "DeploymentPackageS3KeyPrefix"
+                        "S3BucketName",
+                        "S3KeyPrefix"
                     ]
                 }
             ]
-        },
-        "Outputs": {
-            "AutoScalingGroupID": {
-                "Description": "FortiGate Autoscale Auto Scaling Group ID",
-                "Value": {
-                    "Ref": "FgtAutoScalingGroup"
-                }
+        }
+    },
+    "Outputs": {
+        "AutoScalingGroupName": {
+            "Description": "FortiGate Autoscale Auto Scaling Group Name",
+            "Value": {
+                "Ref": "FgtAutoScalingGroup"
             }
         }
     }

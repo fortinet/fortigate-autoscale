@@ -2,13 +2,13 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "This template creates a FortiGate Autoscale Handler Lambda function and an API Gateway.",
     "Parameters": {
-        "DeploymentPackageS3BucketName": {
+        "S3BucketName": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
-        "DeploymentPackageS3KeyPrefix": {
+        "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
@@ -34,6 +34,20 @@
             "AllowedPattern": "[A-Za-z0-9]+",
             "ConstraintDescription": "must only contain uppercase and lowercase letters and digits",
             "Description": "A random text suffix for the DynamoDB table name which can help ensure the DB table name is unique per region. Can only contain uppercase, lowercase letters, and digits. Max length is 8."
+        },
+        "HandlerScriptTimeout": {
+            "Type": "Number",
+            "Default": 300,
+            "MinValue": 300,
+            "MaxValue": 900,
+            "Description": "The Autoscale handler script timeout in seconds. Minimum is 300. Maximum is 900."
+        },
+        "ServiceScriptTimeout": {
+            "Type": "Number",
+            "Default": 900,
+            "MinValue": 300,
+            "MaxValue": 900,
+            "Description": "The CloudFormation service provider script timeout in seconds. Minimum is 300. Maximum is 900."
         },
         "VpcEndPoint": {
             "Type": "String",
@@ -67,6 +81,14 @@
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
             "Description": "The amount of time (in seconds) that can elapse before the FortiGate Autoscale lifecycle hook times out. Minimum is 60. Maximum is 3600."
+        },
+        "HeartBeatInterval": {
+            "Type": "Number",
+            "Default": 30,
+            "MinValue": 30,
+            "MaxValue": 90,
+            "ConstraintDescription": "must be a valid number between 30 and 90.",
+            "Description": "The amount of time (in seconds) for FortiGate to send a heartbeat to the Autoscale handler. Minimum is 30. Maximum is 90."
         },
         "HeartBeatLossCount": {
             "Type": "Number",
@@ -105,10 +127,10 @@
             "Properties": {
                 "Parameters": {
                     "S3BucketName": {
-                        "Ref": "DeploymentPackageS3BucketName"
+                        "Ref": "S3BucketName"
                     },
                     "S3KeyPrefix": {
-                        "Ref": "DeploymentPackageS3KeyPrefix"
+                        "Ref": "S3KeyPrefix"
                     },
                     "ObjectPaths": "functions/packages/fgt-asg-handler.zip"
                 },
@@ -124,10 +146,10 @@
                                 ]
                             },
                             "S3BucketName": {
-                                "Ref": "DeploymentPackageS3BucketName"
+                                "Ref": "S3BucketName"
                             },
                             "S3KeyPrefix": {
-                                "Ref": "DeploymentPackageS3KeyPrefix"
+                                "Ref": "S3KeyPrefix"
                             }
                         }
                     ]
@@ -409,7 +431,9 @@
                                     "ec2:DescribeVpcs",
                                     "ec2:AttachNetworkInterface",
                                     "ec2:DescribeNetworkInterfaces",
-                                    "ec2:CreateTags"
+                                    "ec2:CreateTags",
+                                    "ec2:DescribeVpcs",
+                                    "ec2:DescribeSubnets"
                                 ],
                                 "Resource": "*"
                             },
@@ -437,10 +461,10 @@
                                         "arn:aws:s3:::${bucketname}/${keyprefix}assets/configset/*",
                                         {
                                             "bucketname": {
-                                                "Ref": "DeploymentPackageS3BucketName"
+                                                "Ref": "S3BucketName"
                                             },
                                             "keyprefix": {
-                                                "Ref": "DeploymentPackageS3KeyPrefix"
+                                                "Ref": "S3KeyPrefix"
                                             }
                                         }
                                     ]
@@ -475,7 +499,9 @@
                     ]
                 },
                 "Handler": "index.AutoscaleHandler",
-                "Timeout": 300,
+                "Timeout": {
+                    "Ref": "HandlerScriptTimeout"
+                },
                 "Code": {
                     "S3Bucket": {
                         "Fn::GetAtt": [
@@ -535,14 +561,14 @@
                             "Ref": "VpcId"
                         },
                         "STACK_ASSETS_S3_BUCKET_NAME": {
-                            "Ref": "DeploymentPackageS3BucketName"
+                            "Ref": "S3BucketName"
                         },
                         "STACK_ASSETS_S3_KEY_PREFIX": {
                             "Fn::Sub": [
                                 "${KeyPrefix}assets",
                                 {
                                     "KeyPrefix": {
-                                        "Ref": "DeploymentPackageS3KeyPrefix"
+                                        "Ref": "S3KeyPrefix"
                                     }
                                 }
                             ]
@@ -557,6 +583,9 @@
                         },
                         "FORTIGATE_TRAFFIC_PORT": "",
                         "FORTIGATE_SYNC_INTERFACE": "port1",
+                        "HEART_BEAT_INTERVAL": {
+                            "Ref": "HeartBeatInterval"
+                        },
                         "HEART_BEAT_LOSS_COUNT": {
                             "Ref": "HeartBeatLossCount"
                         },
@@ -590,7 +619,7 @@
                                 ]
                             ]
                         },
-                        "ENABLE_SECOND_NIC": "false",
+                        "ENABLE_SECOND_NIC": "true",
                         "ENABLE_TGW_VPN": "true",
                         "TGW_ID": {
                             "Ref": "TransitGatewayId"
@@ -632,7 +661,9 @@
                     ]
                 },
                 "Handler": "cfn-service.handler",
-                "Timeout": 300,
+                "Timeout": {
+                    "Ref": "ServiceScriptTimeout"
+                },
                 "Code": {
                     "S3Bucket": {
                         "Fn::GetAtt": [
@@ -692,14 +723,14 @@
                             "Ref": "VpcId"
                         },
                         "STACK_ASSETS_S3_BUCKET_NAME": {
-                            "Ref": "DeploymentPackageS3BucketName"
+                            "Ref": "S3BucketName"
                         },
                         "STACK_ASSETS_S3_KEY_PREFIX": {
                             "Fn::Sub": [
                                 "${KeyPrefix}assets",
                                 {
                                     "KeyPrefix": {
-                                        "Ref": "DeploymentPackageS3KeyPrefix"
+                                        "Ref": "S3KeyPrefix"
                                     }
                                 }
                             ]
@@ -714,6 +745,9 @@
                         },
                         "FORTIGATE_TRAFFIC_PORT": "",
                         "FORTIGATE_SYNC_INTERFACE": "port1",
+                        "HEART_BEAT_INTERVAL": {
+                            "Ref": "HeartBeatInterval"
+                        },
                         "HEART_BEAT_LOSS_COUNT": {
                             "Ref": "HeartBeatLossCount"
                         },
@@ -747,7 +781,7 @@
                                 ]
                             ]
                         },
-                        "ENABLE_SECOND_NIC": "false",
+                        "ENABLE_SECOND_NIC": "true",
                         "ENABLE_TGW_VPN": "true",
                         "TGW_ID": {
                             "Ref": "TransitGatewayId"
@@ -802,7 +836,22 @@
                 "Ref": "FgtAsgApiGateway"
             }
         },
-        "FgtAsgHandlerFunctionName": {
+        "FgtAsgHandlerApiGatewayUrl": {
+            "Description": "API Gateway URL of the FortiGate Autoscale Handler",
+            "Value": {
+                "Fn::Sub": [
+                    "https://${gatewayId}.execute-api.${region}.amazonaws.com/prod/fgt-asg-handler",
+                    {
+                        "region": {
+                            "Ref": "AWS::Region"
+                        },
+                        "gatewayId": {
+                            "Ref": "FgtAsgApiGateway"
+                        }
+                    }
+                ]
+            }
+        },"FgtAsgHandlerFunctionName": {
             "Description": "FortiGate Autoscale handler function Name",
             "Value": {
                 "Ref": "FgtAsgLambdaFunctionAsgHandler"
@@ -846,6 +895,10 @@
                     "Arn"
                 ]
             }
+        },
+        "RequiredConfigsetList": {
+            "Description": "A comma-delimited list of required configset for the FortiGate Autoscale handling.",
+            "Value": ""
         }
     }
 }
