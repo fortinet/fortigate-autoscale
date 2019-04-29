@@ -10,12 +10,11 @@ const url = require('url');
 const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./azure-arm-client');
 const UNIQUE_ID = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '';
-const CUSTOM_ID = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '';
 const SUBSCRIPTION_ID = process.env.SUBSCRIPTION_ID;
 const RESOURCE_GROUP = process.env.RESOURCE_GROUP;
-const DATABASE_NAME = `${CUSTOM_ID ? `${CUSTOM_ID}-` : ''}` +
-    `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
-const DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
+const RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '';
+const DATABASE_NAME = `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
+const DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
@@ -562,13 +561,14 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    async setSettingItem(key, value, description = null, jsonEncoded = false) {
+    async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
         let document = {
             id: key,
             settingKey: key,
             settingValue: jsonEncoded ? JSON.stringify(value) : value,
             description: description ? description : '',
-            jsonEncoded: jsonEncoded ? 'true' : 'false'
+            jsonEncoded: jsonEncoded ? 'true' : 'false',
+            editable: editable ? 'true' : 'false'
         };
         try {
             return !!await dbClient.createDocument(DATABASE_NAME, DB.SETTINGS.TableName,
@@ -633,7 +633,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return !!await dbClient.createDocument(DATABASE_NAME, DB.VMINFOCACHE.TableName,
                 document, true);// create new or replace existing
         } catch (error) {
-            logger.warn('called setSettingItem > error: ', error, 'setSettingItem:', document);
+            logger.warn('called setVmInfoCache > error: ', error, 'setVmInfoCache:', document);
             return false;
         }
     }
@@ -930,7 +930,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleGetConfig(event) {
         logger.info('calling handleGetConfig');
         let config,
-            masterInfo;
+            masterInfo,
+            params = {};
 
         // FortiGate actually returns its vmId instead of instanceid
         const instanceId = this._requestInfo.instanceId;
@@ -994,14 +995,16 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             this._step = 'handler:getConfig:getMasterConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
-            config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl(event));
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl(event);
+            config = await this.getMasterConfig(params);
             logger.info('called handleGetConfig: returning master config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
-            config = await this.getSlaveConfig(masterInfo.primaryPrivateIpAddress,
-                await this.platform.getCallbackEndpointUrl(event));
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl(event);
+            params.masterIp = masterInfo.primaryPrivateIpAddress;
+            config = await this.getSlaveConfig(params);
             logger.info('called handleGetConfig: returning slave config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;

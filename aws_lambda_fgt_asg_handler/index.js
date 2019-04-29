@@ -6,6 +6,8 @@ Author: Fortinet
 */
 
 const ftgtAutoscaleAws = require('fortigate-autoscale-aws');
+// TODO:
+// for log output [object object] issues, check util.inspect(result, false, null) for more info
 const logger = new ftgtAutoscaleAws.AutoScaleCore.DefaultLogger(console);
 const autoscaleHandler = new ftgtAutoscaleAws.AwsAutoscaleHandler();
 if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
@@ -66,7 +68,14 @@ async function checkAutoScalingGroupState() {
 }
 
 async function cleanUp() {
-    return await autoscaleHandler.cleanUpAdditionalNics();
+    // if enabled secondary eni attachment, do the cleanup
+    if (process.env.ENABLE_SECOND_NIC) {
+        return await autoscaleHandler.cleanUpAdditionalNics();
+    }
+    // if enabled transit gateway vpn support, do the cleanup
+    if (process.env.ENABLE_TGW_VPN) {
+        return await autoscaleHandler.cleanUpTgwVpns();
+    }
 }
 
 exports.getLogger = () => {

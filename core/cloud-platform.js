@@ -251,7 +251,7 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
-    async setSettingItem(key, value, description = null, jsonEncoded = false) {
+    async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
         await this.throwNotImplementedException();
     }
 

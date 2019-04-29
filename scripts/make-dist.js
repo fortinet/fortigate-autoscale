@@ -389,7 +389,8 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
         rDirDist = path.resolve(REAL_PROJECT_ROOT, 'dist'),
         rTempDirPackage,
         zipFileName,
-        zipFilePath;
+        zipFilePath,
+        saveSource = !!(options && options.quickstart);
 
     let excludeList = ['local*', '.gitignore', 'autoscale_params.txt'];
     if (Array.isArray(options.excludeList)) {
@@ -405,7 +406,9 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
 
     // create /functions/packages & source folder
     await pm.makeDir(rTempDirFunctionPackages);
-    await pm.makeDir(rTempDirFunctionSources);
+    if (saveSource) {
+        await pm.makeDir(rTempDirFunctionSources);
+    }
 
     // fgt-asg-handler
     // remove aws-quickstart unwanted files
@@ -414,9 +417,12 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     // move the zip to functions/packages/
     await pm.moveSafe(fgtAsgHandlerTempDist.packagePath, rTempDirFunctionPackages);
     // move the source into functions/source/
-    rTempDirPackage = path.resolve(rTempDirFunctionSources, fgtAsgHandlerTempDist.packageName);
-    await pm.makeDir(rTempDirPackage);
-    await pm.moveSafe(fgtAsgHandlerTempDist.sourceDir, rTempDirPackage, {moveSourceFiles: true});
+    if (saveSource) {
+        rTempDirPackage = path.resolve(rTempDirFunctionSources, fgtAsgHandlerTempDist.packageName);
+        await pm.makeDir(rTempDirPackage);
+        await pm.moveSafe(fgtAsgHandlerTempDist.sourceDir, rTempDirPackage,
+            {moveSourceFiles: saveSource});
+    }
     // remove the temp file
     await fgtAsgHandlerTempDist.removeTempDir();
 
@@ -426,9 +432,12 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     // move the zip to functions/packages/
     await pm.moveSafe(nicAttachmentTempDist.packagePath, rTempDirFunctionPackages);
     // move the source into functions/source/
-    rTempDirPackage = path.resolve(rTempDirFunctionSources, nicAttachmentTempDist.packageName);
-    await pm.makeDir(rTempDirPackage);
-    await pm.moveSafe(nicAttachmentTempDist.sourceDir, rTempDirPackage, {moveSourceFiles: true});
+    if (saveSource) {
+        rTempDirPackage = path.resolve(rTempDirFunctionSources, nicAttachmentTempDist.packageName);
+        await pm.makeDir(rTempDirPackage);
+        await pm.moveSafe(nicAttachmentTempDist.sourceDir, rTempDirPackage,
+            {moveSourceFiles: saveSource});
+    }
     // remove the temp file
     nicAttachmentTempDist.removeTempDir();
 
@@ -444,9 +453,12 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
         // move the zip to functions/packages/
         await pm.moveSafe(fazHandlerTempDist.packagePath, rTempDirFunctionPackages);
         // move the source into functions/source/
-        rTempDirPackage = path.resolve(rTempDirFunctionSources, fazHandlerTempDist.packageName);
-        await pm.makeDir(rTempDirPackage);
-        await pm.moveSafe(fazHandlerTempDist.sourceDir, rTempDirPackage, {moveSourceFiles: true});
+        if (saveSource) {
+            rTempDirPackage = path.resolve(rTempDirFunctionSources, fazHandlerTempDist.packageName);
+            await pm.makeDir(rTempDirPackage);
+            await pm.moveSafe(fazHandlerTempDist.sourceDir, rTempDirPackage,
+                {moveSourceFiles: saveSource});
+        }
         // remove the temp file
         fazHandlerTempDist.removeTempDir();
     }

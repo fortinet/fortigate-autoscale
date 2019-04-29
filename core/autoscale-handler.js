@@ -145,6 +145,11 @@ module.exports = class AutoscaleHandler {
                 .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
                     process.env.FORTIGATE_INTERNAL_ELB_DNS ?
                         process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
+
+            if (process.env.HEART_BEAT_INTERVAL) {
+                baseConfig = baseConfig.replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'),
+                    process.env.HEART_BEAT_INTERVAL);
+            }
         }
         return baseConfig;
     }
@@ -331,7 +336,7 @@ module.exports = class AutoscaleHandler {
                     this.scalingGroupName === this.masterScalingGroupName) {
                 await this.platform.setSettingItem('fortigate-default-password',
                     this._selfInstance.instanceId,
-                    'default password comes from the new elected master.');
+                    'default password comes from the new elected master.', false, false);
             }
             return '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
@@ -389,12 +394,33 @@ module.exports = class AutoscaleHandler {
         return '';
     }
 
-    async getMasterConfig(callbackUrl) {
-        // no dollar sign in place holders
-        return await this._baseConfig.replace(/\{CALLBACK_URL}/, callbackUrl);
+    /**
+     * Parse a config with given vpn configuration object. This function should be implemented in
+     * a platform-specific one if needed.
+     * @param {String} config a config string to parse
+     * @param {Object} vpnConfiguration a configuration to parse
+     * @returns {String} a pasred config string
+     */
+    async parseVpnConfiguration(config, vpnConfiguration) { // eslint-disable-line no-unused-vars
+        return await config;
     }
 
-    async getSlaveConfig(masterIp, callbackUrl) {
+    async getMasterConfig(parameters) {
+        // no dollar sign in place holders
+        let config = '';
+        // parse TGW VPN
+        if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
+            // append vpnConfig to base config
+            config = await this.getConfigSet(parameters.vpnConfigSetName);
+            config = await this.parseVpnConfiguration(config, parameters.vpnConfiguration);
+            this._baseConfig += config;
+        }
+        config = this._baseConfig.replace(/\{CALLBACK_URL}/,parameters.callbackUrl ?
+            parameters.callbackUrl : '');
+        return config;
+    }
+
+    async getSlaveConfig(parameters) {
         const
             autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
@@ -403,29 +429,36 @@ module.exports = class AutoscaleHandler {
                 /set\s+psksecret\s+(.+)/.exec(autoScaleSection)
             ];
         const [syncInterface, pskSecret] = matches.map(m => m && m[1]),
-            apiEndpoint = callbackUrl;
-        let errorMessage;
+            apiEndpoint = parameters.callbackUrl;
+        let config = '', errorMessage;
         if (!apiEndpoint) {
             errorMessage = 'Api endpoint is missing';
         }
-        if (!masterIp) {
+        if (!parameters.masterIp) {
             errorMessage = 'Master ip is missing';
         }
         if (!pskSecret) {
             errorMessage = 'psksecret is missing';
         }
-        if (!pskSecret || !apiEndpoint || !masterIp) {
+        if (!pskSecret || !apiEndpoint || !parameters.masterIp) {
             throw new Error(`Base config is invalid (${errorMessage}): ${
                 JSON.stringify({
-                    syncInterface,
-                    apiEndpoint,
-                    masterIp,
+                    syncInterface: syncInterface,
+                    apiEndpoint: apiEndpoint,
+                    masterIp: parameters.masterIp,
                     pskSecret: pskSecret && typeof pskSecret
                 })}`);
         }
+        // parse TGW VPN
+        if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
+            // append vpnConfig to base config
+            config = await this.getConfigSet(parameters.vpnConfigSetName);
+            config = await this.parseVpnConfiguration(config, parameters.vpnConfiguration);
+            this._baseConfig += config;
+        }
         return await this._baseConfig.replace(new RegExp('set role master', 'gm'),
-                `set role slave\n    set master-ip ${masterIp}`)
-            .replace(new RegExp('{CALLBACK_URL}', 'gm'), callbackUrl);
+                `set role slave\n    set master-ip ${parameters.masterIp}`)
+            .replace(new RegExp('{CALLBACK_URL}', 'gm'), parameters.callbackUrl);
     }
 
     async checkMasterElection() {
@@ -583,15 +616,15 @@ module.exports = class AutoscaleHandler {
     }
 
     async saveSubnetPairs(subnetPairs) {
-        return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true);
+        return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true, false);
     }
 
     async loadAutoScalingSettings() {
-        let [desiredCapacity, minSize, maxSize, groupSetting] = Promise.all([
-            await this.platform.getSettingItem('scaling-group-desired-capacity'),
-            await this.platform.getSettingItem('scaling-group-min-size'),
-            await this.platform.getSettingItem('scaling-group-max-size'),
-            await this.platform.getSettingItem('auto-scaling-group')
+        let [desiredCapacity, minSize, maxSize, groupSetting] = await Promise.all([
+            this.platform.getSettingItem('scaling-group-desired-capacity'),
+            this.platform.getSettingItem('scaling-group-min-size'),
+            this.platform.getSettingItem('scaling-group-max-size'),
+            this.platform.getSettingItem('auto-scaling-group')
         ]);
 
         if (!(desiredCapacity && minSize && maxSize) && groupSetting) {
@@ -608,7 +641,7 @@ module.exports = class AutoscaleHandler {
     async saveSettings(settings) {
         let tasks = [], errorTasks = [];
         for (let [key, value] of Object.entries(settings)) {
-            let keyName = null, description = null, jsonEncoded = false;
+            let keyName = null, description = null, jsonEncoded = false, editable = false;
             switch (key.toLowerCase()) {
                 case 'servicetype':
                     // ignore service type
@@ -616,38 +649,47 @@ module.exports = class AutoscaleHandler {
                 case 'desiredcapacity':
                     keyName = 'scaling-group-desired-capacity';
                     description = 'Scaling group desired capacity.';
+                    editable = true;
                     break;
                 case 'minsize':
                     keyName = 'scaling-group-min-size';
                     description = 'Scaling group min size.';
+                    editable = true;
                     break;
                 case 'maxsize':
                     keyName = 'scaling-group-max-size';
                     description = 'Scaling group max size.';
+                    editable = true;
                     break;
                 case 'resourcetagprefix':
                     keyName = 'resource-tag-prefix';
                     description = 'Resource tag prefix.';
+                    editable = false;
                     break;
                 case 'customidentifier':
                     keyName = 'custom-id';
                     description = 'Custom Identifier.';
+                    editable = false;
                     break;
                 case 'uniqueid':
                     keyName = 'unique-id';
                     description = 'Unique ID.';
+                    editable = false;
                     break;
                 case 'assetstoragename':
                     keyName = 'asset-storage-name';
                     description = 'Asset storage name.';
+                    editable = false;
                     break;
                 case 'assetstoragekeyprefix':
                     keyName = 'asset-storage-key-prefix';
                     description = 'Asset storage key prefix.';
+                    editable = false;
                     break;
                 case 'vpcid':
                     keyName = 'vpc-id';
                     description = 'VPC ID of the FortiGate Autoscale.';
+                    editable = false;
                     break;
                 case 'fortigatepsksecret':
                     keyName = 'fortigate-psk-secret';
@@ -661,73 +703,92 @@ module.exports = class AutoscaleHandler {
                     keyName = 'fortigate-sync-interface';
                     description = 'The interface the FortiGate uses for configuration ' +
                         'synchronization.';
+                    editable = true;
                     break;
                 case 'lifecyclehooktimeout':
                     keyName = 'lifecycle-hook-timeout';
                     description = 'The auto scaling group lifecycle hook timeout time in second.';
+                    editable = true;
+                    break;
+                case 'heartbeatinterval':
+                    keyName = 'heartbeat-interval';
+                    description = 'The FortiGate sync heartbeat interval in second.';
+                    editable = true;
                     break;
                 case 'heartbeatlosscount':
                     keyName = 'heartbeat-loss-count';
                     description = 'The FortiGate sync heartbeat loss count.';
+                    editable = true;
                     break;
                 case 'autoscalehandlerurl':
                     keyName = 'autoscale-handler-url';
                     description = 'The FortiGate Autoscale handler URL.';
+                    editable = false;
                     break;
                 case 'masterautoscalinggroupname':
                     keyName = 'master-auto-scaling-group-name';
                     description = 'The name of the master auto scaling group.';
+                    editable = false;
                     break;
                 case 'paygautoscalinggroupname':
                     keyName = 'payg-auto-scaling-group-name';
                     description = 'The name of the PAYG auto scaling group.';
+                    editable = false;
                     break;
                 case 'byolautoscalinggroupname':
                     keyName = 'byol-auto-scaling-group-name';
                     description = 'The name of the BYOL auto scaling group.';
+                    editable = false;
                     break;
                 case 'requiredconfigset':
                     keyName = 'required-configset';
                     description = 'A comma-delimited list of required configsets.';
+                    editable = false;
                     break;
                 case 'transitgatewayid':
                     keyName = 'transit-gateway-id';
                     description = 'The ID of the Transit Gateway the FortiGate Autoscale is ' +
                     'attached to.';
+                    editable = false;
                     break;
                 case 'enabletransitgatewayvpn':
                     keyName = 'enable-transit-gateway-vpn';
                     value = value && value !== 'false' ? 'true' : 'false';
                     description = 'Toggle ON / OFF the Transit Gateway VPN creation on each ' +
                     'FortiGate instance';
+                    editable = false;
                     break;
                 case 'enablesecondnic':
                     keyName = 'enable-second-nic';
                     value = value && value !== 'false' ? 'true' : 'false';
                     description = 'Toggle ON / OFF the secondary eni creation on each ' +
                     'FortiGate instance';
+                    editable = false;
                     break;
-                case 'fortigateinterfacein':
+                case 'fgtinterfacetrafficin':
                     keyName = 'fortigate-interface-in';
                     description = 'FortiGate interface to receive incoming traffic from Transit ' +
                     'Gateway for security inspection.';
+                    editable = true;
                     break;
-                case 'fortigateinterfaceout':
+                case 'fgtinterfacetrafficout':
                     keyName = 'fortigate-interface-out';
                     description = 'FortiGate interface to send outcoming traffic back to Transit ' +
                     'Gateway after security inspection.';
+                    editable = true;
                     break;
                 case 'bgpasn':
                     keyName = 'bgp-asn';
                     description = 'The BGP Autonomous System Number of the Customer Gateway ' +
                     'of each FortiGate instance in the Auto Scaling Group.';
+                    editable = true;
                     break;
                 default:
                     break;
             }
             if (keyName) {
                 tasks.push(this.platform
-                    .setSettingItem(keyName, value, description, jsonEncoded)
+                    .setSettingItem(keyName, value, description, jsonEncoded, editable)
                     .catch(error => {
                         this.logger.error(`failed to save setting for key: ${keyName}. ` +
                             `Error: ${JSON.stringify(error)}`);
@@ -751,6 +812,7 @@ module.exports = class AutoscaleHandler {
     async resetMasterElection() {
         this.logger.info('calling resetMasterElection');
         try {
+            this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME);
             await this.platform.removeMasterRecord();
             this.logger.info('called resetMasterElection. done.');
             return true;
@@ -833,9 +895,13 @@ module.exports = class AutoscaleHandler {
     }
 
     setScalingGroup(master, self) {
-        this.masterScalingGroupName = master;
-        this.platform.setMasterScalingGroup(master);
-        this.scalingGroupName = self;
-        this.platform.setScalingGroup(self);
+        if (master) {
+            this.masterScalingGroupName = master;
+            this.platform.setMasterScalingGroup(master);
+        }
+        if (self) {
+            this.scalingGroupName = self;
+            this.platform.setScalingGroup(self);
+        }
     }
 };

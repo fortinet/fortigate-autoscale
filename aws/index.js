@@ -8,6 +8,7 @@ exports = module.exports;
 const path = require('path');
 const AWS = require('aws-sdk');
 const AutoScaleCore = require('fortigate-autoscale-core');
+const Xml2js = require('xml2js');
 
 // lock the API versions
 AWS.config.apiVersions = {
@@ -21,16 +22,19 @@ AWS.config.apiVersions = {
 
 const
     EXPIRE_LIFECYCLE_ENTRY = (process.env.EXPIRE_LIFECYCLE_ENTRY || 60 * 60) * 1000,
+    ENABLE_SECOND_NIC = process.env.ENABLE_SECOND_NIC &&
+        process.env.ENABLE_SECOND_NIC.trim().toLowerCase() === 'true',
+    ENABLE_TGW_VPN = process.env.ENABLE_TGW_VPN &&
+        process.env.ENABLE_TGW_VPN.trim().toLowerCase() === 'true',
     autoScaling = new AWS.AutoScaling(),
     dynamodb = new AWS.DynamoDB(),
     docClient = new AWS.DynamoDB.DocumentClient(),
     ec2 = new AWS.EC2(),
     apiGateway = new AWS.APIGateway(),
     s3 = new AWS.S3(),
-    UNIQUE_ID = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '',
-    CUSTOM_ID = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '',
+    RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '',
     SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
-    DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID),
+    DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
     moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems,
     HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
@@ -315,14 +319,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         const params = {
             TableName: DB.ELECTION.TableName,
             Key: {
-                asgName: this.scalingGroupName
+                asgName: this.masterScalingGroupName
             },
             ConditionExpression: '#AsgName = :asgName',
             ExpressionAttributeNames: {
                 '#AsgName': 'asgName'
             },
             ExpressionAttributeValues: {
-                ':asgName': this.scalingGroupName
+                ':asgName': this.masterScalingGroupName
             }
         };
         return await docClient.delete(params).promise();
@@ -600,7 +604,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     async createNetworkInterface(parameters) {
         try {
-            logger.info('called createNetworkInterface');
+            logger.info('calling createNetworkInterface');
             let result = await ec2.createNetworkInterface(parameters).promise();
             // create a tag
             if (result && result.NetworkInterface) {
@@ -609,8 +613,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         result.NetworkInterface.NetworkInterfaceId
                     ],
                     Tags: [{
-                        Key: 'FortiGateAutoScaleNicAttachment',
-                        Value: `${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`
+                        Key: 'FortiGateAutoscaleNicAttachment',
+                        Value: RESOURCE_TAG_PREFIX
+                    },{
+                        Key: 'Name',
+                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-instance-nic2`
+                    },{
+                        Key: 'ResourceGroup',
+                        Value: RESOURCE_TAG_PREFIX
                     }]
                 };
                 await ec2.createTags(params).promise();
@@ -846,20 +856,24 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      * @param {any} value the value
      * @param {String} description the description
      * @param {Boolean} jsonEncoded set to true if value needs to store as json encoded
+     * @param {Boolean} editable set to true if this setting is allowed to change
      */
-    async setSettingItem(key, value, description = null, jsonEncoded = false) {
+    async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
         let params = {
             TableName: DB.SETTINGS.TableName,
             Key: { settingKey: key},
             ExpressionAttributeNames: {
                 '#settingValue': 'settingValue',
-                '#jsonEncoded': 'jsonEncoded'
+                '#jsonEncoded': 'jsonEncoded',
+                '#editable': 'editable'
             },
             ExpressionAttributeValues: {
                 ':settingValue': jsonEncoded ? JSON.stringify(value) : value,
-                ':jsonEncoded': jsonEncoded ? 'true' : 'false'
+                ':jsonEncoded': jsonEncoded ? 'true' : 'false',
+                ':editable': editable ? 'true' : 'false'
             },
-            UpdateExpression: 'SET #settingValue = :settingValue, #jsonEncoded = :jsonEncoded'
+            UpdateExpression: 'SET #settingValue = :settingValue, #jsonEncoded = :jsonEncoded' +
+            ', #editable = :editable'
         };
         if (description !== null) {
             params.ExpressionAttributeNames['#description'] = 'description';
@@ -871,13 +885,24 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     /** @override */
     async getBlobFromStorage(parameters) {
+        let content = '';
+        // DEBUG:
+        // for local debugging use, the next lines get files from local file system instead
+        if (process.env.DEBUG_MODE === 'true') {
+            const fs = require('fs');
+            content = fs.readFileSync(path.resolve(process.cwd(),
+            'aws_cloudformation', 'assets', 'configset', parameters.fileName));
+            return {
+                content: content.toString()
+            };
+        }
         let data = await s3.getObject({
             Bucket: process.env.STACK_ASSETS_S3_BUCKET_NAME,
             Key: path.join(process.env.STACK_ASSETS_S3_KEY_PREFIX, parameters.path,
                 parameters.fileName)
         }).promise();
 
-        let content = data && data.Body && data.Body.toString('utf8');
+        content = data && data.Body && data.Body.toString('utf8');
         return {
             content: content
         };
@@ -902,7 +927,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async saveLogToDb(log) {
         let timestamp = Date.now(),
             document = {
-                id: `${CUSTOM_ID}-LOG-${UNIQUE_ID}`,
+                id: `${RESOURCE_TAG_PREFIX}-LOG-${timestamp}`,
                 logContent: typeof log === 'string' ? log : JSON.stringify(log),
                 timestamp: timestamp
             };
@@ -992,6 +1017,352 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
         } catch (error) {
             return false;
+        }
+    }
+
+    async createCustomerGateway(parameters) {
+        try {
+            logger.info('calling createCustomerGateway');
+            let params = {
+                    BgpAsn: parameters.bgpAsn,
+                    PublicIp: parameters.publicIp,
+                    Type: parameters.type ? parameters.type : 'ipsec.1'
+                },
+                result = await ec2.createCustomerGateway(params).promise();
+            if (result && result.CustomerGateway) {
+                params = {
+                    Resources: [
+                        result.CustomerGateway.CustomerGatewayId
+                    ],
+                    Tags: [{
+                        Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                        Value: RESOURCE_TAG_PREFIX
+                    },{
+                        Key: 'Name',
+                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                        `cgw-${parameters.publicIp}`
+                    },{
+                        Key: 'ResourceGroup',
+                        Value: RESOURCE_TAG_PREFIX
+                    }]
+                };
+                await ec2.createTags(params).promise();
+            }
+            logger.info('called createCustomerGateway');
+            return result && result.CustomerGateway;
+        } catch (error) {
+            logger.warn(`called createCustomerGateway. failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async deleteCustomerGateway(parameters) {
+        try {
+            logger.info('calling deleteCustomerGateway');
+            let params;
+            params = {
+                CustomerGatewayId: parameters.customerGatewayId
+            };
+            await ec2.deleteCustomerGateway(params).promise();
+            logger.info('called deleteCustomerGateway');
+            return true;
+        } catch (error) {
+            logger.warn(`called deleteCustomerGateway. failed > error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async createVpnConnection(parameters) {
+        try {
+            logger.info('calling createVpnConnection');
+            let params;
+            params = {
+                CustomerGatewayId: parameters.customerGatewayId,
+                Type: parameters.type,
+                Options: {
+                    StaticRoutesOnly: false
+                }
+            };
+            if (parameters.transitGatewayId) {
+                params.TransitGatewayId = parameters.transitGatewayId;
+            }
+            let result = await ec2.createVpnConnection(params).promise();
+            if (result && result.VpnConnection) {
+                // tag the vpnconnection
+                params = {
+                    Resources: [
+                        result.VpnConnection.VpnConnectionId
+                    ],
+                    Tags: [{
+                        Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                        Value: RESOURCE_TAG_PREFIX
+                    },{
+                        Key: 'Name',
+                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                        `vpn-${parameters.publicIp}`
+                    },{
+                        Key: 'ResourceGroup',
+                        Value: RESOURCE_TAG_PREFIX
+                    }]
+                };
+                logger.info('creating tags on the vpnconnection. tags: ', JSON.stringify(params));
+                await ec2.createTags(params).promise();
+                // if this vpn is created for a transit gateway, tag the tgw attachment
+                // describe the tgw attachment
+                // NOTE: it might not be accessible immediately after the vpn connection is created
+                // wait for it
+
+                if (parameters.transitGatewayId) {
+                    let vpnConnectionId = result.VpnConnection.VpnConnectionId, tgwAttachment, data;
+                    logger.info('describing transit gateway attachment' +
+                        `(vpn connection: ${vpnConnectionId}).`);
+                    params = {
+                        Filters: [
+                            {
+                                Name: 'resource-id',
+                                Values: [
+                                    vpnConnectionId
+                                ]
+                            },
+                            {
+                                Name: 'transit-gateway-id',
+                                Values: [
+                                    parameters.transitGatewayId
+                                ]
+                            }
+                        ]
+                    };
+                    let promiseEmitter = params => {
+                        let promise = ec2.describeTransitGatewayAttachments(params).promise();
+                        promise.catch(error => {
+                            logger.warn('error in describeTransitGatewayAttachments ' +
+                                `>${JSON.stringify(error)}`);
+                        });
+                        return promise;
+                    };
+                    let validator = result => {
+                        logger.debug(`TransitGatewayAttachments: ${JSON.stringify(result)}`);
+                        if (result && result.TransitGatewayAttachments &&
+                            result.TransitGatewayAttachments.length > 0) {
+                            // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
+                            // ec2.describeTransitGatewayAttachments cannot properly filter resource
+                            // by resource-id. instead, it always return all resources so we must
+                            // do the filtering in the function here.
+                            // eslint-disable-next-line max-len
+                            // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
+                            let attachmentFound = null;
+                            attachmentFound = result.TransitGatewayAttachments.find(attachment => {
+                                return attachment.ResourceId === vpnConnectionId &&
+                                attachment.TransitGatewayId === parameters.transitGatewayId;
+                            });
+                            logger.debug(`attachmentFound: ${JSON.stringify(attachmentFound)}`);
+                            return !!attachmentFound;
+                        }
+                        return false;
+                    };
+
+                    try {
+                        data = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, 5);
+                    } catch (error) {
+                        logger.error(JSON.stringify(error));
+                        logger.warn('failed to tag the transit gateway attachment for vpn' +
+                        `connetion (id: ${vpnConnectionId}). skip tagging it.`);
+                    }
+                    logger.info('transit gateway attachment info: ', JSON.stringify(data));
+                    if (data) {
+                        // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
+                        // ec2.describeTransitGatewayAttachments cannot properly filter resource
+                        // by resource-id. instead, it always return all resources so we must
+                        // do the filtering in the function here.
+                        // eslint-disable-next-line max-len
+                        // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
+                        tgwAttachment = data.TransitGatewayAttachments.find(attachment => {
+                            return attachment.ResourceId === vpnConnectionId &&
+                                attachment.TransitGatewayId === parameters.transitGatewayId;
+                        });
+                        if (tgwAttachment) {
+                            params = {
+                                Resources: [
+                                    tgwAttachment.TransitGatewayAttachmentId
+                                ],
+                                Tags: [{
+                                    Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                                    Value: RESOURCE_TAG_PREFIX
+                                },{
+                                    Key: 'Name',
+                                    Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                                    `tgw-attachment-vpn-${parameters.publicIp}`
+                                },{
+                                    Key: 'ResourceGroup',
+                                    Value: RESOURCE_TAG_PREFIX
+                                }]
+                            };
+                            logger.info('creating tags on attachment. tags: ',
+                                JSON.stringify(params));
+                            await ec2.createTags(params).promise();
+                        }
+                    }
+                }
+            }
+            logger.info('called createVpnConnection');
+            return result && result.VpnConnection;
+        } catch (error) {
+            logger.warn(`called createVpnConnection. failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async deleteVpnConnection(parameters) {
+        try {
+            logger.info('calling deleteVpnConnection');
+            let params;
+            params = {
+                VpnConnectionId: parameters.vpnConnectionId
+            };
+            await ec2.deleteVpnConnection(params).promise();
+            logger.info('called deleteVpnConnection');
+            return true;
+        } catch (error) {
+            logger.warn(`called deleteVpnConnection. failed > error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async getTgwVpnAttachmentRecord(instance) {
+        let params = {
+            TableName: DB.VPNATTACHMENT.TableName,
+            Key: {
+                id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`
+            }
+        };
+        try {
+            let result = await docClient.get(params).promise();
+            if (result && result.Item) {
+                // convert CustomerGatewayConfiguration raw data (JSON string) into object
+                if (result.Item.customerGatewayConfiguration) {
+                    result.Item.customerGatewayConfiguration =
+                    JSON.parse(result.Item.customerGatewayConfiguration);
+                }
+            }
+            return result && result.Item;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async updateTgwVpnAttachmentRecord(instance, vpnConnection) {
+        logger.info('calling updateTgwVpnAttachmentRecord');
+        let params = {
+            Key: {
+                id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`
+            },
+            TableName: DB.VPNATTACHMENT.TableName
+        };
+
+        let parseConfiguration = configuration => {
+            return new Promise((resolve, reject) => {
+                let xmlParser = new Xml2js.Parser({trim: true});
+                xmlParser.parseString(configuration, (err, result) => {
+                    if (err) {
+                        reject(err);
+                    }
+                    resolve(result);
+                });
+            });
+        };
+        let configuration = await parseConfiguration(vpnConnection.CustomerGatewayConfiguration);
+        params.Item = {
+            id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`,
+            instanceId: instance.instanceId,
+            publicIp: instance.primaryPublicIpAddress,
+            transitGatewayId: vpnConnection.TransitGatewayId,
+            customerGatewayId: vpnConnection.CustomerGatewayId,
+            vpnConnectionId: vpnConnection.VpnConnectionId,
+            customerGatewayConfiguration: JSON.stringify(configuration)
+        };
+        params.ConditionExpression = 'attribute_not_exists(id)';
+        let result = await docClient.put(params).promise();
+        logger.info('called updateTgwVpnAttachmentRecord');
+        return result;
+    }
+
+    async deleteTgwVpnAttachmentRecord(instance) {
+        logger.info('calling deleteTgwVpnAttachmentRecord');
+        let params = {
+            TableName: DB.VPNATTACHMENT.TableName,
+            Key: {
+                id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`
+            }
+        };
+        try {
+            let result = await docClient.delete(params).promise();
+            logger.info('called deleteTgwVpnAttachmentRecord');
+            return result;
+        } catch (error) {
+            logger.error(`called deleteTgwVpnAttachmentRecord > error: ${JSON.stringify(error)}`);
+            return error;
+        }
+    }
+
+    /* eslint-disable max-len */
+    /**
+     * Get information about a VPC by the given parameters.
+     * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeVpcs-property
+     * @param {Object} parameters parameters accepts: vpcId
+     */
+    /* eslint-enable max-len */
+    async describeVpc(parameters) {
+        logger.info('calling describeVpc');
+        if (parameters && parameters.vpcId) {
+            let params = {
+                VpcIds: [parameters.vpcId]
+            };
+            const result = await ec2.describeVpcs(params).promise();
+            if (result && result.Vpcs && result.Vpcs.length > 0) {
+                logger.info('called describeVpc, result: ' +
+                    `${result ? JSON.stringify(result) : 'null'}`);
+                return result.Vpcs[0];
+            }
+        }
+        logger.warn(`called describeVpc, vpc (id: ${parameters.vpcId}) not found.`);
+    }
+
+    /* eslint-disable max-len */
+    /**
+     * Get information about a Subnet by the given parameters.
+     * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeSubnets-property
+     * @param {Object} parameters parameters accepts: vpcId,
+     * subnetId (a single subnet id),subnetIds(an array of subnetId)
+     */
+    /* eslint-enable max-len */
+    async describeSubnet(parameters) {
+        logger.info('calling describeSubnet');
+        let params = {};
+        if (parameters && parameters.vpcId) {
+            params.Filters = [{
+                Name: 'vpc-id',
+                Values: [parameters.vpcId]
+            }];
+        }
+        if (parameters && parameters.subnetIds && Array.isArray(parameters.subnetIds)) {
+            params.SubnetIds = parameters.subnetIds;
+        }
+        if (parameters && parameters.subnetId) {
+            if (!Array.isArray(params.SubnetIds)) {
+                params.SubnetIds = [];
+            }
+            if (!params.SubnetIds.includes(params.subnetId)) {
+                params.SubnetIds.push(parameters.subnetId);
+            }
+        }
+        const result = await ec2.describeSubnets(params).promise();
+        if (result && result.Subnets && result.Subnets.length > 0) {
+            logger.info('called describeSubnet, result: ' +
+                `${result ? JSON.stringify(result) : 'null'}`);
+            return parameters.subnetId ? result.Subnets[0] : result.Subnets;
+        } else {
+            logger.warn('called describeSubnet, subnet not found. ' +
+            `params: ${JSON.stringify(parameters)}`);
         }
     }
 
@@ -1151,7 +1522,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-enable max-len */
     async handleAutoScalingEvent(event) {
         logger.info(`calling handleAutoScalingEvent: ${event['detail-type']}`);
-        let result;
+        let result, errorTasks = [], tasks = [];
         switch (event['detail-type']) {
             case 'EC2 Instance-launch Lifecycle Action':
                 if (event.detail.LifecycleTransition === 'autoscaling:EC2_INSTANCE_LAUNCHING') {
@@ -1164,18 +1535,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
                     await this.platform.cleanUpDbLifeCycleActions();
                     result = await this.handleTerminatingInstanceHook(event);
-
                 }
                 break;
             case 'EC2 Instance Launch Successful':
-                // attach nic2
-                this._selfInstance = this._selfInstance ||
-                    await this.platform.describeInstance({
-                        instanceId: event.detail.EC2InstanceId
-                    });
-                this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME,
-                    event.detail.AutoScalingGroupName);
-                result = await this.handleNicAttachment(event);
+                result = true;
                 break;
             case 'EC2 Instance Terminate Successful':
                 // remove master record if this instance is the elected master
@@ -1188,13 +1551,20 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     this._masterRecord.instanceId === event.detail.EC2InstanceId) {
                     await this.platform.removeMasterRecord();
                 }
-                // attach nic2
-                result = await this.handleNicDetachment(event);
+                // detach nic2
+                if (this._selfInstance && ENABLE_SECOND_NIC) {
+                    tasks.push(this.handleNicDetachment(event).catch(() => {
+                        errorTasks.push('handleNicDetachment');
+                    }));
+                }
+                await Promise.all(tasks);
+                result = errorTasks.length === 0 && !!this._selfInstance;
                 // remove monitor record
                 await this.removeInstanceFromMonitor(event.detail.EC2InstanceId);
                 break;
             default:
                 logger.warn(`Ignore autoscaling event type: ${event['detail-type']}`);
+                result = true;
                 break;
         }
         return result;
@@ -1218,14 +1588,36 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async handleLaunchingInstanceHook(event) {
         logger.info('calling handleLaunchingInstanceHook');
-        let result;
-        // add an additional nic to instance
-        result = await this.handleNicAttachment(event);
+        const instanceId = event.detail.EC2InstanceId;
+        let lifecycleItem, result, errorTasks = [], tasks = [];
+        this._selfInstance = this._selfInstance ||
+                    await this.platform.describeInstance({
+                        instanceId: event.detail.EC2InstanceId
+                    });
+        this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME,
+                    event.detail.AutoScalingGroupName);
+        // attach nic2
+        if (this._selfInstance && ENABLE_SECOND_NIC) {
+            tasks.push(this.handleNicAttachment(event).catch(() => {
+                errorTasks.push('handleNicAttachment');
+            }));
+        }
+        // handle TGW VPN attachment
+        if (this._selfInstance && ENABLE_TGW_VPN) {
+            tasks.push(this.handleTgwVpnAttachment(event).catch(() => {
+                errorTasks.push('handleTgwVpnAttachment');
+            }));
+        }
+        await Promise.all(tasks);
+        result = errorTasks.length === 0 && !!this._selfInstance;
         if (result) {
-            const instanceId = event.detail.EC2InstanceId,
-                item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                    AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
-            result = await this.platform.updateLifecycleItem(item);
+            // TODO: if any additional process here failed, should turn this lifecycle hook into
+            // the abandon state then proceed to clean this instance and related components
+
+            // create a pending lifecycle item for this instance
+            lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
+            result = await this.platform.updateLifecycleItem(lifecycleItem);
             logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
                 `lifecyclehook(${event.detail.LifecycleActionToken})`);
         }
@@ -1234,19 +1626,33 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async handleTerminatingInstanceHook(event) {
         logger.info('calling handleTerminatingInstanceHook');
-        let result, instanceId = event.detail.EC2InstanceId;
-        // detach addtional nic
-        result = await this.handleNicDetachment(event);
-        if (result) {
+        let result, errorTasks = [], tasks = [], instanceId = event.detail.EC2InstanceId;
+        this._selfInstance = this._selfInstance ||
+                    await this.platform.describeInstance({
+                        instanceId: event.detail.EC2InstanceId
+                    });
+        this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME,
+                    event.detail.AutoScalingGroupName);
+        // detach nic2
+        if (this._selfInstance && ENABLE_SECOND_NIC) {
+            tasks.push(this.handleNicDetachment(event).catch(() => {
+                errorTasks.push('handleNicDetachment');
+            }));
+        }
+        // handle TGW VPN attachment
+        if (this._selfInstance && ENABLE_TGW_VPN) {
+            tasks.push(this.handleTgwVpnDetachment(event).catch(() => {
+                errorTasks.push('handleTgwVpnDetachment');
+            }));
+        }
+        await Promise.all(tasks);
+        result = errorTasks.length === 0 && !!this._selfInstance;
+        if (this._selfInstance && result) {
             // force updating this instance sync state to 'out-of-sync' so the script can treat
             // it as an unhealthy instance
-            let instance = this._selfInstance ||
-                await this.platform.describeInstance({
-                    instanceId: event.detail.EC2InstanceId
-                });
             this._selfHealthCheck = this._selfHealthCheck ||
                 await this.platform.getInstanceHealthCheck({
-                    instanceId: instance.instanceId
+                    instanceId: this._selfInstance.instanceId
                 }, 0);
             if (this._selfHealthCheck && this._selfHealthCheck.inSync) {
                 await this.platform.updateInstanceHealthCheck(this._selfHealthCheck,
@@ -1256,7 +1662,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // check if master
             let masterInfo = await this.getMasterInfo();
             logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
-            if (masterInfo && masterInfo.instanceId === instance.instanceId) {
+            if (masterInfo && masterInfo.instanceId === this._selfInstance.instanceId) {
                 // remove master record so it will trigger a new master election
                 let masterRecord = await this.platform.getMasterRecord();
                 if (masterRecord) {
@@ -1313,6 +1719,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         let
             config,
             masterInfo,
+            params = {},
             instanceId = this._requestInfo.instanceId;
 
         // get instance object from platform
@@ -1367,18 +1774,31 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 ' administrators.');
         }
 
+        // get TGW_VPN record
+        if (ENABLE_TGW_VPN) {
+            let vpnAttachmentRecord =
+                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            if (vpnAttachmentRecord) {
+                params.vpnConfigSetName = 'setuptgwvpn';
+                params.vpnConfiguration =
+                vpnAttachmentRecord.customerGatewayConfiguration.vpn_connection;
+            }
+        }
+
         // the master ip same as mine? (diagram: master IP same as mine?)
         if (masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
-            config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl());
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl();
+            config = await this.getMasterConfig(params);
             logger.info('called handleGetConfig: returning master config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
 
             this._step = 'handler:getConfig:getSlaveConfig';
-            config = await this.getSlaveConfig(masterInfo.primaryPrivateIpAddress,
-                await this.platform.getCallbackEndpointUrl());
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl();
+            params.masterIp = masterInfo.primaryPrivateIpAddress;
+            config = await this.getSlaveConfig(params);
             logger.info('called handleGetConfig: returning slave config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
@@ -1415,7 +1835,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 let subnetPair = subnetPairs.filter(element => {
                     return element.subnetId === subnetId;
                 });
-                if (subnetPair && subnetPair.length >= 0) {
+                if (subnetPair && subnetPair.length >= 0 && subnetPair[0].pairId) {
                     subnetId = subnetPair[0].pairId;
                 }
             }
@@ -1625,12 +2045,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async cleanUpAdditionalNics() {
         logger.info('calling cleanUpAdditionalNics');
-        // list all nics with tag: {key: 'FortiGateAutoScaleNicAttachment', value:
-        // `${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`}
+        // list all nics with tag: {key: 'FortiGateAutoscaleNicAttachment', value:
+        // RESOURCE_TAG_PREFIX
         let nics = await this.platform.listNetworkInterfaces({
             Filters: [{
-                Name: 'tag:FortiGateAutoScaleNicAttachment',
-                Values: [`${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`]
+                Name: 'tag:FortiGateAutoscaleNicAttachment',
+                Values: [RESOURCE_TAG_PREFIX]
             }]
         });
         let tasks = [];
@@ -1687,6 +2107,186 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 `master: ${this.masterScalingGroupName})`);
         } else {
             logger.warn(`cannot identify instance: vmid:(${instanceId})`);
+        }
+    }
+
+    async handleTgwVpnAttachment(event) {
+        logger.info('calling handleTgwVpnAttachment');
+        if (!event || !event.detail || !event.detail.EC2InstanceId) {
+            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(event)}`);
+            return null;
+        }
+        try {
+            this._selfInstance = this._selfInstance ||
+                await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
+            // create an ec2 vpn of "ipsec.1" type
+            // get the transit gateway id
+            let transitGatewayId = process.env.TGW_ID;
+            let attachmentRecord =
+                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            if (attachmentRecord) {
+                logger.warn('Transit Gateway VPN attachment for instance id: ' +
+                `(${this._selfInstance.instanceId}) already exisits.`);
+                return true;
+            }
+            // create a customer gateway with the public IP address of the FGT instance
+            // try to get a setting of customer gateway
+            let bgpAsn = await this.platform.getSettingItem('customer-gateway.bgpasn');
+            // take 65000 by AWS' default
+            bgpAsn = bgpAsn && bgpAsn.value && !isNaN(bgpAsn.value) ? bgpAsn.value : 65000;
+            let customerGateway = await this.platform.createCustomerGateway({
+                bgpAsn: bgpAsn,
+                publicIp: this._selfInstance.primaryPublicIpAddress,
+                type: 'ipsec.1'
+            });
+            // create the vpn connection
+            let vpnConnection =
+                await this.platform.createVpnConnection({
+                    customerGatewayId: customerGateway.CustomerGatewayId,
+                    transitGatewayId: transitGatewayId,
+                    type: 'ipsec.1',
+                    publicIp: this._selfInstance.primaryPublicIpAddress
+                });
+            // save attachment record
+            if (!vpnConnection) {
+                throw new Error('create VPN connection unsuccessfully.');
+            }
+
+            await this.platform.updateTgwVpnAttachmentRecord(this._selfInstance, vpnConnection);
+            logger.info('Transit Gateway VPN attachment (' +
+            `vpn id: ${vpnConnection.VpnConnectionId}, ` +
+            `tgw id: ${vpnConnection.TransitGatewayId}) created.`);
+            return true;
+        } catch (error) {
+            logger.warn(`called handleTgwVpnAttachment with error: ${JSON.stringify(error)}`);
+            return null;
+        }
+    }
+
+    async handleTgwVpnDetachment(event) {
+        logger.info('calling handleTgwVpnDetachment');
+        let attachmentRecord;
+        if (!event || !event.detail || !event.detail.EC2InstanceId) {
+            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(event)}`);
+            return null;
+        }
+        try {
+            this._selfInstance = this._selfInstance ||
+                await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
+            attachmentRecord =
+                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            if (attachmentRecord) {
+                // delete vpn
+                await this.platform.deleteVpnConnection({
+                    vpnConnectionId: attachmentRecord.vpnConnectionId
+                });
+                // delete customer gateway
+                await this.platform.deleteCustomerGateway({
+                    customerGatewayId: attachmentRecord.customerGatewayId
+                });
+                // delete attachment record
+                await this.platform.deleteTgwVpnAttachmentRecord(this._selfInstance);
+                logger.info('Transit Gateway VPN attachment (' +
+                `vpn id: ${attachmentRecord.vpnConnectionId}, ` +
+                `tgw id: ${attachmentRecord.transitGatewayId}) deleted.`);
+            } else {
+                logger.info('Transit Gateway VPN attachment for instance (' +
+                `id: ${this._selfInstance.instanceId}` +
+                `public ip: ${this._selfInstance.primaryPublicIpAddress}) not found.`);
+            }
+            return true;
+        } catch (error) {
+            logger.warn(`called handleTgwVpnDetachment with error: ${JSON.stringify(error)}`);
+            return null;
+        }
+    }
+
+    /** @override */
+    async parseVpnConfiguration(config, vpnConfiguration) {
+        let fortigate = {};
+        let resourceMap = {
+            vpnConfiguration: vpnConfiguration
+        };
+        let nodePath, conf = config, match,
+            matches = typeof config === 'string' ? config.match(/({\S+})/gm) : [];
+        try {
+            for (nodePath of matches) {
+                let data = null, resource = null, replaceBy = null,
+                    resRoot = typeof nodePath === 'string' ? nodePath.split('.')[0].substr(1) : '';
+                switch (resRoot) {
+                    case '@vpc':
+                        if (!resourceMap[resRoot]) {
+                            data = await this.platform.describeVpc({
+                                vpcId: this._selfInstance.virtualNetworkId
+                            });
+                            resourceMap['@vpc'] = data;
+                            data = await this.platform.describeSubnet({
+                                vpcId: this._selfInstance.virtualNetworkId
+                            });
+                            if (data && Array.isArray(data)) {
+                                resourceMap['@vpc'].subnet = data;
+                            }
+                        }
+                        resource = resourceMap; // here pass the the upper level object where it's
+                        // slightly deferent from the default case.
+                        replaceBy =
+                            AutoScaleCore.Functions.configSetResourceFinder(resource, nodePath);
+                        break;
+                    case '@fortigate':
+                        // will fetch info from db that input by user when deploy the template
+                        match = /{@(.+)}/g.exec(nodePath);
+                        if (match && match[1] && !resourceMap[match[1]]) {
+                            match = match[1];
+                            data = await this.platform.getSettingItem(match.replace(/\./g, '-'));
+                            resourceMap[match] = data || null;
+                        }
+                        replaceBy = resourceMap[match];
+                        break;
+                    default:
+                        resource = resourceMap.vpnConfiguration;
+                        replaceBy =
+                            AutoScaleCore.Functions.configSetResourceFinder(resource, nodePath);
+                        break;
+                }
+                if (replaceBy) {
+                    conf = conf.replace(new RegExp(nodePath, 'g'), replaceBy);
+                }
+            }
+        } catch (error) {
+            console.log(error);
+        }
+        return conf;
+    }
+    async cleanUpTgwVpns() {
+        logger.info('calling cleanUpTgwVpns');
+        // list all nics with tag: {key: 'FortiGateAutoscaleNicAttachment', value:
+        // RESOURCE_TAG_PREFIX
+        let nics = await this.platform.listNetworkInterfaces({
+            Filters: [{
+                Name: 'tag:FortiGateAutoscaleNicAttachment',
+                Values: [RESOURCE_TAG_PREFIX]
+            }]
+        });
+        let tasks = [];
+        // delete them
+        if (Array.isArray(nics) && nics.length > 0) {
+            nics.forEach(element => {
+                tasks.push(this.platform.deleteNetworkInterface({
+                    NetworkInterfaceId: element.NetworkInterfaceId
+                }));
+            });
+            try {
+                await Promise.all(tasks);
+                logger.info('called cleanUpTgwVpns. no error.');
+                return true;
+            } catch (error) {
+                logger.error('calling cleanUpTgwVpns. error > ', error);
+                return false;
+            }
         }
     }
     // end of AwsAutoscaleHandler class

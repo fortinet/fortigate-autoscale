@@ -240,11 +240,13 @@
             },
             "us-west-1": {
                 "FGTVM64PAYG603": "ami-057300bd7e60ea2b2",
-                "FGTVM64PAYG604": "ami-057300bd7e60ea2b2"
+                "FGTVM64PAYG604": "ami-057300bd7e60ea2b2",
+                "FGTVM64PAYG620": "ami-0f52dcaf77a2ae656"
             },
             "us-west-2": {
                 "FGTVM64PAYG603": "ami-0ea3f14da73832fdc",
-                "FGTVM64PAYG604": "ami-0ea3f14da73832fdc"
+                "FGTVM64PAYG604": "ami-0ea3f14da73832fdc",
+                "FGTVM64PAYG620": "ami-0c221111d1fc80383"
             },
             "us-gov-west-1": {
                 "FGTVM64PAYG603": "ami-ddf76dbc"
