@@ -356,27 +356,27 @@ const DB = {
     VPNATTACHMENT: {
         AttributeDefinitions: [
             {
-                AttributeName: 'id',
-                AttributeType: 'S'
-            }
-        ],
-        KeySchema: [
-            {
-                AttributeName: 'id',
-                KeyType: 'HASH'
-            }
-        ],
-        ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
-        TableName: 'VpnAttachment',
-        AdditionalAttributeDefinitions: [
-            {
                 AttributeName: 'instanceId',
                 AttributeType: 'S'
             },
             {
                 AttributeName: 'publicIp',
                 AttributeType: 'S'
+            }
+        ],
+        KeySchema: [
+            {
+                AttributeName: 'instanceId',
+                KeyType: 'HASH'
             },
+            {
+                AttributeName: 'publicIp',
+                KeyType: 'RANGE'
+            }
+        ],
+        ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
+        TableName: 'VpnAttachment',
+        AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'customerGatewayId',
                 AttributeType: 'S'

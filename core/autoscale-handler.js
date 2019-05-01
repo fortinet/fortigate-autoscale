@@ -765,18 +765,6 @@ module.exports = class AutoscaleHandler {
                     'FortiGate instance';
                     editable = false;
                     break;
-                case 'fgtinterfacetrafficin':
-                    keyName = 'fortigate-interface-in';
-                    description = 'FortiGate interface to receive incoming traffic from Transit ' +
-                    'Gateway for security inspection.';
-                    editable = true;
-                    break;
-                case 'fgtinterfacetrafficout':
-                    keyName = 'fortigate-interface-out';
-                    description = 'FortiGate interface to send outcoming traffic back to Transit ' +
-                    'Gateway after security inspection.';
-                    editable = true;
-                    break;
                 case 'bgpasn':
                     keyName = 'bgp-asn';
                     description = 'The BGP Autonomous System Number of the Customer Gateway ' +

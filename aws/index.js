@@ -1233,7 +1233,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         let params = {
             TableName: DB.VPNATTACHMENT.TableName,
             Key: {
-                id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`
+                instanceId: instance.instanceId,
+                publicIp: instance.primaryPublicIpAddress
             }
         };
         try {
@@ -1255,7 +1256,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         logger.info('calling updateTgwVpnAttachmentRecord');
         let params = {
             Key: {
-                id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`
+                instanceId: instance.instanceId,
+                publicIp: instance.primaryPublicIpAddress
             },
             TableName: DB.VPNATTACHMENT.TableName
         };
@@ -1273,7 +1275,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         };
         let configuration = await parseConfiguration(vpnConnection.CustomerGatewayConfiguration);
         params.Item = {
-            id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`,
             instanceId: instance.instanceId,
             publicIp: instance.primaryPublicIpAddress,
             transitGatewayId: vpnConnection.TransitGatewayId,
@@ -1281,7 +1282,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             vpnConnectionId: vpnConnection.VpnConnectionId,
             customerGatewayConfiguration: JSON.stringify(configuration)
         };
-        params.ConditionExpression = 'attribute_not_exists(id)';
+        params.ConditionExpression = 'attribute_not_exists(instanceId) ' +
+            'OR (attribute_exists(instanceId) AND attribute_not_exists(publicIp))';
         let result = await docClient.put(params).promise();
         logger.info('called updateTgwVpnAttachmentRecord');
         return result;
@@ -1292,7 +1294,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         let params = {
             TableName: DB.VPNATTACHMENT.TableName,
             Key: {
-                id: `${instance.instanceId}-${instance.primaryPublicIpAddress}`
+                instanceId: instance.instanceId,
+                publicIp: instance.primaryPublicIpAddress
             }
         };
         try {
@@ -1303,6 +1306,24 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.error(`called deleteTgwVpnAttachmentRecord > error: ${JSON.stringify(error)}`);
             return error;
         }
+    }
+
+    async listTgwVpnAttachments() {
+        logger.info('calling listTgwVpnAttachments');
+        let items = [];
+        try {
+            const result = await docClient.scan({
+                TableName: DB.VPNATTACHMENT.TableName
+            }).promise();
+            if (Array.isArray(result.Items) && result.Items.length > 0) {
+                items = result.Items;
+            }
+            logger.info('called listTgwVpnAttachments');
+            // await deleteTable(dbTables.NICATTACHMENT);
+        } catch (error) {
+            logger.warn(`called listTgwVpnAttachments. error >: ${JSON.stringify(error)}`);
+        }
+        return items;
     }
 
     /* eslint-disable max-len */
@@ -2209,7 +2230,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /** @override */
     async parseVpnConfiguration(config, vpnConfiguration) {
-        let fortigate = {};
         let resourceMap = {
             vpnConfiguration: vpnConfiguration
         };
@@ -2220,7 +2240,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 let data = null, resource = null, replaceBy = null,
                     resRoot = typeof nodePath === 'string' ? nodePath.split('.')[0].substr(1) : '';
                 switch (resRoot) {
-                    case '@vpc':
+                    case '@vpc':// reference the current vpc of this device
                         if (!resourceMap[resRoot]) {
                             data = await this.platform.describeVpc({
                                 vpcId: this._selfInstance.virtualNetworkId
@@ -2238,7 +2258,13 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         replaceBy =
                             AutoScaleCore.Functions.configSetResourceFinder(resource, nodePath);
                         break;
-                    case '@fortigate':
+                    case '@device':// reference this device
+                        resourceMap['@device'] = this._selfInstance;
+                        resource = resourceMap; // here pass the the upper level object where it's
+                        replaceBy =
+                            AutoScaleCore.Functions.configSetResourceFinder(resource, nodePath);
+                        break;
+                    case '@setting': // fetch from settings in the db
                         // will fetch info from db that input by user when deploy the template
                         match = /{@(.+)}/g.exec(nodePath);
                         if (match && match[1] && !resourceMap[match[1]]) {
@@ -2263,36 +2289,53 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
         return conf;
     }
-    async cleanUpTgwVpns() {
-        logger.info('calling cleanUpTgwVpns');
-        // list all nics with tag: {key: 'FortiGateAutoscaleNicAttachment', value:
-        // RESOURCE_TAG_PREFIX
-        let nics = await this.platform.listNetworkInterfaces({
-            Filters: [{
-                Name: 'tag:FortiGateAutoscaleNicAttachment',
-                Values: [RESOURCE_TAG_PREFIX]
-            }]
-        });
-        let tasks = [];
-        // delete them
-        if (Array.isArray(nics) && nics.length > 0) {
-            nics.forEach(element => {
-                tasks.push(this.platform.deleteNetworkInterface({
-                    NetworkInterfaceId: element.NetworkInterfaceId
-                }));
+    async cleanUpVpnAttachments(cleanUpNonExistInstanceOnly = false) {
+        logger.info('calling cleanUpVpnAttachments');
+
+        let attachments = await this.platform.listTgwVpnAttachments();
+        let tasks = [], errorTasks = [];
+
+        let cleanUpFunc = async attachment => {
+            // delete vpn
+            await this.platform.deleteVpnConnection({
+                vpnConnectionId: attachment.vpnConnectionId
             });
-            try {
-                await Promise.all(tasks);
-                logger.info('called cleanUpTgwVpns. no error.');
-                return true;
-            } catch (error) {
-                logger.error('calling cleanUpTgwVpns. error > ', error);
-                return false;
+            // delete customer gateway
+            await this.platform.deleteCustomerGateway({
+                customerGatewayId: attachment.customerGatewayId
+            });
+            logger.info('Transit Gateway VPN attachment (' +
+            `vpn id: ${attachment.vpnConnectionId}, ` +
+            `tgw id: ${attachment.transitGatewayId}) deleted.`);
+            return true;
+        };
+
+        for (let attachmentRecord of attachments) {
+            let inatance, attachmentId = attachmentRecord.id;
+            // check instance existence
+            if (cleanUpNonExistInstanceOnly) {
+                inatance = this.platform.describeInstance({
+                    instanceId: attachmentRecord.instanceId
+                });
             }
+
+            if (!cleanUpNonExistInstanceOnly || (cleanUpNonExistInstanceOnly && !inatance)) {
+                tasks.push(cleanUpFunc(attachmentRecord).catch(error => {
+                    logger.error(`cannot delete vpn attachemnt by id: ${attachmentId}. ` +
+                        `error: ${error}`);
+                    errorTasks.push(attachmentId);
+                }));
+            }
+        }
+
+        await Promise.all(tasks);
+        if (errorTasks.length > 0) {
+            logger.warn(`[${errorTasks.length}] rows of vpn attachemnt cannot be deleted.`);
+        } else {
+            logger.info(`[${tasks.length}] rows of vpn attachemnt have been deleted.`);
         }
     }
     // end of AwsAutoscaleHandler class
-
 }
 
 /**

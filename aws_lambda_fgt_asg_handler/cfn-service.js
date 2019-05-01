@@ -31,6 +31,7 @@ exports.handler = async (event, context) => {
 
         logger.info('requested event:', event);
         let serviceType = event.ResourceProperties.ServiceType;
+        logger.info(`RequestType: ${event.RequestType}, serviceType: ${serviceType}`);
         if (event.RequestType === 'Create') {
             let subnetPairs = [];
             switch (serviceType) {

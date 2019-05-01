@@ -24,10 +24,12 @@ end
 #1: Internet Key Exchange (IKE) Configuration
 config vpn ipsec phase1-interface
     edit "tgw-vpn-1"
-        set interface {@fortigate.interface.in}
+        set interface "port1"
+        set local-gw {@device.networkInterfaces#0.PrivateIpAddress}
         set dhgrp 2
         set proposal aes128-sha1
         set keylife 28800
+        set net-device enable
         set remote-gw {ipsec_tunnel.vpn_gateway.tunnel_outside_address.ip_address}
         set psksecret {ipsec_tunnel.ike.pre_shared_key}
         set dpd-retryinterval 10
@@ -47,12 +49,12 @@ end
 #3: Tunnel Interface Configuration
 config system interface
     edit "tgw-vpn-1"
+        set interface "port1"
         set ip {ipsec_tunnel.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
         set allowaccess ping
         set type tunnel
         set tcp-mss 1379
         set remote-ip {ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address} {ipsec_tunnel.vpn_gateway.tunnel_inside_address.network_mask}
-        set interface {@fortigate.interface.in}
     next
 end
 
@@ -74,24 +76,16 @@ config router bgp
     end
 end
 
-config router prefix-list
-    edit "default_route"
-        config rule
-            edit 1
-                set prefix 0.0.0.0 0.0.0.0
-            next
-        end
-    next
-end
-
 #IPSec Tunnel #2
 #1: Internet Key Exchange (IKE) Configuration
 config vpn ipsec phase1-interface
     edit "tgw-vpn-2"
-        set interface {@fortigate.interface.in}
+        set interface "port1"
+        set local-gw {@device.networkInterfaces#0.PrivateIpAddress}
         set dhgrp 2
         set proposal aes128-sha1
         set keylife 28800
+        set net-device enable
         set remote-gw {ipsec_tunnel#1.vpn_gateway.tunnel_outside_address.ip_address}
         set psksecret {ipsec_tunnel#1.ike.pre_shared_key}
         set dpd-retryinterval 10
@@ -110,13 +104,13 @@ end
 
 #3: Tunnel Interface Configuration
 config system interface
-    edit "tgw-vpn-1"
+    edit "tgw-vpn-2"
         set ip {ipsec_tunnel#1.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
         set allowaccess ping
         set type tunnel
         set tcp-mss 1379
         set remote-ip {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address} {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.network_mask}
-        set interface {@fortigate.interface.in}
+        set interface "port1"
     next
 end
 
@@ -138,67 +132,118 @@ config router bgp
     end
 end
 
+#Loopback Interface Configurations
+config system interface
+    edit "loopback"
+        set vdom "root"
+        set ip {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address} 255.255.255.255
+        set allowaccess ping https ssh fgfm
+        set type loopback
+    next
+end
+
+#Router Configuration
 config router prefix-list
-    edit "default_route"
+    edit "pflist-default-route"
         config rule
             edit 1
                 set prefix 0.0.0.0 0.0.0.0
+                unset ge
+                unset le
+            next
+        end
+    next
+    edit "pflist-port1"
+        config rule
+            edit 1
+                set prefix {@device.networkInterfaces#0.PrivateIpAddress} 255.255.255.255
+                unset ge
+                unset le
+            next
+        end
+    next
+end
+
+config router route-map
+    edit "rmap-outbound"
+        config rule
+            edit 1
+                set match-ip-address "pflist-default-route"
+            next
+            edit 2
+                set match-ip-address "pflist-port1"
             next
         end
     next
 end
 
 #Firewall Configuration (do this after the two tunnels have been set)
-#Firewall Address Configuration
-config firewall address
-    edit "transit-gateway-inline-10.0.0.0"
-        set subnet 10.0.0.0 255.255.0.0
+
+config firewall ippool
+    edit "ippool"
+        set startip {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address}
+        set endip {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address}
     next
 end
 
-config firewall addrgrp
-    edit "transit-gateway-inline"
-        set member "transit-gateway-inline-10.0.0.0"
-    next
-end
-
-config firewall address
-    edit "firewall-vpc-subnet-1"
-        set subnet {@vpc.subnet#0.CidrBlock}
-    next
-    edit "firewall-vpc-subnet-2"
-        set subnet {@vpc.subnet#1.CidrBlock}
-    next
-end
-
-config firewall addrgrp
-    edit "firewall-vpc-subnets"
-        set member "firewall-vpc-subnet-1" "firewall-vpc-subnet-2"
+config system zone
+    edit "sys-zone-tgw-vpn"
+        set interface "tgw-vpn-1" "tgw-vpn-2"
     next
 end
 
 #Firewall Policy Configuration
 config firewall policy
     edit 1
-        set name "from-transit-gateway-inline"
-        set srcintf "tgw-vpn-1" "tgw-vpn-2"
-        set dstintf {@fortigate.interface.in} {@fortigate.interface.out}
-        set srcaddr "transit-gateway-inline"
-        set dstaddr "firewall-vpc-subnets"
+        set name "transit-gateway-inline"
+        set srcintf "sys-zone-tgw-vpn"
+        set dstintf "sys-zone-tgw-vpn"
+        set srcaddr "all"
+        set dstaddr "all"
         set action accept
         set schedule "always"
         set service "ALL"
         set fsso disable
     next
     edit 2
-        set name "to-transit-gateway-inline"
-        set srcintf {@fortigate.interface.in} {@fortigate.interface.out}
-        set dstintf "tgw-vpn-1" "tgw-vpn-2"
-        set srcaddr "firewall-vpc-subnets"
-        set dstaddr "transit-gateway-inline"
+        set name "transit-gateway-inline-internet-access"
+        set srcintf "sys-zone-tgw-vpn"
+        set dstintf "port1"
+        set srcaddr "all"
+        set dstaddr "all"
         set action accept
         set schedule "always"
         set service "ALL"
         set fsso disable
     next
 end
+
+#Firewall Address Configuration
+
+#Those transit gateway inline firewall addresses are per vpc attachment to the transit gateway
+#You should add them based on your transit gateway network environment.
+#Here is an example configuration for an attached vpc with cidr 10.0.0.0/16
+#In this example. all packets with destination to this vpc should be routed back to the transit gateway.
+#And there should be a route domain in the transit gateway to forward the packets to the right vpc
+#Remove the first hashtag on each line below to enable these exsample configurations
+
+#config firewall address
+#    edit "transit-gateway-inline-10.0.0.0"
+#        set subnet 10.0.0.0 255.255.0.0
+#    next
+#end
+#
+#config firewall addrgrp
+#    edit "transit-gateway-inline"
+#        set member "transit-gateway-inline-10.0.0.0"
+#    next
+#end
+#
+#config firewall address
+#    edit "firewall-vpc-subnet-1"
+#        set subnet {@vpc.subnet#0.CidrBlock}
+#    next
+#    edit "firewall-vpc-subnet-2"
+#        set subnet {@vpc.subnet#1.CidrBlock}
+#    next
+#end

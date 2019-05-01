@@ -21,14 +21,12 @@
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
-            "Default": "jliang01-fortigate-autoscale-us-west-2",
             "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
         "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
-            "Default": "transit-gateway/",
             "Description": "S3 key prefix for the deployment package. Key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
         },
         "AvailabilityZones": {
@@ -84,7 +82,7 @@
         },
         "LifecycleHookTimeout": {
             "Type": "Number",
-            "Default": 400,
+            "Default": 480,
             "MinValue": 60,
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
@@ -195,17 +193,8 @@
         },
         "TransitGatewayId": {
             "Type": "String",
+            "Default": "",
             "Description": "If you use an existing Transit Gateway, specify the ID of the Transit Gateway that the FortiGate Autoscale VPC is attached to."
-        },
-        "FgtInterfaceTrafficIn": {
-            "Type": "String",
-            "Default": "port1",
-            "Description": "The FortiGate interface to receive incoming traffic from Transit Gateway for security inspection."
-        },
-        "FgtInterfaceTrafficOut": {
-            "Type": "String",
-            "Default": "port1",
-            "Description": "The FortiGate interface to send outcoming traffic back to Transit Gateway after security inspection."
         },
         "BgpAsn": {
             "Type": "Number",
@@ -440,6 +429,9 @@
                     },
                     "TransitGatewayId": {
                         "Ref": "TransitGatewayId"
+                    },
+                    "BgpAsn": {
+                        "Ref": "BgpAsn"
                     }
                 },
                 "TemplateURL": {
@@ -456,7 +448,7 @@
                         }
                     ]
                 },
-                "TimeoutInMinutes": "30"
+                "TimeoutInMinutes": 30
             }
         }
     },
@@ -493,8 +485,6 @@
                         "FortiGateAdminPort",
                         "FortiGateAdminCidr",
                         "KeyPairName",
-                        "FgtInterfaceTrafficIn",
-                        "FgtInterfaceTrafficOut",
                         "BgpAsn"
                     ]
                 },
@@ -619,12 +609,6 @@
                 },
                 "ResourceTagPrefix": {
                     "default": "Resource tag prefix"
-                },
-                "FgtInterfaceTrafficIn": {
-                    "default": "Incoming traffic port"
-                },
-                "FgtInterfaceTrafficOut": {
-                    "default": "outgoing traffic port"
                 },
                 "BgpAsn": {
                     "default": "BGP ASN"

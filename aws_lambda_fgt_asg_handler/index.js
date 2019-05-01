@@ -68,14 +68,16 @@ async function checkAutoScalingGroupState() {
 }
 
 async function cleanUp() {
+    let tasks = [];
     // if enabled secondary eni attachment, do the cleanup
     if (process.env.ENABLE_SECOND_NIC) {
-        return await autoscaleHandler.cleanUpAdditionalNics();
+        tasks.push(autoscaleHandler.cleanUpAdditionalNics());
     }
     // if enabled transit gateway vpn support, do the cleanup
     if (process.env.ENABLE_TGW_VPN) {
-        return await autoscaleHandler.cleanUpTgwVpns();
+        tasks.push(autoscaleHandler.cleanUpVpnAttachments());
     }
+    return await Promise.all(tasks);
 }
 
 exports.getLogger = () => {

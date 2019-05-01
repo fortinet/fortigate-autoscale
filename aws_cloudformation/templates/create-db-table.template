@@ -262,12 +262,19 @@
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [{
-                    "AttributeName": "id",
+                    "AttributeName": "instanceId",
+                    "AttributeType": "S"
+                },
+                {
+                    "AttributeName": "publicIp",
                     "AttributeType": "S"
                 }],
                 "KeySchema": [{
-                    "AttributeName": "id",
+                    "AttributeName": "instanceId",
                     "KeyType": "HASH"
+                },{
+                    "AttributeName": "publicIp",
+                    "KeyType": "RANGE"
                 }],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",

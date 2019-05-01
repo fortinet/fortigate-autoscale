@@ -202,16 +202,6 @@
             "Type": "String",
             "Description": "If you use an existing Transit Gateway, specify the ID of the Transit Gateway that the FortiGate Autoscale VPC is attached to."
         },
-        "FgtInterfaceTrafficIn": {
-            "Type": "String",
-            "Default": "port1",
-            "Description": "The FortiGate interface to receive incoming traffic from Transit Gateway for security inspection."
-        },
-        "FgtInterfaceTrafficOut": {
-            "Type": "String",
-            "Default": "port1",
-            "Description": "The FortiGate interface to send outcoming traffic back to Transit Gateway after security inspection."
-        },
         "BgpAsn": {
             "Type": "Number",
             "MinValue": 64512,
@@ -234,6 +224,82 @@
                 },
                 "create one"
             ]
+        }
+    },
+    "Mappings": {
+        "FortiGateKeyMap": {
+            "FortiGateVersion": {
+                "LATEST": "FGTVM64PAYG620",
+                "603": "FGTVM64PAYG603",
+                "604": "FGTVM64PAYG604",
+                "620": "FGTVM64PAYG620"
+            }
+        },
+        "AWSAMIRegionMap": {
+            "AMI": {
+                "FGTVM64PAYG603": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0200 (6.0.3) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-09dba22e5db2d4fb5.4",
+                "FGTVM64PAYG604": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0231 (6.0.4) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-03aa5daa2a028ceba.4",
+                "FGTVM64PAYG620": "TODO: need to set correct info here."
+            },
+            "ap-northeast-1": {
+                "FGTVM64PAYG603": "ami-0bd9e6e0020928ef9"
+            },
+            "ap-northeast-2": {
+                "FGTVM64PAYG603": "ami-0a560b6c089c6310a"
+            },
+            "ap-southeast-1": {
+                "FGTVM64PAYG603": "ami-000c0166f49864e4a"
+            },
+            "ap-southeast-2": {
+                "FGTVM64PAYG603": "ami-0e3662b3f822e3be4"
+            },
+            "ap-south-1": {
+                "FGTVM64PAYG603": "ami-0c5a28e0b56028d6d"
+            },
+            "sa-east-1": {
+                "FGTVM64PAYG603": "ami-0424ffd602f0af643"
+            },
+            "eu-west-1": {
+                "FGTVM64PAYG603": "ami-0aeda1bdca1b205bd"
+            },
+            "eu-west-2": {
+                "FGTVM64PAYG603": "ami-0de7050ef166ab900"
+            },
+            "eu-west-3": {
+                "FGTVM64PAYG603": "ami-0ce86abfa74c76ad2"
+            },
+            "eu-central-1": {
+                "FGTVM64PAYG603": "ami-0af055c02be246473"
+            },
+            "ca-central-1": {
+                "FGTVM64PAYG603": "ami-0583f62d15a462f5c"
+            },
+            "us-east-1": {
+                "FGTVM64PAYG603": "ami-09e4f25ec992c94ab"
+            },
+            "us-east-2": {
+                "FGTVM64PAYG603": "ami-0a1f403f5e0cfa88e"
+            },
+            "us-west-1": {
+                "FGTVM64PAYG603": "ami-057300bd7e60ea2b2"
+            },
+            "us-west-2": {
+                "FGTVM64PAYG603": "ami-0ea3f14da73832fdc"
+            },
+            "us-gov-west-1": {
+                "FGTVM64PAYG603": "ami-ddf76dbc"
+            }
+        },
+        "ProtocolPortMap": {
+            "HTTP": {
+                "defaultport": "80"
+            },
+            "HTTPS": {
+                "defaultport": "443"
+            },
+            "TCP": {
+                "defaultport": "443"
+            }
         }
     },
     "Resources": {
@@ -423,6 +489,8 @@
                     "VpcEndPoint": {
                         "Ref": "FgtAsgVpcEndpoint"
                     },
+                    "HandlerScriptTimeout": 300,
+                    "ServiceScriptTimeout": 900,
                     "DbTableArnList": {
                         "Fn::GetAtt": [
                             "StackCreateDynamoDBTable",
@@ -737,13 +805,13 @@
                     "UniqueId": {
                         "Ref": "UniqueId"
                     },
-                    "FgtAsgSubnet1Id": {
+                    "AsgSubnet1Id": {
                         "Fn::GetAtt": [
                             "StackCreateNewVPC",
                             "Outputs.PublicSubnet1Id"
                         ]
                     },
-                    "FgtAsgSubnet2Id": {
+                    "AsgSubnet2Id": {
                         "Fn::GetAtt": [
                             "StackCreateNewVPC",
                             "Outputs.PublicSubnet2Id"
@@ -752,9 +820,6 @@
                     "ELBV2TargetGroupARNs": "",
                     "InstanceType": {
                         "Ref": "FortiGateInstanceType"
-                    },
-                    "FortiOSVersion": {
-                        "Ref": "FortiOSVersion"
                     },
                     "InstanceProfileArn": {
                         "Fn::GetAtt": [
@@ -774,39 +839,33 @@
                             "Outputs.ApiGatewayId"
                         ]
                     },
-                    "FgtAsgHandlerFunctionName": {
+                    "AsgHandlerFunctionName": {
                         "Fn::GetAtt": [
                             "StackCreateFortiGateAutoScaleHandler",
                             "Outputs.FgtAsgHandlerFunctionName"
                         ]
                     },
-                    "FgtAsgHandlerFunctionArn": {
+                    "AsgHandlerFunctionArn": {
                         "Fn::GetAtt": [
                             "StackCreateFortiGateAutoScaleHandler",
                             "Outputs.FgtAsgHandlerFunctionArn"
                         ]
                     },
-                    "FgtAsgHandlerServiceArn": {
-                        "Fn::GetAtt": [
-                            "StackCreateFortiGateAutoScaleHandler",
-                            "Outputs.FgtAsgHandlerServiceArn"
-                        ]
-                    },
-                    "FgtAsgHealthCheckGracePeriod": {
+                    "AsgHealthCheckGracePeriod": {
                         "Ref": "FgtAsgHealthCheckGracePeriod"
                     },
-                    "FgtAsgScaleInThreshold": {
+                    "AsgScaleInThreshold": {
                         "Ref": "FgtAsgScaleInThreshold"
                     },
-                    "FgtAsgScaleOutThreshold": {
+                    "AsgScaleOutThreshold": {
                         "Ref": "FgtAsgScaleOutThreshold"
                     },
-                    "FgtAsgDesiredCapacity": 0,
-                    "FgtAsgMinSize": 0,
-                    "FgtAsgMaxSize": {
+                    "AsgDesiredCapacity": 0,
+                    "AsgMinSize": 0,
+                    "AsgMaxSize": {
                         "Ref": "FgtAsgMaxSize"
                     },
-                    "FgtAsgCooldown": {
+                    "AsgCooldown": {
                         "Ref": "FgtAsgCooldown"
                     },
                     "LifecycleHookTimeout": {
@@ -825,7 +884,25 @@
                                 "Ref": "TransitGatewayId"
                             }
                         ]
-                    }
+                    },
+                    "ProductAMI": {
+                        "Fn::FindInMap": [
+                            "AWSAMIRegionMap",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            {
+                                "Fn::FindInMap": [
+                                    "FortiGateKeyMap",
+                                    "FortiGateVersion",
+                                    {
+                                        "Ref": "FortiOSVersion"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "ProductCode": ""
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
@@ -906,6 +983,7 @@
             },
             "DependsOn": [
                 "StackCreateFortiGateAutoScalingGroup",
+                "StackCreateFortiGateAutoScaleHandler",
                 "SaveSettings"
             ]
         },
@@ -985,12 +1063,6 @@
                         "StackCreateFortiGateAutoScaleHandler",
                         "Outputs.RequiredConfigsetList"
                     ]
-                },
-                "FgtInterfaceTrafficIn":{
-                    "Ref": "FgtInterfaceTrafficIn"
-                },
-                "FgtInterfaceTrafficOut":{
-                    "Ref": "FgtInterfaceTrafficOut"
                 },
                 "BgpAsn":{
                     "Ref": "BgpAsn"
@@ -1350,8 +1422,6 @@
                         "FortiGateAdminPort",
                         "FortiGateAdminCidr",
                         "KeyPairName",
-                        "FgtInterfaceTrafficIn",
-                        "FgtInterfaceTrafficOut",
                         "BgpAsn"
                     ]
                 },
@@ -1476,12 +1546,6 @@
                 },
                 "ResourceTagPrefix": {
                     "default": "Resource tag prefix"
-                },
-                "FgtInterfaceTrafficIn": {
-                    "default": "Incoming traffic port"
-                },
-                "FgtInterfaceTrafficOut": {
-                    "default": "outgoing traffic port"
                 },
                 "BgpAsn": {
                     "default": "BGP ASN"

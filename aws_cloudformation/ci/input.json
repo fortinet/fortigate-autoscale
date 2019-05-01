@@ -1,106 +1,118 @@
 [
     {
-        "ParameterKey": "KeyPairName",
+        "ParameterKey": "ResourceTagPrefix",
         "ParameterValue": "taskcat"
-    },
-    {
-        "ParameterKey": "AvailabilityZones",
-        "ParameterValue": "$[taskcat_genaz_2]"
-    },
-    {
-        "ParameterKey": "BalanceWebTrafficOverPort",
-        "ParameterValue": 443
     },
     {
         "ParameterKey": "CustomIdentifier",
         "ParameterValue": "fgtASG"
     },
     {
-        "ParameterKey": "ExpireLifecycleEntry",
-        "ParameterValue": "300"
+        "ParameterKey": "S3BucketName",
+        "ParameterValue": "$[taskcat_autobucket]"
     },
     {
-        "ParameterKey": "FortiGateAdminCidr",
-        "ParameterValue": "0.0.0.0/0"
+        "ParameterKey": "S3KeyPrefix",
+        "ParameterValue": "quickstart-fortinet-fortigate/"
     },
     {
-        "ParameterKey": "FortiGateAdminPort",
-        "ParameterValue": "8443"
+        "ParameterKey": "AvailabilityZones",
+        "ParameterValue": "$[taskcat_genaz_2]"
     },
     {
-        "ParameterKey": "FortiGateAsgCooldown",
-        "ParameterValue": "300"
+        "ParameterKey": "VpcCidr",
+        "ParameterValue": "192.168.128.0/23"
     },
     {
-        "ParameterKey": "FortiGateAsgDesiredCapacity",
-        "ParameterValue": "2"
+        "ParameterKey": "PublicSubnet1Cidr",
+        "ParameterValue": "192.168.128.0/24"
     },
     {
-        "ParameterKey": "FortiGateAsgHealthCheckGracePeriod",
-        "ParameterValue": "300"
-    },
-    {
-        "ParameterKey": "FortiGateAsgMaxSize",
-        "ParameterValue": "4"
-    },
-    {
-        "ParameterKey": "FortiGateAsgMinSize",
-        "ParameterValue": "2"
-    },
-    {
-        "ParameterKey": "FortiGateAsgScaleInThreshold",
-        "ParameterValue": "25"
-    },
-    {
-        "ParameterKey": "FortiGateAsgScaleOutThreshold",
-        "ParameterValue": "80"
-    },
-    {
-        "ParameterKey": "FortiGateElbTgHealthyThreshold",
-        "ParameterValue": "3"
+        "ParameterKey": "PublicSubnet2Cidr",
+        "ParameterValue": "192.168.129.0/24"
     },
     {
         "ParameterKey": "FortiGateInstanceType",
         "ParameterValue": "c5.large"
     },
     {
+        "ParameterKey": "FortiOSVersion",
+        "ParameterValue": "Latest (6.2.0)"
+    },
+    {
+        "ParameterKey": "LifecycleHookTimeout",
+        "ParameterValue": 480
+    },
+    {
+        "ParameterKey": "FgtAsgCooldown",
+        "ParameterValue": 300
+    },
+    {
+        "ParameterKey": "FgtAsgDesiredCapacity",
+        "ParameterValue": 2
+    },
+    {
+        "ParameterKey": "FgtAsgMinSize",
+        "ParameterValue": 2
+    },
+    {
+        "ParameterKey": "FgtAsgMaxSize",
+        "ParameterValue": 4
+    },
+    {
+        "ParameterKey": "FgtAsgHealthCheckGracePeriod",
+        "ParameterValue": 300
+    },
+    {
+        "ParameterKey": "FgtAsgScaleInThreshold",
+        "ParameterValue": 25
+    },
+    {
+        "ParameterKey": "FgtAsgScaleOutThreshold",
+        "ParameterValue": 80
+    },
+    {
         "ParameterKey": "FortiGatePskSecret",
         "ParameterValue": "$[taskcat_genpass_8]"
     },
     {
-        "ParameterKey": "InternalLoadBalancingOptions",
-        "ParameterValue": "add a new internal load balancer"
+        "ParameterKey": "FortiGateAdminPort",
+        "ParameterValue": 8443
     },
     {
-        "ParameterKey": "InternalLoadBalancerDnsName",
-        "ParameterValue": "fgtqsg-asg"
+        "ParameterKey": "FortiGateAdminCidr",
+        "ParameterValue": "0.0.0.0/0"
     },
     {
-        "ParameterKey": "PrivateSubnet1CIDR",
-        "ParameterValue": "10.0.1.0/24"
+        "ParameterKey": "KeyPairName",
+        "ParameterValue": "taskcat"
     },
     {
-        "ParameterKey": "PrivateSubnet2CIDR",
-        "ParameterValue": "10.0.3.0/24"
+        "ParameterKey": "HeartBeatInterval",
+        "ParameterValue": 30
     },
     {
-        "ParameterKey": "PublicSubnet1CIDR",
-        "ParameterValue": "10.0.0.0/24"
+        "ParameterKey": "HeartBeatLossCount",
+        "ParameterValue": 3
     },
     {
-        "ParameterKey": "PublicSubnet2CIDR",
-        "ParameterValue": "10.0.2.0/24"
+        "ParameterKey": "TransitGatewaySupportOptions",
+        "ParameterValue": "create one"
     },
     {
-        "ParameterKey": "QSS3BucketName",
-        "ParameterValue": "$[taskcat_autobucket]"
+        "ParameterKey": "TransitGatewayId",
+        "ParameterValue": ""
     },
     {
-        "ParameterKey": "QSS3KeyPrefix",
-        "ParameterValue": "quickstart-fortinet-fortigate/"
+        "ParameterKey": "FgtInterfaceTrafficIn",
+        "ParameterValue": "port1"
     },
     {
-        "ParameterKey": "VPCCIDR",
-        "ParameterValue": "10.0.0.0/16"
+        "ParameterKey": "FgtInterfaceTrafficOut",
+        "ParameterValue": "port1"
+    },
+    {
+        "ParameterKey": "BgpAsn",
+        "ParameterValue": 65000
     }
 ]
