@@ -19,7 +19,11 @@ const moduleId = AutoScaleCore.Functions.uuidGenerator(
     JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
-const HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
+// time in ms allowed to offset the network latency
+const HEART_BEAT_DELAY_ALLOWANCE = process.env.HEART_BEAT_DELAY_ALLOWANCE ?
+    process.env.HEART_BEAT_DELAY_ALLOWANCE : 2000;
+const HEART_BEAT_LOSS_COUNT = process.env.HEART_BEAT_LOSS_COUNT ?
+    process.env.HEART_BEAT_LOSS_COUNT : 3; // heartbeat loss count
 
 var logger = new AutoScaleCore.DefaultLogger();
 var dbClient, computeClient, storageClient;
@@ -331,9 +335,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 }
             ];
         try {
-            let compensatedScriptTime,
+            let scriptExecutionStartTime,
                 healthy,
                 heartBeatLossCount,
+                heartBeatDelays,
+                inevitableFailToSyncTime,
                 interval,
                 healthCheckRecord,
                 items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
@@ -345,25 +351,59 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             healthCheckRecord = items[0];
             // to get a more accurate heart beat elapsed time, the script execution time so far
             // is compensated.
-            compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
+            scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
             interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
                 heartBeatInterval : healthCheckRecord.heartBeatInterval;
-            if (compensatedScriptTime <
-                healthCheckRecord.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE) {
+            heartBeatDelays = scriptExecutionStartTime - healthCheckRecord.nextHeartBeatTime;
+            if (heartBeatDelays <= HEART_BEAT_DELAY_ALLOWANCE) {
                 // reset hb loss cound if instance sends hb within its interval
                 healthy = true;
                 heartBeatLossCount = 0;
             } else {
                 // if the current sync heartbeat is late, the instance is still considered
-                // healthy unless 3 times of heartBeatInterval amount of time has passed.
-                // where the instance have 0% chance to catch up with a heartbeat sync
-                healthy = healthCheckRecord.heartBeatLossCount < 3 &&
-                    Date.now() < healthCheckRecord.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE +
-                        interval * 1000 * (2 - healthCheckRecord.heartBeatLossCount);
+                // healthy unless the the inevitable-fail-to-sync time has passed.
+                // The the inevitable-fail-to-sync time is defined as:
+                // the maximum amount of time for an instance to be able to sync without being
+                // deemed unhealth. For example:
+                // the instance has x (x < hb loss count allowance) loss count recorded.
+                // the hb loss count allowance is X.
+                // the hb interval is set to i second.
+                // its hb sync time delay allowance is I ms.
+                // its current hb sync time is t.
+                // its expected next hb sync time is T.
+                // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
+                // inevitable-fail-to-sync time. This means the instance can never catch up with a
+                // heartbeat sync that makes it possile to deem health again.
+                inevitableFailToSyncTime = healthCheckRecord.nextHeartBeatTime +
+                    (HEART_BEAT_LOSS_COUNT - healthCheckRecord.heartBeatLossCount - 1) *
+                    (interval * 1000 + HEART_BEAT_DELAY_ALLOWANCE);
+                healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
                 heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
+                logger.info('hb sync is late again.\n' +
+                    `hb loss count goes from ${healthCheckRecord.heartBeatLossCount} to ` +
+                    `${heartBeatLossCount},\n` +
+                    `hb sync delay allowance: ${HEART_BEAT_DELAY_ALLOWANCE} ms\n` +
+                    'expected hb arrived time: ' +
+                    `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
+                    'current hb sync check time: ' +
+                    `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                    `this hb sync delay is: ${heartBeatDelays} ms`);
+                // log the math why this instance is deemed unhealthy
+                if (!healthy) {
+                    logger.info('Instance is deemed unhealthy. reasons:\n' +
+                    `previous hb loss count: ${healthCheckRecord.heartBeatLossCount},\n` +
+                    `hb sync delay allowance: ${HEART_BEAT_DELAY_ALLOWANCE} ms\n` +
+                    'expected hb arrived time: ' +
+                    `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
+                    'current hb sync check time: ' +
+                    `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                    `this hb sync delays: ${heartBeatDelays} ms\n` +
+                    'the inevitable-fail-to-sync time: ' +
+                    `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
+                }
             }
-            logger.info(`called getInstanceHealthCheck. (time: ${compensatedScriptTime}, ` +
-                `interval:${heartBeatInterval}) healthcheck record:`,
+            logger.info(`called getInstanceHealthCheck. (time: ${scriptExecutionStartTime}, ` +
+                `interval:${heartBeatInterval} delay: ${heartBeatDelays}) healthcheck record:`,
                 JSON.stringify(healthCheckRecord));
             return {
                 instanceId: instance.instanceId,
