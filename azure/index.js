@@ -682,7 +682,13 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     // eslint-disable-next-line no-unused-vars
-    async listLogFromDb(timeFrom, timeTo = null) {
+    /**
+     * List logs from DB
+     * @param {UnixTimeStamp} timeFrom unix timestamp in UTC
+     * @param {UnixTimeStamp} timeTo unix timestamp in UTC
+     * @param {Integer} timeZoneOffset timezone offset from UTC
+     */
+    async listLogFromDb(timeFrom, timeTo = null, timeZoneOffset = 0) {
         try {
             let logContent = '', queryDone = false,
                 rowCount = 0, currentCount = 0,
@@ -692,17 +698,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 if (timeFrom) {
                     filterExp.push({
                         keys: ['timestamp'],
-                        exp: `:timestamp > ${(new Date(timeFrom)).getTime()}`
+                        exp: `:timestamp > ${timeFrom}`
                     });
                 }
                 if (timeTo) {
                     filterExp.push({
                         keys: ['timestamp'],
-                        exp: `:timestamp < ${(new Date(timeTo)).getTime()}`
+                        exp: `:timestamp < ${timeTo}`
                     });
                 }
-                // local debug console
-                console.info(`fetching from ${(new Date(timeFrom))} to ${timeTo}`);
                 let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
                     DB.CUSTOMLOG.TableName,
                     null, filterExp, null, {
@@ -723,23 +727,45 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     if (!logTimeTo || item.timestamp > logTimeTo) {
                         logTimeTo = item.timestamp;
                     }
+                    let regMatches = null, nTime = null;
+                    do {
+                        regMatches = /\[(_t:([0-9]+))\]/g.exec(item.logContent);
+                        if (regMatches) {
+                            nTime = AutoScaleCore.Functions.toGmtTime(regMatches[2]);
+                            nTime = nTime && new Date(nTime.getTime() + timeZoneOffset * 3600000);
+                            let timeString = nTime ? nTime.toUTCString() :
+                                `unknown ${regMatches[2]}`;
+                            item.logContent =
+                                item.logContent.replace(new RegExp(regMatches[1], 'g'),
+                                    `[time]${timeString}${timeZoneOffset}[/time]`);
+                        }
+                    } while (regMatches);
                     logContent += item.logContent;
                 });
                 rowCount += currentCount;
-                if (timeTo && ((new Date(timeTo)).getTime() > logTimeTo) && currentCount > 0) {
+                if (timeTo && (timeTo > logTimeTo) && currentCount > 0) {
                     timeFrom = logTimeTo;
                 } else {
                     queryDone = true;
                 }
             }
-
-            return `Log count:${rowCount}, Time from: ${new Date(logTimeFrom)} to: ` +
-            `${new Date(logTimeTo)}\n${logContent}`;
+            logTimeFrom = logTimeFrom || timeFrom;
+            logTimeTo = logTimeTo || timeTo;
+            logTimeFrom += timeZoneOffset * 3600000;
+            logTimeTo += timeZoneOffset * 3600000;
+            return `Log count:${rowCount}, Time from: ` +
+            `${(new Date(logTimeFrom)).toUTCString()}${timeZoneOffset}` +
+            ` to: ${(new Date(logTimeTo)).toUTCString()}${timeZoneOffset}\n${logContent}`;
         } catch (error) {
             return '';
         }
     }
 
+    /**
+     * delete logs from DB
+     * @param {UnixTimeStamp} timeFrom unix timestamp in UTC
+     * @param {UnixTimeStamp} timeTo unix timestamp in UTC
+     */
     async deleteLogFromDb(timeFrom, timeTo = null) {
         try {
             let timeRangeFrom = timeFrom && !isNaN(timeFrom) ? parseInt(timeFrom) : 0,
@@ -760,7 +786,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     deletionTasks.push(
                         dbClient.deleteDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
                         item.id).catch(e => {
-                            errorTasks.push(item);
+                            errorTasks.push({item: item,error: e});
                             return e;
                         }));
                 }
@@ -1364,21 +1390,32 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // TODO: this function should be inaccessible on production
         try {
             let psksecret, proxyMethod = 'method' in event && event.method, result = '';
-            let timeFrom, timeTo;
+            let timeFrom, timeTo, timeZoneOffset;
             await this.platform.init();
             if (event && event.headers) {
                 if (event.headers.psksecret) {
                     psksecret = event.headers.psksecret;
                 }
+                // time from and time to could be Date Formattable string or valid unix timestamp
                 timeFrom = event.headers.timefrom ? event.headers.timefrom : 0;
-                timeTo = event.headers.timeto ? event.headers.timeto : null;
+                timeTo = event.headers.timeto ? event.headers.timeto : Date.now();
+                timeZoneOffset = event.headers.timezoneoffset ? event.headers.timezoneoffset : 0;
+                timeFrom = AutoScaleCore.Functions.toGmtTime(timeFrom);
+                if (!timeFrom) {
+                    throw new Error(`TimeFrom (${timeFrom}) is invalid `);
+                }
+                timeTo = AutoScaleCore.Functions.toGmtTime(timeTo);
+                if (!timeTo) {
+                    throw new Error(`timeTo (${timeTo}) is invalid `);
+                }
             }
             if (!(psksecret && psksecret === process.env.FORTIGATE_PSKSECRET)) {
                 return;
             }
             switch (proxyMethod && proxyMethod.toUpperCase()) {
                 case 'GET':
-                    result = await this.platform.listLogFromDb(timeFrom, timeTo);
+                    result = await this.platform.listLogFromDb(timeFrom.getTime(), timeTo.getTime(),
+                        timeZoneOffset);
                     break;
                 case 'DELETE':
                     if (timeFrom && isNaN(timeFrom)) {
@@ -1395,7 +1432,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                             timeTo = null;
                         }
                     }
-                    result = await this.platform.deleteLogFromDb(timeFrom, timeTo);
+                    result = await this.platform.deleteLogFromDb(
+                        timeFrom.getTime(), timeTo.getTime());
                     break;
                 default:
                     break;

@@ -24,7 +24,19 @@ const uuidv5 = require('uuid/v5');
 const Logger = require('./logger');
 const crypto = require('crypto');
 const uuidGenerator = inStr => uuidv5(inStr, uuidv5.URL);
-
+const toGmtTime = function(time) {
+    let timeObject;
+    if (time instanceof Date) {
+        timeObject = time;
+    } else {
+        timeObject = new Date(isNaN(time) ? time : parseInt(time));
+    }
+    if (timeObject.getTime()) {
+        return new Date(timeObject.getTime() + timeObject.getTimezoneOffset() * 60000);
+    } else {
+        return null;
+    }
+};
 class DefaultLogger extends Logger {
     constructor(loggerObject) {
         super(loggerObject);
@@ -95,12 +107,13 @@ class DefaultLogger extends Logger {
         }
         while (this._queue.length > 0) {
             let item = this._queue.shift();
-            outputContent += `[${item.level}][${item.timestamp.toString()}][/${item.level}]\n`;
+            outputContent += `[${item.level}][_t:${item.timestamp}]\n[_c]`;
             if (item.arguments.length > 0) {
                 item.arguments.forEach(arg => {
                     outputContent += `${arg}\n`;
                 });
             }
+            outputContent += `[/_c][/${item.level}]`;
 
         }
         this._flushing = true;
@@ -207,3 +220,4 @@ exports.uuidGenerator = uuidGenerator;
 exports.sleep = sleep;
 exports.waitFor = waitFor;
 exports.calStringChecksum = calStringChecksum;
+exports.toGmtTime = toGmtTime;

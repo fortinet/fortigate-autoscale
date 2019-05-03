@@ -926,6 +926,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     // eslint-disable-next-line no-unused-vars
     async listLogFromDb(timeFrom, timeTo = null) {
+        // TODO: Don't need this level of logging for AWS for now
+        // will complete as needed.
         try {
             let query = {
                 TableName: DB.CUSTOMLOG.TableName,
