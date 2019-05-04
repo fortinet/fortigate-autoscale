@@ -192,7 +192,7 @@
         "EndpointURL": {
             "type": "string",
             "metadata": {
-                "description": "Auto-Scale App service URL.  For example, https://fgt-app-serv.azurewebsites.net/api/."
+                "description": "Auto-Scale App service URL. No trailing slash. For example, https://fgt-app-serv.azurewebsites.net."
             }
         }
     },
@@ -277,9 +277,9 @@
         "imageReference": "[variables('osType')]",
         "imageReference2": "[variables('osType2')]",
         "storageAccountName": "[concat(parameters('ScalingGroupNamePrefix'),'storage') ]",
-        "LicenseEndPoints": "[concat(parameters('EndpointURL'), 'byol-license')]",
-        "PAYGEndPoints": "[concat(parameters('EndpointURL'), 'fgt-asg-handler')]",
-        "BYOLEndPoints": "[concat(parameters('EndpointURL'), 'fgt-asg-handler')]",
+        "LicenseEndPoints": "[concat(parameters('EndpointURL'), '/api/byol-license')]",
+        "PAYGEndPoints": "[concat(parameters('EndpointURL'), '/api/fgt-asg-handler')]",
+        "BYOLEndPoints": "[concat(parameters('EndpointURL'), '/api/fgt-asg-handler')]",
         "userdata": "[concat('{\"config-url\": \"', variables('PAYGEndPoints'), '\"}\n')]",
         "userdata2": "[concat('{\"license-url\": \"', variables('LicenseEndPoints'), '\",\"config-url\": \"', variables('BYOLEndPoints'), '\"}\n')]",
         "computeApiVersion": "2017-03-30",
