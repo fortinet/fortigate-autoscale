@@ -283,6 +283,10 @@
                             "value": "[parameters('SubscriptionID')]"
                         },
                         {
+                            "name": "VM_INFO_CACHE_ENABLED",
+                            "value": "true"
+                        },
+                        {
                             "name": "DEBUG_SAVE_CUSTOM_LOG",
                             "value": "true"
                         },
