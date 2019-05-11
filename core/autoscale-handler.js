@@ -142,14 +142,11 @@ module.exports = class AutoscaleHandler {
                     process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
                 .replace(new RegExp('{ADMIN_PORT}', 'gm'),
                     process.env.FORTIGATE_ADMIN_PORT ? process.env.FORTIGATE_ADMIN_PORT : 8443)
+                .replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'),
+                    process.env.HEART_BEAT_INTERVAL ? process.env.HEART_BEAT_INTERVAL : 30)
                 .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
                     process.env.FORTIGATE_INTERNAL_ELB_DNS ?
                         process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
-
-            if (process.env.HEART_BEAT_INTERVAL) {
-                baseConfig = baseConfig.replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'),
-                    process.env.HEART_BEAT_INTERVAL);
-            }
         }
         return baseConfig;
     }
@@ -395,14 +392,24 @@ module.exports = class AutoscaleHandler {
     }
 
     /**
-     * Parse a config with given vpn configuration object. This function should be implemented in
+     * Parse a configset with given data sources. This function should be implemented in
      * a platform-specific one if needed.
-     * @param {String} config a config string to parse
-     * @param {Object} vpnConfiguration a configuration to parse
+     * @param {String} configSet a config string with placeholders. The placeholder looks like:
+     * {@device.networkInterfaces#0.PrivateIpAddress}, where @ + device incidates the data source,
+     * networkInterfaces + # + number incidates the nth item of networkInterfaces, so on and so
+     * forth. The # index starts from 0. For referencing the 0th item, it can get rid of
+     * the # + number, e.g. {@device.networkInterfaces#0.PrivateIpAddress} can be written as
+     * {@device.networkInterfaces.PrivateIpAddress}
+     * @param {Object} dataSources a json object of multiple key/value pairs with data
+     * to relace some placeholders in the configSet parameter. Each key must start with an
+     * asperand (@ symbol) to form a category of data such as: @vpc, @device, @vpn_connection, etc.
+     * The value of each key must be an object {}. Each property of this object could be
+     * a primitive, a nested object, or an array of the same type of primitives or nested object.
+     * The leaf property of a nested object must be a primitive.
      * @returns {String} a pasred config string
      */
-    async parseVpnConfiguration(config, vpnConfiguration) { // eslint-disable-line no-unused-vars
-        return await config;
+    async parseConfigSet(configSet, dataSources) { // eslint-disable-line no-unused-vars
+        return await configSet;
     }
 
     async getMasterConfig(parameters) {
@@ -412,7 +419,8 @@ module.exports = class AutoscaleHandler {
         if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
             // append vpnConfig to base config
             config = await this.getConfigSet(parameters.vpnConfigSetName);
-            config = await this.parseVpnConfiguration(config, parameters.vpnConfiguration);
+            config = await this.parseConfigSet(config,
+                {'@vpn_connection': parameters.vpnConfiguration});
             this._baseConfig += config;
         }
         config = this._baseConfig.replace(/\{CALLBACK_URL}/,parameters.callbackUrl ?
@@ -453,7 +461,8 @@ module.exports = class AutoscaleHandler {
         if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
             // append vpnConfig to base config
             config = await this.getConfigSet(parameters.vpnConfigSetName);
-            config = await this.parseVpnConfiguration(config, parameters.vpnConfiguration);
+            config = await this.parseConfigSet(config,
+                {'@vpn_connection': parameters.vpnConfiguration});
             this._baseConfig += config;
         }
         return await this._baseConfig.replace(new RegExp('set role master', 'gm'),

@@ -30,8 +30,8 @@ config vpn ipsec phase1-interface
         set proposal aes128-sha1
         set keylife 28800
         set net-device enable
-        set remote-gw {ipsec_tunnel.vpn_gateway.tunnel_outside_address.ip_address}
-        set psksecret {ipsec_tunnel.ike.pre_shared_key}
+        set remote-gw {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_outside_address.ip_address}
+        set psksecret {@vpn_connection.ipsec_tunnel.ike.pre_shared_key}
         set dpd-retryinterval 10
     next
 end
@@ -50,28 +50,32 @@ end
 config system interface
     edit "tgw-vpn-1"
         set interface "port1"
-        set ip {ipsec_tunnel.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
+        set ip {@vpn_connection.ipsec_tunnel.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
         set allowaccess ping
         set type tunnel
         set tcp-mss 1379
-        set remote-ip {ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address} {ipsec_tunnel.vpn_gateway.tunnel_inside_address.network_mask}
+        set remote-ip {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address} {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.network_mask}
     next
 end
 
 #4: Border Gateway Protocol (BGP) Configuration
 config router bgp
-    set as {ipsec_tunnel.customer_gateway.bgp.asn}
-    set router-id {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address}
+    set as {@vpn_connection.ipsec_tunnel.customer_gateway.bgp.asn}
+    set router-id {@device.networkInterfaces#0.PrivateIpAddress}
     set ebgp-multipath enable
+    set network-import-check disable
     config neighbor
-        edit {ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address}
+        edit {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address}
             set capability-default-originate enable
-            set remote-as {ipsec_tunnel.vpn_gateway.bgp.asn}
+            set link-down-failover enable
+            set description "{@vpn_connection.id}-1"
+            set remote-as {@vpn_connection.ipsec_tunnel.vpn_gateway.bgp.asn}
+            set route-map-out "rmap-outbound"
         next
     end
     config network
         edit 1
-            set prefix {@vpc.CidrBlock}
+            set prefix {@device.networkInterfaces#0.PrivateIpAddress} 255.255.255.255
         next
     end
 end
@@ -86,8 +90,8 @@ config vpn ipsec phase1-interface
         set proposal aes128-sha1
         set keylife 28800
         set net-device enable
-        set remote-gw {ipsec_tunnel#1.vpn_gateway.tunnel_outside_address.ip_address}
-        set psksecret {ipsec_tunnel#1.ike.pre_shared_key}
+        set remote-gw {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_outside_address.ip_address}
+        set psksecret {@vpn_connection.ipsec_tunnel#1.ike.pre_shared_key}
         set dpd-retryinterval 10
     next
 end
@@ -105,41 +109,35 @@ end
 #3: Tunnel Interface Configuration
 config system interface
     edit "tgw-vpn-2"
-        set ip {ipsec_tunnel#1.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
+        set interface "port1"
+        set ip {@vpn_connection.ipsec_tunnel#1.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
         set allowaccess ping
         set type tunnel
         set tcp-mss 1379
-        set remote-ip {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address} {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.network_mask}
-        set interface "port1"
+        set remote-ip {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address} {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.network_mask}
     next
 end
 
 #4: Border Gateway Protocol (BGP) Configuration
 config router bgp
-    set as {ipsec_tunnel.customer_gateway.bgp.asn}
-    set router-id {ipsec_tunnel#1.customer_gateway.tunnel_outside_address.ip_address}
+    set as {@vpn_connection.ipsec_tunnel.customer_gateway.bgp.asn}
+    set router-id {@device.networkInterfaces#0.PrivateIpAddress}
     set ebgp-multipath enable
+    set network-import-check disable
     config neighbor
-        edit {ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address}
+        edit {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address}
             set capability-default-originate enable
-            set remote-as {ipsec_tunnel#1.vpn_gateway.bgp.asn}
+            set link-down-failover enable
+            set description "{@vpn_connection.id}-2"
+            set remote-as {@vpn_connection.ipsec_tunnel#1.vpn_gateway.bgp.asn}
+            set route-map-out "rmap-outbound"
         next
     end
     config network
         edit 1
-            set prefix {@vpc.CidrBlock}
+            set prefix {@device.networkInterfaces#0.PrivateIpAddress} 255.255.255.255
         next
     end
-end
-
-#Loopback Interface Configurations
-config system interface
-    edit "loopback"
-        set vdom "root"
-        set ip {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address} 255.255.255.255
-        set allowaccess ping https ssh fgfm
-        set type loopback
-    next
 end
 
 #Router Configuration
@@ -181,8 +179,8 @@ end
 
 config firewall ippool
     edit "ippool"
-        set startip {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address}
-        set endip {ipsec_tunnel.customer_gateway.tunnel_outside_address.ip_address}
+        set startip {@device.networkInterfaces#0.PrivateIpAddress}
+        set endip {@device.networkInterfaces#0.PrivateIpAddress}
     next
 end
 
@@ -195,7 +193,7 @@ end
 #Firewall Policy Configuration
 config firewall policy
     edit 1
-        set name "transit-gateway-inline"
+        set name "vpc-vpc_access"
         set srcintf "sys-zone-tgw-vpn"
         set dstintf "sys-zone-tgw-vpn"
         set srcaddr "all"
@@ -204,9 +202,12 @@ config firewall policy
         set schedule "always"
         set service "ALL"
         set fsso disable
+        set nat enable
+        set ippool enable
+        set poolname "ippool"
     next
     edit 2
-        set name "transit-gateway-inline-internet-access"
+        set name "vpc-internet_access"
         set srcintf "sys-zone-tgw-vpn"
         set dstintf "port1"
         set srcaddr "all"
@@ -215,35 +216,6 @@ config firewall policy
         set schedule "always"
         set service "ALL"
         set fsso disable
+        set nat enable
     next
 end
-
-#Firewall Address Configuration
-
-#Those transit gateway inline firewall addresses are per vpc attachment to the transit gateway
-#You should add them based on your transit gateway network environment.
-#Here is an example configuration for an attached vpc with cidr 10.0.0.0/16
-#In this example. all packets with destination to this vpc should be routed back to the transit gateway.
-#And there should be a route domain in the transit gateway to forward the packets to the right vpc
-#Remove the first hashtag on each line below to enable these exsample configurations
-
-#config firewall address
-#    edit "transit-gateway-inline-10.0.0.0"
-#        set subnet 10.0.0.0 255.255.0.0
-#    next
-#end
-#
-#config firewall addrgrp
-#    edit "transit-gateway-inline"
-#        set member "transit-gateway-inline-10.0.0.0"
-#    next
-#end
-#
-#config firewall address
-#    edit "firewall-vpc-subnet-1"
-#        set subnet {@vpc.subnet#0.CidrBlock}
-#    next
-#    edit "firewall-vpc-subnet-2"
-#        set subnet {@vpc.subnet#1.CidrBlock}
-#    next
-#end

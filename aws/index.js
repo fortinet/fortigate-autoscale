@@ -1262,7 +1262,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             TableName: DB.VPNATTACHMENT.TableName
         };
 
-        let parseConfiguration = configuration => {
+        let xmlToJson = configuration => {
             return new Promise((resolve, reject) => {
                 let xmlParser = new Xml2js.Parser({trim: true});
                 xmlParser.parseString(configuration, (err, result) => {
@@ -1273,7 +1273,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 });
             });
         };
-        let configuration = await parseConfiguration(vpnConnection.CustomerGatewayConfiguration);
+        let configuration = await xmlToJson(vpnConnection.CustomerGatewayConfiguration);
         params.Item = {
             instanceId: instance.instanceId,
             publicIp: instance.primaryPublicIpAddress,
@@ -1805,6 +1805,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 params.vpnConfigSetName = 'setuptgwvpn';
                 params.vpnConfiguration =
                 vpnAttachmentRecord.customerGatewayConfiguration.vpn_connection;
+                params.vpnConfiguration.id = params.vpnConfiguration.$.id;
             }
         }
 
@@ -2229,15 +2230,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     /** @override */
-    async parseVpnConfiguration(config, vpnConfiguration) {
-        let resourceMap = {
-            vpnConfiguration: vpnConfiguration
-        };
-        let nodePath, conf = config, match,
-            matches = typeof config === 'string' ? config.match(/({\S+})/gm) : [];
+    async parseConfigSet(configSet, dataSources) {
+        let resourceMap = {};
+        Object.assign(resourceMap, dataSources);
+        let nodePath, conf = configSet, match,
+            matches = typeof configSet === 'string' ? configSet.match(/({\S+})/gm) : [];
         try {
             for (nodePath of matches) {
-                let data = null, resource = null, replaceBy = null,
+                let data = null, replaceBy = null,
                     resRoot = typeof nodePath === 'string' ? nodePath.split('.')[0].substr(1) : '';
                 switch (resRoot) {
                     case '@vpc':// reference the current vpc of this device
@@ -2253,16 +2253,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                                 resourceMap['@vpc'].subnet = data;
                             }
                         }
-                        resource = resourceMap; // here pass the the upper level object where it's
                         // slightly deferent from the default case.
                         replaceBy =
-                            AutoScaleCore.Functions.configSetResourceFinder(resource, nodePath);
+                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
                         break;
                     case '@device':// reference this device
                         resourceMap['@device'] = this._selfInstance;
-                        resource = resourceMap; // here pass the the upper level object where it's
                         replaceBy =
-                            AutoScaleCore.Functions.configSetResourceFinder(resource, nodePath);
+                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
                         break;
                     case '@setting': // fetch from settings in the db
                         // will fetch info from db that input by user when deploy the template
@@ -2275,9 +2273,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         replaceBy = resourceMap[match];
                         break;
                     default:
-                        resource = resourceMap.vpnConfiguration;
-                        replaceBy =
-                            AutoScaleCore.Functions.configSetResourceFinder(resource, nodePath);
+                        if (resourceMap[resRoot]) {
+                            replaceBy =
+                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
+                        }
                         break;
                 }
                 if (replaceBy) {
