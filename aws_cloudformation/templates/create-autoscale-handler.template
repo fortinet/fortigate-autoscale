@@ -97,10 +97,6 @@
             "MaxValue": 65535,
             "ConstraintDescription": "must be a valid number between 1 and 65535.",
             "Description": "Number of consecutively lost heartbeats. When the Heartbeat loss count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
-        },
-        "TransitGatewayId": {
-            "Type": "String",
-            "Description": "The Transit Gateway ID."
         }
     },
     "Conditions": {
@@ -612,11 +608,9 @@
                                 ]
                             ]
                         },
-                        "ENABLE_SECOND_NIC": "false",
-                        "ENABLE_TGW_VPN": "true",
-                        "TGW_ID": {
-                            "Ref": "TransitGatewayId"
-                        }
+                        "ENABLE_SECOND_NIC": "true",
+                        "ENABLE_TGW_VPN": "false",
+                        "TGW_ID": ""
                     }
                 },
                 "Tags": [{
@@ -774,11 +768,9 @@
                                 ]
                             ]
                         },
-                        "ENABLE_SECOND_NIC": "false",
-                        "ENABLE_TGW_VPN": "true",
-                        "TGW_ID": {
-                            "Ref": "TransitGatewayId"
-                        }
+                        "ENABLE_SECOND_NIC": "true",
+                        "ENABLE_TGW_VPN": "false",
+                        "TGW_ID": ""
                     }
                 },
                 "Tags": [{

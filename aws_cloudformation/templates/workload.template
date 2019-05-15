@@ -22,7 +22,7 @@
             "MaxLength": "8",
             "AllowedPattern": "[A-Za-z0-9]+",
             "ConstraintDescription": "must only contain uppercase and lowercase letters and digits",
-            "Description": "A random text suffix for the DynamoDB table name which can help ensure the DB table name is unique per region. Can only contain uppercase, lowercase letters, and digits. Max length is 8."
+            "Description": "A random string as a unique ID for all resources in this deployment stack and nested stacks. Max length is 8."
         },
         "S3BucketName": {
             "Type": "String",

@@ -27,12 +27,47 @@
             "ConstraintDescription": "must be a valid CIDR block format.",
             "Description": "The CIDR block for the public facing subnet located in Availability Zone 2."
         },
+        "PrivateSubnet1Cidr": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
+            "ConstraintDescription": "must be a valid CIDR block format.",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 1 where it is protected by the FortiGates in public subnet in the same AZ."
+        },
+        "PrivateSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.3.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
+            "ConstraintDescription": "must be a valid CIDR block format.",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 1 where it is protected by the FortiGates in public subnet in the same AZ."
+        },
+        "PairWithPrivateSubnet": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "ConstraintDescription": "must choose from the provided options.",
+            "Description": "Create one private subnet to pair with the public subnet in the same AZ or not."
+        },
         "ResourceTagPrefix": {
             "Type": "String",
             "AllowedPattern": "[0-9a-zA-Z@.#-]+",
             "MaxLength": 64,
             "ConstraintDescription": "Resource tag prefix can include numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64.",
             "Description": "A prefix for tag key ResourceGroup on all resources. It's also used as the name prefix of all applicable resources. Can only contain numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64."
+        }
+    },
+    "Conditions": {
+        "NeedPairedPrivateSubnet": {
+            "Fn::Not": [{
+                "Fn::Equals": [{
+                        "Ref": "PairWithPrivateSubnet"
+                    },
+                    "no"
+                ]
+            }]
         }
     },
     "Resources": {
@@ -92,7 +127,7 @@
                                 [{
                                         "Ref": "ResourceTagPrefix"
                                     },
-                                    "fortigate-autoscale-vpc-subnet#1"
+                                    "fortigate-autoscale-vpc-public-subnet#1"
                                 ]
                             ]
                         }
@@ -131,7 +166,7 @@
                                 [{
                                         "Ref": "ResourceTagPrefix"
                                     },
-                                    "fortigate-autoscale-vpc-subnet#2"
+                                    "fortigate-autoscale-vpc-public-subnet#2"
                                 ]
                             ]
                         }
@@ -263,7 +298,7 @@
                                 [{
                                         "Ref": "ResourceTagPrefix"
                                     },
-                                    "fortigate-autoscale-vpc-route-table"
+                                    "fortigate-autoscale-vpc-public-route-table"
                                 ]
                             ]
                         }
@@ -286,11 +321,7 @@
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
                 }
-            },
-            "DependsOn": [
-                "FgtPublicSubnetRouteTable",
-                "PublicSubnet1"
-            ]
+            }
         },
         "FgtPublicSubnet2RouteTableAssoc": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
@@ -301,11 +332,7 @@
                 "SubnetId": {
                     "Ref": "PublicSubnet2"
                 }
-            },
-            "DependsOn": [
-                "FgtPublicSubnetRouteTable",
-                "PublicSubnet2"
-            ]
+            }
         },
         "FgtPublicSubnetRoute1": {
             "Type": "AWS::EC2::Route",
@@ -321,6 +348,139 @@
             "DependsOn": [
                 "FgtIgwAttachment"
             ]
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "NeedPairedPrivateSubnet",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1Cidr"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "FgtAsgVpc"
+                },
+                "Tags": [{
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-autoscale-vpc-private-subnet#1"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "NeedPairedPrivateSubnet",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2Cidr"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "FgtAsgVpc"
+                },
+                "Tags": [{
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-autoscale-vpc-private-subnet#2"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
+                    }
+                ]
+            }
+        },
+        "FgtPrivateSubnetRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "NeedPairedPrivateSubnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FgtAsgVpc"
+                },
+                "Tags": [{
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-autoscale-vpc-private-route-table"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
+                    }
+                ]
+            }
+        },
+        "FgtPrivateSubnet1RouteTableAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "NeedPairedPrivateSubnet",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "FgtPrivateSubnetRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "FgtPrivateSubnet2RouteTableAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "NeedPairedPrivateSubnet",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "FgtPrivateSubnetRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
         }
     },
     "Outputs": {
@@ -346,6 +506,58 @@
             "Description": "Public Subnet 2 ID",
             "Value": {
                 "Ref": "PublicSubnet2"
+            }
+        },
+        "PublicSubnetRouteTableId": {
+            "Description": "Public Subnet Route Table ID",
+            "Value": {
+                "Ref": "FgtPublicSubnetRouteTable"
+            }
+        },
+        "PairWithPrivateSubnet": {
+            "Description": "Pair with private subnet",
+            "Value": {
+                "Fn::If": [
+                    "NeedPairedPrivateSubnet",
+                    "yes",
+                    "no"
+                ]
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Fn::If": [
+                    "NeedPairedPrivateSubnet",
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    ""
+                ]
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Fn::If": [
+                    "NeedPairedPrivateSubnet",
+                    {
+                        "Ref": "PrivateSubnet2"
+                    },
+                    ""
+                ]
+            }
+        },
+        "PrivateSubnetRouteTableId": {
+            "Description": "Pair with private subnet",
+            "Value": {
+                "Fn::If": [
+                    "NeedPairedPrivateSubnet",
+                    {
+                        "Ref": "FgtPrivateSubnetRouteTable"
+                    },
+                    ""
+                ]
             }
         }
     }
