@@ -1544,10 +1544,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     constructor() {
         super(new AwsPlatform(), '');
         this._step = '';
-        this._selfInstance = null;
-        this._masterRecord = null;
-        this.setScalingGroup(process.env.AUTO_SCALING_GROUP_NAME,
-            process.env.AUTO_SCALING_GROUP_NAME);
+        this.setScalingGroup(null, null);
     }
 
     async init() {
@@ -1558,6 +1555,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } catch (error) {
             throw error;
         }
+        // load settings
+        this._settings = this._settings || await this.platform.getSettingItems();
         return success;
     }
 

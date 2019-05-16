@@ -983,6 +983,19 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await super.init();
     }
 
+    async init() {
+        let success;
+        try {
+            // call parent's init to enforce some general init checkings.
+            success = await super.init();
+        } catch (error) {
+            throw error;
+        }
+        // load settings
+        this._settings = this._settings || await this.platform.getSettingItems();
+        return success;
+    }
+
     async handle(context, event) {
         logger.info('start to handle autoscale');
         let proxyMethod = 'method' in event && event.method,

@@ -58,6 +58,14 @@ module.exports = class AutoscaleHandler {
     }
 
     /**
+     * Get the read-only settings object from the platform. To modify the settings object,
+     * do it via the platform instance but not here.
+     */
+    get _settings() {
+        return this.platform && this.platform._settings;
+    }
+
+    /**
      * Set the logger to output log to platform
      * @param {Logger} logger Logger object used to output log to platform
      */
