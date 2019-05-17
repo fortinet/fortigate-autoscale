@@ -53,10 +53,6 @@
             "Type": "String",
             "Description": "The ID of a VPC Endpoint to associate with the deployed API Gateway. This Endpoint ID is optional."
         },
-        "DbTableArnList": {
-            "Type": "String",
-            "Description": "The ARN of the DynamoDB table which is used to keep tracks of nic attachment records."
-        },
         "VpcId": {
             "Type": "AWS::EC2::VPC::Id",
             "Description": "The existing VPC IDs where you deploy the Auto Scaling group and related resources. The VPC must have the option 'DNS hostnames' enabled."
@@ -330,10 +326,18 @@
                                     "dynamodb:UpdateItem"
                                 ],
                                 "Resource": {
-                                    "Fn::Split": [
-                                        ",",
+                                    "Fn::Sub": [
+                                        "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${TABLE_NAME_PREFIX}*",
                                         {
-                                            "Ref": "DbTableArnList"
+                                            "AWS_REGION": {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "AWS_ACCOUNT_ID": {
+                                                "Ref": "AWS::AccountId"
+                                            },
+                                            "TABLE_NAME_PREFIX": {
+                                                "Ref": "ResourceTagPrefix"
+                                            }
                                         }
                                     ]
                                 }
