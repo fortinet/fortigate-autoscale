@@ -805,6 +805,13 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async listLicenseFiles() {
         let blobService = storageClient.refBlobService();
         return await new Promise((resolve, reject) => {
+            // NOTE: the etag of each object returned by Azure API function:
+            // listBlobsSegmented
+            // is NOT wrapped with double quotes.
+            // however, it would be wrapped with double quotes
+            // in the Azure API function:
+            // getBlobToText and getBlobProperties
+            // see: https://github.com/Azure/azure-storage-node/issues/586
             blobService.listBlobsSegmented('fgt-asg-license', null,
             (error, data) => {
                 if (error) {
@@ -812,7 +819,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 } else {
                     if (data && data.entries) {
                         let iterable = data.entries.map(item => {
-                            return [this.genLicenseFileSimpleKey(item.name, item.eTag),
+                            // FIXME: the etag should be enclosed with double quote
+                            return [this.genLicenseFileSimpleKey(item.name, `"${item.eTag}"`),
                                 item];
                         });
                         resolve(new Map(iterable));
@@ -883,14 +891,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async updateLicenseStock(parameters) {
         // eTag is originally wrapped with a pair of double quotes.
-        let eTag = parameters.item.properties.etag.replace(new RegExp('"', 'g'), '');
+        // NOTE: decide to use whatever the etag is passed in here. the double quotes should
+        // be handled in the caller. (May 17, 2019)
         let document = {
             id: parameters.checksum,
             checksum: parameters.checksum,
             filePath: parameters.item.properties.container,
             fileName: parameters.item.properties.name,
             algorithm: parameters.algorithm,
-            fileETag: eTag
+            fileETag: parameters.item.properties.etag
         };
 
         try {
