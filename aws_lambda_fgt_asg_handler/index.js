@@ -48,8 +48,15 @@ async function restart() {
     await autoscaleHandler.resetMasterElection();
     // set desired capacity & min size from saved setting to start auto scaling again
     let settings = await autoscaleHandler.loadAutoScalingSettings();
-    await autoscaleHandler.updateCapacity(settings.desiredCapacity,
+    // FIXME: if bug 0560197 is fixed, the delay added here needs to remove
+    // and update the capacity to settings.desiredCapacity
+    await autoscaleHandler.updateCapacity(1,
                         settings.minSize, settings.maxSize);
+    if (settings.desiredCapacity > 1) {
+        await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
+        await autoscaleHandler.updateCapacity(settings.desiredCapacity,
+            settings.minSize, settings.maxSize);
+    }
 }
 
 async function stop() {
