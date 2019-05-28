@@ -378,7 +378,7 @@
                                 ],
                                 "Resource": {
                                     "Fn::Sub": [
-                                        "arn:aws:autoscaling:${AWS_REGION}:${AWS_ACCOUNT_ID}:autoScalingGroup:*:autoScalingGroupName/${ASG_NAME}",
+                                        "arn:aws:autoscaling:${AWS_REGION}:${AWS_ACCOUNT_ID}:autoScalingGroup:*:autoScalingGroupName/${ASG_NAME}*",
                                         {
                                             "AWS_REGION": {
                                                 "Ref": "AWS::Region"
@@ -387,14 +387,7 @@
                                                 "Ref": "AWS::AccountId"
                                             },
                                             "ASG_NAME": {
-                                                "Fn::Join": [
-                                                    "-",
-                                                    [{
-                                                            "Ref": "ResourceTagPrefix"
-                                                        },
-                                                        "fortigate-auto-scaling-group"
-                                                    ]
-                                                ]
+                                                "Ref": "ResourceTagPrefix"
                                             }
                                         }
                                     ]
@@ -619,7 +612,7 @@
                                 ]
                             ]
                         },
-                        "ENABLE_SECOND_NIC": "true",
+                        "ENABLE_SECOND_NIC": "false",
                         "ENABLE_TGW_VPN": "true",
                         "TGW_ID": {
                             "Ref": "TransitGatewayId"
@@ -781,7 +774,7 @@
                                 ]
                             ]
                         },
-                        "ENABLE_SECOND_NIC": "true",
+                        "ENABLE_SECOND_NIC": "false",
                         "ENABLE_TGW_VPN": "true",
                         "TGW_ID": {
                             "Ref": "TransitGatewayId"

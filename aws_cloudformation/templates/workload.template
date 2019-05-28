@@ -486,11 +486,11 @@
                     "UniqueId": {
                         "Ref": "UniqueId"
                     },
+                    "HandlerScriptTimeout": 300,
+                    "ServiceScriptTimeout": 900,
                     "VpcEndPoint": {
                         "Ref": "FgtAsgVpcEndpoint"
                     },
-                    "HandlerScriptTimeout": 300,
-                    "ServiceScriptTimeout": 900,
                     "DbTableArnList": {
                         "Fn::GetAtt": [
                             "StackCreateDynamoDBTable",
@@ -789,6 +789,49 @@
                 }
             }
         },
+        "StackCreateTransitGatewayVpnHandler": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "Parameters": {
+                    "S3BucketName": {
+                        "Ref": "S3BucketName"
+                    },
+                    "S3KeyPrefix": {
+                        "Ref": "S3KeyPrefix"
+                    },
+                    "ResourceTagPrefix": {
+                        "Ref": "ResourceTagPrefix"
+                    },
+                    "CustomIdentifier": {
+                        "Ref": "CustomIdentifier"
+                    },
+                    "UniqueId": {
+                        "Ref": "UniqueId"
+                    }
+                },
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/create-tgw-vpn-handler.template",
+                        {
+                            "S3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            },
+                            "S3BucketName": {
+                                "Ref": "S3BucketName"
+                            },
+                            "S3KeyPrefix": {
+                                "Ref": "S3KeyPrefix"
+                            }
+                        }
+                    ]
+                },
+                "TimeoutInMinutes": 10
+            }
+        },
         "StackCreateFortiGateAutoScalingGroup": {
             "Type": "AWS::CloudFormation::Stack",
             "Properties": {
@@ -997,6 +1040,7 @@
                     ]
                 },
                 "ServiceType": "saveSettings",
+                "DeploymentSettingsSaved": "true",
                 "ResourceTagPrefix": {
                     "Ref": "ResourceTagPrefix"
                 },
@@ -1010,7 +1054,14 @@
                     "Ref": "S3BucketName"
                 },
                 "AssetStorageKeyPrefix": {
-                    "Ref": "S3KeyPrefix"
+                    "Fn::Sub": [
+                        "${keyprefix}assets/",
+                        {
+                            "keyprefix": {
+                                "Ref": "S3KeyPrefix"
+                            }
+                        }
+                    ]
                 },
                 "VpcId": {
                     "Fn::GetAtt": [
@@ -1081,11 +1132,23 @@
                         }
                     ]
                 },
+                "TransitGatewayRouteTableInbound": {
+                    "Ref": "TransitGatewayRouteTableInbound"
+                },
+                "TransitGatewayRouteTableOutbound": {
+                    "Ref": "TransitGatewayRouteTableOutbound"
+                },
                 "EnableTransitGatewayVpn": "true",
                 "EnableSecondNic": "false",
                 "EnableExternalElb": "false",
                 "EnableInternalElb": "false",
-                "InternalElbDns": ""
+                "InternalElbDns": "",
+                "TransitGatewayVpnHandlerName": {
+                    "Fn::GetAtt": [
+                        "StackCreateTransitGatewayVpnHandler",
+                        "Outputs.HandlerName"
+                    ]
+                }
             },
             "DependsOn": [
                 "StackCreateFortiGateAutoScalingGroup",
@@ -1206,6 +1269,32 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "lambda:InvokeFunction",
+                            "lambda:InvokeAsync"
+                        ],
+                        "Resource": {
+                            "Fn::Sub": [
+                                "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${CUSTOM_ID}-${UNIQUE_ID}*",
+                                {
+                                    "AWS_REGION": {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    "AWS_ACCOUNT_ID": {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    "CUSTOM_ID": {
+                                        "Ref": "CustomIdentifier"
+                                    },
+                                    "UNIQUE_ID": {
+                                        "Ref": "UniqueId"
+                                    }
+                                }
+                            ]
+                        }
                     }]
                 },
                 "PolicyName": "fortigate-autoscale-transit-gateway-management-policy",
@@ -1280,7 +1369,47 @@
                 ]
             }
         },
-        "TransitGatewayRouteTableInline": {
+        "TransitGatewayRouteTableInbound": {
+            "Type": "AWS::EC2::TransitGatewayRouteTable",
+            "Condition": "CreateTransitGateway",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Fn::If": [
+                        "CreateTransitGateway",
+                        {
+                            "Fn::GetAtt": [
+                                "StackCreateNewTransitGateway",
+                                "Outputs.TransitGatewayId"
+                            ]
+                        },
+                        {
+                            "Ref": "TransitGatewayId"
+                        }
+                    ]
+                },
+                "Tags": [{
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "transit-gateway-route-table-inbound"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransitGatewayRouteTableOutbound": {
             "Type": "AWS::EC2::TransitGatewayRouteTable",
             "Properties": {
                 "TransitGatewayId": {
@@ -1305,7 +1434,7 @@
                                 [{
                                         "Ref": "ResourceTagPrefix"
                                     },
-                                    "transit-gateway-route-table-inline"
+                                    "transit-gateway-route-table-outbound"
                                 ]
                             ]
                         }
@@ -1319,74 +1448,27 @@
                 ]
             }
         },
-        "TransitGatewayRouteTableFgtVPC": {
-            "Type": "AWS::EC2::TransitGatewayRouteTable",
-            "Properties": {
-                "TransitGatewayId": {
-                    "Fn::If": [
-                        "CreateTransitGateway",
-                        {
-                            "Fn::GetAtt": [
-                                "StackCreateNewTransitGateway",
-                                "Outputs.TransitGatewayId"
-                            ]
-                        },
-                        {
-                            "Ref": "TransitGatewayId"
-                        }
-                    ]
-                },
-                "Tags": [{
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "transit-gateway-route-table-fortigate-vpc"
-                                ]
-                            ]
-                        }
-                    },
-                    {
-                        "Key": "ResourceGroup",
-                        "Value": {
-                            "Ref": "ResourceTagPrefix"
-                        }
-                    }
-                ]
-            }
-        },
-        "TransitGatewayRouteToFgtAsgVPC": {
-            "Type": "AWS::EC2::TransitGatewayRoute",
-            "Properties": {
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "TransitGatewayAttachmentId": {
-                    "Ref": "TransitGatewayAttachmentFgtVPC"
-                },
-                "TransitGatewayRouteTableId": {
-                    "Ref": "TransitGatewayRouteTableInline"
-                }
-            },
-            "DependsOn": [
-                "TransitGatewayAttachmentFgtVPC"
-            ]
-        },
-        "TransitGatewayAssocFgtAsgVPC": {
+        "TransitGatewayAssociationFgtAsgVPC": {
             "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
             "Properties": {
                 "TransitGatewayAttachmentId": {
                     "Ref": "TransitGatewayAttachmentFgtVPC"
                 },
                 "TransitGatewayRouteTableId": {
-                    "Ref": "TransitGatewayRouteTableFgtVPC"
+                    "Ref": "TransitGatewayRouteTableOutbound"
                 }
-            },
-            "DependsOn": [
-                "TransitGatewayAttachmentFgtVPC",
-                "TransitGatewayRouteToFgtAsgVPC"
-            ]
+            }
+        },
+        "TransitGatewayPropagationFgtAsgVPC": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "TransitGatewayAttachmentFgtVPC"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "TransitGatewayRouteTableInbound"
+                }
+            }
         }
     },
     "Metadata": {

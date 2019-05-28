@@ -33,32 +33,30 @@ exports.handler = async (event, context) => {
         let serviceType = event.ResourceProperties.ServiceType;
         logger.info(`RequestType: ${event.RequestType}, serviceType: ${serviceType}`);
         if (event.RequestType === 'Create') {
-            let subnetPairs = [];
+            let subnetPairs = [], params = Object.assign({}, event.ResourceProperties);
             switch (serviceType) {
                 case 'initiateAutoscale':
                     // initiate
                     subnetPairs = [
                         {
-                            subnetId: event.ResourceProperties.Subnet1,
-                            pairId: event.ResourceProperties.Subnet1Pair
+                            subnetId: params.Subnet1,
+                            pairId: params.Subnet1Pair
                         },
                         {
-                            subnetId: event.ResourceProperties.Subnet2,
-                            pairId: event.ResourceProperties.Subnet2Pair
+                            subnetId: params.Subnet2,
+                            pairId: params.Subnet2Pair
                         }
                     ];
-                    await autoscaleHandler.initiate(
-                        event.ResourceProperties.DesiredCapacity,
-                        event.ResourceProperties.MinSize,
-                        event.ResourceProperties.MaxSize,
-                        subnetPairs);
+                    await autoscaleHandler.init();
+                    await autoscaleHandler.initiate(params.DesiredCapacity, params.MinSize,
+                        params.MaxSize, subnetPairs);
                     await autoscaleHandler.restart();
                     break;
                 case 'saveSettings':
-                    // save settings
-                    await autoscaleHandler.saveSettings(
-                        Object.assign({}, event.ResourceProperties)
-                    );
+                    // no need to call await autoscaleHandler.init();
+                    // this setting item indicates all deployment settings have been saved.
+                    params.DeploymentSettingsSaved = 'true';
+                    await autoscaleHandler.saveSettings(params);
                     break;
                 case 'restartAutoscale':
                     // set desired capacity & min size to 0 to terminate all existing instnaces
@@ -68,15 +66,15 @@ exports.handler = async (event, context) => {
                     // must also adjust the script timeout to allow enough time for the process to
                     // complete
                     // this may take a significantly long time
+                    await autoscaleHandler.init();
                     await autoscaleHandler.restart();
                     break;
                 case 'updateCapacity':
                     // manually change current desired capacity & adjust min size
+                    await autoscaleHandler.init();
                     await autoscaleHandler.updateCapacity(
-                        event.ResourceProperties.DesiredCapacity,
-                        event.ResourceProperties.MinSize,
-                        event.ResourceProperties.MaxSize
-                    );
+                        autoscaleHandler.getSettings['payg-auto-scaling-group-name'],
+                        params.desiredCapacity, params.minSize, params.maxSize);
                     break;
                 case 'stopAutoscale':
                     // do not need to respond to the stop service type while resource is creating
@@ -91,10 +89,39 @@ exports.handler = async (event, context) => {
             // clean up the left over detached nic in case there are some
             if (serviceType === 'stopAutoscale') {
                 let promiseEmitter = () => {
-                        return Promise.resolve(autoscaleHandler.checkAutoScalingGroupState());
+                        let tasks = [];
+                        // check if all additional nics are detached and removed
+                        if (autoscaleHandler.getSettings['enable-second-nic'] === 'true') {
+                            tasks.push(autoscaleHandler.platform.listNicAttachmentRecord()
+                                .then(nicAttachmentCheck => {
+                                    return {checkName: 'nicAttachmentCheck',
+                                        result: !nicAttachmentCheck ||
+                                                nicAttachmentCheck.length === 0
+                                    };
+                                }));
+                        }
+                        if (autoscaleHandler.getSettings['enable-hybrid-licensing'] === 'true') {
+                            tasks.push(autoscaleHandler.checkAutoScalingGroupState(
+                                autoscaleHandler.getSettings['byol-auto-scaling-group-name']
+                            ).then(byolGroupCheck => {
+                                return {checkName: 'byolGroupCheck',
+                                    result: !byolGroupCheck || byolGroupCheck === 'stopped'};
+                            }));
+                        }
+                        tasks.push(autoscaleHandler.checkAutoScalingGroupState(
+                            autoscaleHandler.getSettings['payg-auto-scaling-group-name']
+                        ).then(paygGroupCheck => {
+                            return {checkName: 'paygGroupCheck',
+                                result: !paygGroupCheck || paygGroupCheck === 'stopped'};
+                        }));
+                        return Promise.all(tasks);
                     },
-                    validator = result => {
-                        return result === null || result === 'stopped';
+                    validator = resultArray => {
+                        let fullyStopped = true;
+                        resultArray.forEach(item => {
+                            fullyStopped = fullyStopped && item.result;
+                        });
+                        return fullyStopped;
                     },
                     counter = () => {
                         if (Date.now() < scriptExecutionExpireTime - 5000) {
@@ -103,6 +130,7 @@ exports.handler = async (event, context) => {
                         throw new Error('cannot wait for auto scaling group status because ' +
                     'script execution is about to expire');
                     };
+                await autoscaleHandler.init();
                 // this may take a significantly long time to wait for its fully stop
                 await autoscaleHandler.stop();
                 try {
@@ -115,6 +143,7 @@ exports.handler = async (event, context) => {
                 }
                 // clean up
                 await autoscaleHandler.cleanUp();
+                return;
             }
         }
         responseStatus = cfnResponse.SUCCESS;

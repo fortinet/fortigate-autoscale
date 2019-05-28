@@ -369,6 +369,96 @@ async function makeDistAWSLambdaNicAttachment(options = {saveToDist: 'zip', keep
     };
 }
 
+async function makeDistAWSLambdaTgwVpnHandler(options = {saveToDist: 'zip', keepTemp: false}) {
+    console.info('Making distribution zip package for: AWS Lambda Transit Gateway VPN handler function');
+    let pm = Packman.spawn(),
+        packageName = options.packageName ? options.packageName : 'aws_lambda_tgw_vpn_handler',
+        rTempDir = await pm.makeTempDir(),
+        rTempDirSrc = path.resolve(rTempDir, 'src'),
+        rTempDirSrcLambda = path.resolve(rTempDirSrc, packageName),
+        rTempDirSrcLib = path.resolve(rTempDirSrcLambda, 'lib'),
+        rTempDirSrcCore = path.resolve(rTempDirSrcLib, 'core'),
+        rTempDirSrcAws = path.resolve(rTempDirSrcLib, 'aws'),
+        packageInfo,
+        zipFilePath,
+        rDirSrcCore = path.resolve(REAL_PROJECT_ROOT, './core'),
+        rDirSrcAws = path.resolve(REAL_PROJECT_ROOT, './aws'),
+        rDirSrcLambda = path.resolve(REAL_PROJECT_ROOT, './aws_lambda_tgw_vpn_handler'),
+        rDirDist = path.resolve(REAL_PROJECT_ROOT, './dist'),
+        zipFileName,
+        packageType,
+        saveAs;
+
+    // create temp dirs
+    await pm.makeDir(rTempDirSrc);
+    await pm.makeDir(rDirDist);
+    // copy lambda module to temp dir
+    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, ['node_modules', 'local*', 'test',
+        '.nyc_output', '.vscode', 'package-lock.json']);
+    // create library dir on funcapp
+    await pm.makeDir(rTempDirSrcLib);
+    // copy core module to temp dir and remove unnecessary files
+    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore,
+        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    // copy aws module to temp dir and remove unnecessary files
+    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws,
+        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    // install aws as dependency
+    await pm.npmInstallAt(rTempDirSrcLambda,
+        ['--save', rTempDirSrcAws.replace(rTempDirSrcLambda, '.')]);
+    // TODO: the following two function calls should be removed once async-cfn-response module is
+    // published to npm
+
+    // read package info of module lambda
+    packageInfo = pm.readPackageJsonAt(rTempDirSrcLambda);
+    // if a package name is given in the options, use the package name as zip name,
+    // otherwise use the package name in the package.json
+    zipFileName = options.packageName ? `${packageName}.zip` : `${packageInfo.name}.zip`;
+    // if only make zip file distribution file
+    if (options && options.saveToDist === 'zip') {
+    // zip
+        zipFilePath = await pm.zipSafe(zipFileName, rTempDirSrcLambda, ['*.git*', '*.vsc*']);
+        // copy the zip file to distribution directory
+        await pm.copy(zipFilePath, rDirDist);
+        // move zip file to upper level directory
+        await pm.moveSafe(zipFilePath, path.resolve(rTempDirSrcLambda, '..'));
+        packageType = 'zip';
+        saveAs = path.resolve(rDirDist, zipFileName);
+    } else if (options && options.saveToDist === 'directory') {
+        // copy folder to distribution directory
+        await pm.copy(rTempDirSrcLambda, rDirDist);
+        packageType = 'directory';
+        saveAs = rDirSrcLambda;
+    } else {
+        // save the zip file to the temp directory
+        zipFilePath = await pm.zipSafe(zipFileName, rTempDirSrcLambda, ['*.git*', '*.vsc*']);
+        // move zip file to upper level directory
+        await pm.moveSafe(zipFilePath, path.resolve(rTempDirSrcLambda, '..'));
+        zipFilePath = path.resolve(rTempDirSrcLambda, '..', zipFileName);
+        packageType = 'zip';
+        saveAs = zipFilePath;
+    }
+    // if keep temp is true, the kept temp dir will be return and the calle is responsible for
+    // deleteing it after use.
+    if (!(options && options.keepTemp)) {
+        await pm.removeTempDir();
+    }
+    console.info('\n\n( ͡° ͜ʖ ͡°) package is saved as:');
+    console.info(`${saveAs}`);
+    return {
+        tempDir: rTempDir,
+        packageInfo: packageInfo,
+        packageFileName: zipFileName,
+        packageName: packageName,
+        packagePath: saveAs,
+        packageType: packageType,
+        sourceDir: rTempDirSrcLambda,
+        removeTempDir: async () => {
+            await pm.removeTempDir();
+        } // this holds a reference to the function to remove temp
+    };
+}
+
 async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart: false,
     fazhandler: true}) {
     // create the aws cloud formation package
@@ -380,6 +470,8 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
                 packageName: 'fgt-asg-handler', keepTemp: true}),
         nicAttachmentTempDist = await makeDistAWSLambdaNicAttachment({saveToDist: 'none',
             packageName: 'nic-attachment', keepTemp: true}),
+        tgwVpnHandlerTempDist = await makeDistAWSLambdaTgwVpnHandler({saveToDist: 'none',
+            packageName: 'tgw-vpn-handler', keepTemp: true}),
         rTempDir = await pm.makeTempDir(), // create temp folder
         rTempDirCloudFormation = path.resolve(rTempDir, 'aws_cloudformation'),
         rTempDirFunctionPackages = path.resolve(rTempDirCloudFormation, 'functions', 'packages'),
@@ -440,6 +532,21 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     }
     // remove the temp file
     nicAttachmentTempDist.removeTempDir();
+
+    // tgw vpn handler
+    // remove aws-quickstart unwanted files
+    await pm.remove(excludeList, tgwVpnHandlerTempDist.sourceDir);
+    // move the zip to functions/packages/
+    await pm.moveSafe(tgwVpnHandlerTempDist.packagePath, rTempDirFunctionPackages);
+    // move the source into functions/source/
+    if (saveSource) {
+        rTempDirPackage = path.resolve(rTempDirFunctionSources, tgwVpnHandlerTempDist.packageName);
+        await pm.makeDir(rTempDirPackage);
+        await pm.moveSafe(tgwVpnHandlerTempDist.sourceDir, rTempDirPackage,
+            {moveSourceFiles: saveSource});
+    }
+    // remove the temp file
+    tgwVpnHandlerTempDist.removeTempDir();
 
     // faz-handler
     if (options.fazhandler) {
@@ -628,6 +735,9 @@ switch (scrptName.toLowerCase()) {
     case 'aws-lambda-nic-attachment':
         makeDistAWSLambdaNicAttachment();
         break;
+    case 'aws-lambda-tgw-vpn-handler':
+        makeDistAWSLambdaTgwVpnHandler();
+        break;
     case 'aws-cloudformation':
         makeDistAwsCloudFormation({quickstart: false, fazhandler: false});
         break;
@@ -649,6 +759,7 @@ switch (scrptName.toLowerCase()) {
         console.warn('npm run build-aws-lambda-fgt-asg-handler');
         console.warn('npm run build-aws-lambda-faz-handler');
         console.warn('npm run build-aws-lambda-nic-attachment');
+        console.warn('npm run build-aws-lambda-tgw-vpn-handler');
         console.warn('npm run build-aws-cloudformation');
         console.warn('npm run build-aws-quickstart-special');
         break;

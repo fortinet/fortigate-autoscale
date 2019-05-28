@@ -20,6 +20,18 @@ if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
 autoscaleHandler.useLogger(logger);
 ftgtAutoscaleAws.initModule();
 
+async function init() {
+    if (!autoscaleHandler._settings) {
+        await autoscaleHandler.init();
+    } else {
+        return Promise.resolve(true);
+    }
+}
+
+function getSettings() {
+    return autoscaleHandler._settings;
+}
+
 /**
  * AWS Lambda Entry.
  * @param {Object} event The event been passed to
@@ -42,46 +54,55 @@ async function saveSettings(settings) {
 }
 
 async function restart() {
+    await init();
     // autoscaleHandler = autoscaleHandler || new ftgtAutoscaleAws.autoscaleHandler();
-    await autoscaleHandler.updateCapacity(0, 0, null);
+    await autoscaleHandler.updateCapacity(
+        autoscaleHandler._settings['payg-auto-scaling-group-name'], 0, 0, null);
     // delete master election result
     await autoscaleHandler.resetMasterElection();
     // set desired capacity & min size from saved setting to start auto scaling again
     let settings = await autoscaleHandler.loadAutoScalingSettings();
     // FIXME: if bug 0560197 is fixed, the delay added here needs to remove
     // and update the capacity to settings.desiredCapacity
-    await autoscaleHandler.updateCapacity(1,
-                        settings.minSize, settings.maxSize);
+    await autoscaleHandler.updateCapacity(
+        autoscaleHandler._settings['payg-auto-scaling-group-name'], 1, 1, settings.maxSize);
     if (settings.desiredCapacity > 1) {
         await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
-        await autoscaleHandler.updateCapacity(settings.desiredCapacity,
+        await autoscaleHandler.updateCapacity(
+            autoscaleHandler._settings['payg-auto-scaling-group-name'], settings.desiredCapacity,
             settings.minSize, settings.maxSize);
     }
 }
 
 async function stop() {
-    await autoscaleHandler.updateCapacity(0, 0, null);
+    await init();
+    if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true') {
+        await autoscaleHandler.updateCapacity(
+            autoscaleHandler._settings['byol-auto-scaling-group-name'], 0, 0, null);
+    }
+    await autoscaleHandler.updateCapacity(
+        autoscaleHandler._settings['payg-auto-scaling-group-name'], 0, 0, null);
     // delete master election result
     await autoscaleHandler.resetMasterElection();
 }
 
-async function updateCapacity(desiredCapacity, minSize, maxSize) {
-    await autoscaleHandler.updateCapacity(desiredCapacity,
-        minSize, maxSize);
+async function updateCapacity(scalingGroupName, desiredCapacity, minSize, maxSize) {
+    await autoscaleHandler.updateCapacity(scalingGroupName, desiredCapacity, minSize, maxSize);
 }
 
-async function checkAutoScalingGroupState() {
-    return await autoscaleHandler.checkAutoScalingGroupState();
+async function checkAutoScalingGroupState(scalingGroupName) {
+    return await autoscaleHandler.checkAutoScalingGroupState(scalingGroupName);
 }
 
 async function cleanUp() {
     let tasks = [];
+    await init();
     // if enabled secondary eni attachment, do the cleanup
-    if (process.env.ENABLE_SECOND_NIC) {
+    if (autoscaleHandler._settings['enable-second-nic'] === 'true') {
         tasks.push(autoscaleHandler.cleanUpAdditionalNics());
     }
     // if enabled transit gateway vpn support, do the cleanup
-    if (process.env.ENABLE_TGW_VPN) {
+    if (autoscaleHandler._settings['enable-transit-gateway-vpn'] === 'true') {
         tasks.push(autoscaleHandler.cleanUpVpnAttachments());
     }
     return await Promise.all(tasks);
@@ -99,3 +120,5 @@ exports.stop = stop;
 exports.checkAutoScalingGroupState = checkAutoScalingGroupState;
 exports.cleanUp = cleanUp;
 exports.AutoScaleCore = ftgtAutoscaleAws.AutoScaleCore;
+exports.init = init;
+exports.getSettings = getSettings;

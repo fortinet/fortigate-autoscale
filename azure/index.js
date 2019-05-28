@@ -487,21 +487,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         let blobService = storageClient.refBlobService();
         let queries = [];
         queries.push(new Promise((resolve, reject) => {
-            blobService.getBlobToText(parameters.path, parameters.fileName,
-            (error, text, result, response) => {
-                if (error) {
-                    reject(error);
-                } else if (response && response.statusCode === 200 || response.isSuccessful) {
-                    resolve(response.body);
-                } else {
-                    reject(response);
-                }
-            });
-        }));
-        if (parameters.getProperties) {
-            queries.push(new Promise((resolve, reject) => {
-                blobService.getBlobProperties(parameters.path, parameters.fileName,
-                (error, result, response) => {
+            blobService.getBlobToText(parameters.keyPrefix, parameters.fileName,
+                (error, text, result, response) => {
                     if (error) {
                         reject(error);
                     } else if (response && response.statusCode === 200 || response.isSuccessful) {
@@ -510,6 +497,19 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                         reject(response);
                     }
                 });
+        }));
+        if (parameters.getProperties) {
+            queries.push(new Promise((resolve, reject) => {
+                blobService.getBlobProperties(parameters.keyPrefix, parameters.fileName,
+                    (error, result, response) => {
+                        if (error) {
+                            reject(error);
+                        } else if (response && response.statusCode === 200 || response.isSuccessful) {
+                            resolve(result);
+                        } else {
+                            reject(response);
+                        }
+                    });
             }));
         }
         let result = await Promise.all(queries);
@@ -1159,7 +1159,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
 
             let licenseFile = await this.platform.getBlobFromStorage({
-                path: availStockItem.filePath,
+                storageName: '',
+                keyPrefix: availStockItem.filePath,
                 fileName: availStockItem.fileName
             });
 

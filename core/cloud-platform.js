@@ -8,6 +8,9 @@ Author: Fortinet
 */
 
 module.exports = class CloudPlatform {
+    constructor() {
+        this._settings = null;
+    }
     throwNotImplementedException() {
         throw new Error('Not Implemented');
     }
@@ -251,6 +254,16 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    /**
+     * get multiple saved settings from DB
+     * @param {Array} keyFilter An array of setting key to filter (return)
+     * @param {Boolean} valueOnly return setting value only or full detail
+     * @returns {Object} Json object
+     */
+    async getSettingItems(keyFilter = null, valueOnly = true) {
+        await this.throwNotImplementedException();
+    }
+
     async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
         await this.throwNotImplementedException();
     }
@@ -290,6 +303,28 @@ module.exports = class CloudPlatform {
 
     async terminateInstanceInAutoScalingGroup(instance) {
         await this.throwNotImplementedException();
+    }
+
+    /**
+     * Update to enable the Transit Gateway attachment propagation on a given Transit Gateway
+     * route table
+     * @param {String} attachmentId id of the transit gateway to update
+     * @param {String} routeTableId id of the transit gateway route table to update
+     * @returns {Boolean} A boolean value for whether the update is success or not.
+     */
+    async updateTgwRouteTablePropagation(attachmentId, routeTableId) {
+        return await this.throwNotImplementedException() || attachmentId && routeTableId;
+    }
+
+    /**
+     * Update to enable the Transit Gateway attachment association on a given Transit Gateway
+     * route table
+     * @param {String} attachmentId id of the transit gateway to update
+     * @param {String} routeTableId id of the transit gateway route table to update
+     * @returns {Boolean} A boolean value for whether the update is success or not.
+     */
+    async updateTgwRouteTableAssociation(attachmentId, routeTableId) {
+        return await this.throwNotImplementedException() || attachmentId && routeTableId;
     }
 
     /**

@@ -20,6 +20,7 @@
     "build-aws-lambda-faz-handler": "scripts/make-dist.js aws-lambda-faz-handler",
     "build-aws-lambda-fgt-asg-handler": "scripts/make-dist.js aws-lambda-fgt-asg-handler",
     "build-aws-lambda-nic-attachment": "scripts/make-dist.js aws-lambda-nic-attachment",
+    "build-aws-lambda-tgw-vpn-handler": "scripts/make-dist.js aws-lambda-tgw-vpn-handler",
     "build-aws-cloudformation": "scripts/make-dist.js aws-cloudformation",
     "build-aws-quickstart-special": "scripts/make-dist.js aws-quickstart-special"
   },

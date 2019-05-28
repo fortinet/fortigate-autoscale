@@ -20,12 +20,14 @@ Author: Fortinet
 * needed for the FortiGate config's callback-url parameter.
 */
 
+const path = require('path');
 const Logger = require('./logger');
 const CoreFunctions = require('./core-functions');
 const
     AUTOSCALE_SECTION_EXPR =
     /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/;
 const NO_HEART_BEAT_INTERVAL_SPECIFIED = -1;
+const DEFAULT_HEART_BEAT_INTERVAL = 30;
 
 module.exports = class AutoscaleHandler {
 
@@ -41,6 +43,18 @@ module.exports = class AutoscaleHandler {
 
     static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
         return NO_HEART_BEAT_INTERVAL_SPECIFIED;
+    }
+
+    static get DEFAULT_HEART_BEAT_INTERVAL() {
+        return DEFAULT_HEART_BEAT_INTERVAL;
+    }
+
+    /**
+     * Get the read-only settings object from the platform. To modify the settings object,
+     * do it via the platform instance but not here.
+     */
+    get _settings() {
+        return this.platform && this.platform._settings;
     }
 
     /**
@@ -60,16 +74,41 @@ module.exports = class AutoscaleHandler {
     }
 
     async init() {
-        const success = await this.platform.init();
-        // retrieve base config from a blob storage
-        this._baseConfig = await this.getBaseConfig();
+        this.logger.info('calling init [Autoscale handler ininitialization]');
+        const success = await this.platform.init();// do the cloud platform initialization
+        // ensure that the settings are saved properly.
+        // check settings availability
+
+        // if there's limitation for a platform that it cannot save settings to db during
+        // deployment. the deployment template must create a service function that takes all
+        // deployment settings as its environment variables. The CloudPlatform class must
+        // invoke this service function to store all settings to db. and also create a flag
+        // setting item 'deployment-settings-saved' with value set to 'true'.
+        // from then on, it can load item from db.
+        // if this process cannot be done during the deployment, it must be done once here in the
+        // init function of the platform-specific autoscale-handler.
+        // by doing so, catch the error 'Deployment settings not saved.' and handle it.
+        this.logger.info('checking deployment setting items');
+        if (!this._settings) {
+            await this.platform.getSettingItems();// initialize the platform settings
+        }
+        if (!this._settings || this._settings &&
+            this._settings['deployment-settings-saved'] !== 'true') {
+            // in the init function of each platform autoscale-handler, this error must be caught
+            // and provide addtional handling code to save the settings
+            throw new Error('Deployment settings not saved.');
+        }
+
         return success;
     }
 
     async getConfigSet(configName) {
         try {
+            let keyPrefix = this._settings['asset-storage-key-prefix'] ?
+                path.join(this._settings['asset-storage-key-prefix'], 'configset') : 'configset';
             const parameters = {
-                path: 'configset',
+                storageName: this._settings['asset-storage-name'],
+                keyPrefix: keyPrefix,
                 fileName: configName
             };
             let blob = await this.platform.getBlobFromStorage(parameters);
@@ -94,13 +133,15 @@ module.exports = class AutoscaleHandler {
 
     async getBaseConfig() {
         let baseConfig = await this.getConfigSet('baseconfig');
-        let psksecret = process.env.FORTIGATE_PSKSECRET,
+        let psksecret = this._settings['fortigate-psk-secret'],
+            requiredConfigSet = this._settings['fortigate-psk-secret'] &&
+            this._settings['fortigate-psk-secret'].split(',') || [],
+            heartBeatInterval = this._settings['heartbeat-interval'] ||
+                AutoscaleHandler.DEFAULT_HEART_BEAT_INTERVAL,
             fazConfig = '',
             fazIp;
         if (baseConfig) {
             // check if other config set are required
-            let requiredConfigSet = process.env.REQUIRED_CONFIG_SET ?
-                process.env.REQUIRED_CONFIG_SET.split(',') : [];
             let configContent = '';
             for (let configset of requiredConfigSet) {
                 let [name, selected] = configset.trim().split('-');
@@ -142,8 +183,7 @@ module.exports = class AutoscaleHandler {
                     process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
                 .replace(new RegExp('{ADMIN_PORT}', 'gm'),
                     process.env.FORTIGATE_ADMIN_PORT ? process.env.FORTIGATE_ADMIN_PORT : 8443)
-                .replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'),
-                    process.env.HEART_BEAT_INTERVAL ? process.env.HEART_BEAT_INTERVAL : 30)
+                .replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'), heartBeatInterval)
                 .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
                     process.env.FORTIGATE_INTERNAL_ELB_DNS ?
                         process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
@@ -415,6 +455,7 @@ module.exports = class AutoscaleHandler {
     async getMasterConfig(parameters) {
         // no dollar sign in place holders
         let config = '';
+        this._baseConfig = await this.getBaseConfig();
         // parse TGW VPN
         if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
             // append vpnConfig to base config
@@ -429,6 +470,7 @@ module.exports = class AutoscaleHandler {
     }
 
     async getSlaveConfig(parameters) {
+        this._baseConfig = await this.getBaseConfig();
         const
             autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
@@ -655,6 +697,12 @@ module.exports = class AutoscaleHandler {
                 case 'servicetype':
                     // ignore service type
                     break;
+                case 'deploymentsettingssaved':
+                    keyName = 'deployment-settings-saved';
+                    description = 'A flag setting item that indicates all deployment' +
+                    'settings have been saved.';
+                    editable = false;
+                    break;
                 case 'desiredcapacity':
                     keyName = 'scaling-group-desired-capacity';
                     description = 'Scaling group desired capacity.';
@@ -779,6 +827,20 @@ module.exports = class AutoscaleHandler {
                     description = 'The BGP Autonomous System Number of the Customer Gateway ' +
                     'of each FortiGate instance in the Auto Scaling Group.';
                     editable = true;
+                    break;
+                case 'transitgatewayvpnhandlername':
+                    keyName = 'transit-gateway-vpn-handler-name';
+                    description = 'The Transit Gateway VPN handler function name.';
+                    editable = false;
+                    break;
+                case 'transitgatewayroutetableinbound':
+                    keyName = 'transit-gateway-route-table-inbound';
+                    description = 'The Id of the Transit Gateway inbound route table.';
+                    editable = true;
+                    break;
+                case 'transitgatewayroutetableoutbound':
+                    keyName = 'transit-gateway-route-table-outbound';
+                    description = 'The Id of the Transit Gateway outbound route table.';
                     break;
                 default:
                     break;
