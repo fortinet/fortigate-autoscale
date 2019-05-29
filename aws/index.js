@@ -1779,7 +1779,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }));
         }
         // handle TGW VPN attachment
-        if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
+        if (this._selfInstance && this._settings['enable-transit-gateway-vpn'] === 'true') {
             tasks.push(this.handleTgwVpnDetachment(event).catch(() => {
                 errorTasks.push('handleTgwVpnDetachment');
             }));
