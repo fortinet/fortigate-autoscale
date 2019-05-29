@@ -1458,17 +1458,6 @@
                     "Ref": "TransitGatewayRouteTableOutbound"
                 }
             }
-        },
-        "TransitGatewayPropagationFgtAsgVPC": {
-            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
-            "Properties": {
-                "TransitGatewayAttachmentId": {
-                    "Ref": "TransitGatewayAttachmentFgtVPC"
-                },
-                "TransitGatewayRouteTableId": {
-                    "Ref": "TransitGatewayRouteTableInbound"
-                }
-            }
         }
     },
     "Metadata": {
