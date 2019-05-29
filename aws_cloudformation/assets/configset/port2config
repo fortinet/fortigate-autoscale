@@ -1,0 +1,10 @@
+config sys interface
+    edit "port2"
+        set mode dhcp
+        set defaultgw disable
+        set allowaccess ping https ssh http fgfm
+        # work around for FortiOS 6.0.4 #0543036 mtu values from DNS interfere with HA checksum.
+        set mtu-override enable
+        set mtu 9001
+    next
+end

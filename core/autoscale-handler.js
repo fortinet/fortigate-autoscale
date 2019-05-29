@@ -143,6 +143,11 @@ module.exports = class AutoscaleHandler {
         if (baseConfig) {
             // check if other config set are required
             let configContent = '';
+            // check if second nic is enabled, config for the second nic must be prepended to
+            // base config
+            if (this._settings['enable-second-nic'] === 'true') {
+                baseConfig = await this.getConfigSet('port2config') + baseConfig;
+            }
             for (let configset of requiredConfigSet) {
                 let [name, selected] = configset.trim().split('-');
                 if (selected && selected.toLowerCase() === 'yes') {
