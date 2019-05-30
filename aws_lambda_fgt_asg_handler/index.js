@@ -32,6 +32,10 @@ function getSettings() {
     return autoscaleHandler._settings;
 }
 
+function getPlatform() {
+    return autoscaleHandler.platform;
+}
+
 /**
  * AWS Lambda Entry.
  * @param {Object} event The event been passed to
@@ -122,3 +126,4 @@ exports.cleanUp = cleanUp;
 exports.AutoScaleCore = ftgtAutoscaleAws.AutoScaleCore;
 exports.init = init;
 exports.getSettings = getSettings;
+exports.getPlatform = getPlatform;
