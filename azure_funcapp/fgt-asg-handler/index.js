@@ -17,7 +17,6 @@ ftgtAutoscaleAzure.initModule();
  * @param {Object} req request object specified by HTTP trigger Request parameter name
  */
 module.exports = async function(context, req) {
-    // context.log(`Incoming request: ${JSON.stringify(req)}`);
     await ftgtAutoscaleAzure.handle(context, req);
     if (process.env.FUNCTIONS_EXTENSION_VERSION &&
         process.env.FUNCTIONS_EXTENSION_VERSION === '~1') {

@@ -17,7 +17,8 @@ AWS.config.apiVersions = {
     lambda: '2015-03-31',
     dynamodb: '2012-08-10',
     apiGateway: '2015-07-09',
-    s3: '2006-03-01'
+    s3: '2006-03-01',
+    elbv2: '2015-12-01'
 };
 
 const
@@ -33,7 +34,9 @@ const
     lambda = new AWS.Lambda(),
     apiGateway = new AWS.APIGateway(),
     s3 = new AWS.S3(),
-    RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '',
+    elbv2 = new AWS.ELBv2(),
+    RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '',
+    DEFAULT_MASTER_ELECTION_TIMEOUT = 300,
     SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
     DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
     moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
@@ -552,59 +555,90 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      * @param {Object} parameters parameters accepts: instanceId, privateIp, publicIp
      */
     /* eslint-enable max-len */
+    /* eslint-disable max-len */
+    /**
+     * Get information about an instance by the given parameters.
+     * @see https://docs.aws.amazon.com/opsworks/latest/APIReference/API_DescribeInstances.html
+     * @see https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeAutoScalingInstances.html
+     * @param {Object} parameters parameters accepts: instanceId, privateIp, publicIp
+     */
+    /* eslint-enable max-len */
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
-        let params = {
-                Filters: []
-            },
-            instanceId;
-        // check if instance is in scaling group
-        if (parameters.scalingGroupName) {
-            // describe the instance in auto scaling group
-            let scalingGroup = await autoScaling.describeAutoScalingGroups({
-                AutoScalingGroupNames: [
-                    parameters.scalingGroupName
-                ]
-            }).promise();
-            if (scalingGroup && Array.isArray(scalingGroup.AutoScalingGroups) &&
-                scalingGroup.AutoScalingGroups[0] &&
-                scalingGroup.AutoScalingGroups[0].AutoScalingGroupName ===
-                parameters.scalingGroupName) {
-                const instances = scalingGroup.AutoScalingGroups[0].Instances.filter(instance => {
-                    return instance.InstanceId === parameters.instanceId;
-                });
-                if (instances && instances.length === 1) {
-                    instanceId = instances[0].InstanceId;
+        let readCache = this._settings['enable-vm-info-cache'] === 'true';
+        let virtualMachine, hitCache = '';
+
+        if (readCache) {
+            virtualMachine = await this.getVmInfoCache(parameters.scalingGroupName,
+                parameters.instanceId, null);
+            hitCache = virtualMachine && '(hit cache)';
+        }
+
+        // if not hit the cache
+        if (!virtualMachine) {
+            let params = {
+                    Filters: []
+                },
+                instanceId;
+            // check if instance is in scaling group
+            if (parameters.scalingGroupName) {
+                // describe the instance in auto scaling group
+                let scalingGroup = await autoScaling.describeAutoScalingGroups({
+                    AutoScalingGroupNames: [
+                        parameters.scalingGroupName
+                    ]
+                }).promise();
+                if (scalingGroup && Array.isArray(scalingGroup.AutoScalingGroups) &&
+                    scalingGroup.AutoScalingGroups[0] &&
+                    scalingGroup.AutoScalingGroups[0].AutoScalingGroupName ===
+                    parameters.scalingGroupName) {
+                    const instances =
+                        scalingGroup.AutoScalingGroups[0].Instances.filter(instance => {
+                            return instance.InstanceId === parameters.instanceId;
+                        });
+                    if (instances && instances.length === 1) {
+                        instanceId = instances[0].InstanceId;
+                    }
                 }
+            } else if (parameters.instanceId) {
+                instanceId = parameters.instanceId;
             }
-        } else if (parameters.instanceId) {
-            instanceId = parameters.instanceId;
+            // describe the instance
+            if (instanceId) {
+                params.Filters.push({
+                    Name: 'instance-id',
+                    Values: [parameters.instanceId]
+                });
+            }
+            if (parameters.publicIp) {
+                params.Filters.push({
+                    Name: 'ip-address',
+                    Values: [parameters.publicIp]
+                });
+            }
+            if (parameters.privateIp) {
+                params.Filters.push({
+                    Name: 'private-ip-address',
+                    Values: [parameters.privateIp]
+                });
+            }
+            const result = instanceId && await ec2.describeInstances(params).promise();
+            // parse to virtual machine instance
+            virtualMachine = result && result.Reservations[0] &&
+                result.Reservations[0].Instances[0];
+            hitCache = virtualMachine && hitCache || '';
+            // cache the vm info
+            if (virtualMachine && readCache) {
+                let cacheTime = this._settings['vm-info-cache-time'];
+                cacheTime = isNaN(cacheTime) ? 3600 : parseInt(cacheTime);
+                await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine, cacheTime);
+            }
         }
-        // describe the instance
-        if (instanceId) {
-            params.Filters.push({
-                Name: 'instance-id',
-                Values: [parameters.instanceId]
-            });
-        }
-        if (parameters.publicIp) {
-            params.Filters.push({
-                Name: 'ip-address',
-                Values: [parameters.publicIp]
-            });
-        }
-        if (parameters.privateIp) {
-            params.Filters.push({
-                Name: 'private-ip-address',
-                Values: [parameters.privateIp]
-            });
-        }
-        const result = instanceId && await ec2.describeInstances(params).promise();
-        logger.info(`called describeInstance, result: ${result ? JSON.stringify(result) : 'null'}`);
-        return result && result.Reservations[0] && result.Reservations[0].Instances[0] &&
-            AutoScaleCore.VirtualMachine.fromAwsEc2(
-                result.Reservations[0] && result.Reservations[0].Instances[0],
-                parameters.scalingGroupName || null);
+        // if mv is found
+        virtualMachine = virtualMachine && AutoScaleCore.VirtualMachine.fromAwsEc2(virtualMachine,
+            parameters.scalingGroupName || null);
+        logger.info(`called describeInstance${hitCache}, virtualMachine: ${virtualMachine}`);
+        return virtualMachine;
     }
 
     /**
@@ -1553,6 +1587,217 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
+    /** @override */
+    async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
+        logger.info('calling getVmInfoCache.');
+        try {
+            let data, params = {
+                Key: {
+                    id: vmId || instanceId
+                },
+                TableName: DB.VMINFOCACHE.TableName
+            };
+
+            data = await docClient.get(params).promise();
+            if (data && data.Item && data.Item.expireTime < Date.now()) {
+                logger.info('called getVmInfoCache > cached expired.');
+                return null;
+            }
+            return data.Item && JSON.parse(data.Item.info);
+        } catch (error) {
+            logger.warn(`called getVmInfoCache (id: ${instanceId}) > error: `, error);
+            return null;
+        }
+    }
+
+    /** @override */
+    async setVmInfoCache(scaleSetName, info, cacheTime = 3600) {
+        logger.info('calling setVmInfoCache');
+        try {
+            let now = Date.now();
+            let params = {
+                TableName: DB.VMINFOCACHE.TableName,
+                Item: {
+                    id: info.InstanceId,
+                    instanceId: info.InstanceId,
+                    vmId: info.InstanceId,
+                    asgName: scaleSetName,
+                    info: typeof info === 'string' ? info : JSON.stringify(info),
+                    cacheTime: now,
+                    expireTime: now + cacheTime * 1000
+                }
+            };
+            let result = await docClient.put(params).promise();
+            logger.info('called setVmInfoCache');
+            return !!result;
+        } catch (error) {
+            logger.info('called setVmInfoCache with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    /** @override */
+    async getLicenseFileContent(fileName) {
+        const blob = await this.getBlobFromStorage({
+            storageName: this._settings['asset-storage-name'],
+            keyPrefix: this._settings['fortigate-license-storage-key-prefix'],
+            fileName: fileName
+        });
+        return blob.content;
+    }
+
+    /** @override */
+    async listLicenseFiles() {
+        // NOTE: as the autoscale seems less likely to scale out to more than 100 instances that
+        // require a license, the list license function will set a limit to maximum 100 licenses
+        // file being returned. Also, there is a hard limit of 1000 per request by the api.
+        // eslint-disable-next-line max-len
+        // see reference: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#listObjectsV2-property
+        let prefix = path.join(this._settings['asset-storage-key-prefix'],
+            this._settings['fortigate-license-storage-key-prefix']);
+        let prefixLen = prefix && prefix.length;
+        let iterable;
+        let data = await s3.listObjectsV2({
+            Bucket: this._settings['asset-storage-name'],
+            Prefix: prefix,
+            StartAfter: prefix
+        }).promise();
+
+        if (data && Array.isArray(data.Contents) && data.Contents.length > 0 && data.Contents) {
+            iterable = data.Contents.map(item => {
+                let licenseItem = new AutoScaleCore.LicenseItem(
+                    item.Key.substr(prefixLen), item.ETag);
+                return [licenseItem.blobKey, licenseItem];
+            });
+            return new Map(iterable);
+        } else {
+            return new Map();
+        }
+    }
+
+    /** @override */
+    async listLicenseUsage() {
+        logger.info('calling listLicenseUsage');
+        try {
+            const
+                response = await docClient.scan({
+                    TableName: DB.LICENSEUSAGE.TableName
+                }).promise();
+            let recordCount = 0,
+                records = [];
+            if (response && response.Items) {
+                recordCount = response.Items.length;
+                records = response.Items;
+            }
+            let iterable = records.map(item => {
+                const licenseRecord = AutoScaleCore.LicenseRecord.fromDb(item);
+                return [licenseRecord.checksum, licenseRecord];
+            });
+            logger.info(`called listLicenseUsage: (${recordCount}) licenses in use.`);
+            return new Map(iterable);
+        } catch (error) {
+            logger.warn('called listLicenseUsage: error:', error);
+            return new Map();
+        }
+    }
+
+
+    /** @override */
+    async updateLicenseUsage(licenseRecord) {
+        logger.info('calling updateLicenseUsage');
+
+        try {
+            let params = {
+                TableName: DB.LICENSEUSAGE.TableName,
+                Item: {
+                    id: licenseRecord.id,
+                    blobKey: licenseRecord.blobKey,
+                    checksum: licenseRecord.checksum,
+                    fileName: licenseRecord.fileName,
+                    algorithm: licenseRecord.algorithm,
+                    instanceId: licenseRecord.instanceId,
+                    scalingGroupName: licenseRecord.scalingGroupName,
+                    assignedTime: licenseRecord.assignedTime
+                }
+            };
+            let result = await docClient.put(params).promise();
+            logger.info('called updateLicenseUsage');
+            return !!result;
+        } catch (error) {
+            logger.info('called updateLicenseUsage with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    /** @override */
+    async listLicenseStock() {
+        logger.info('calling listLicenseStock');
+        try {
+            const
+                response = await docClient.scan({
+                    TableName: DB.LICENSESTOCK.TableName
+                }).promise();
+            let recordCount = 0,
+                records = [];
+            if (response && response.Items) {
+                recordCount = response.Items.length;
+                records = response.Items;
+            }
+            let iterable = records.map(item => {
+                const licenseRecord = AutoScaleCore.LicenseRecord.fromDb(item);
+                return [licenseRecord.checksum, licenseRecord];
+            });
+            logger.info(`called listLicenseStock: (${recordCount}) licenses in use.`);
+            return new Map(iterable);
+        } catch (error) {
+            logger.warn('called listLicenseStock: error:', error);
+            return new Map();
+        }
+    }
+
+    /** @override */
+    async updateLicenseStock(licenseItem, replace = true) { // eslint-disable-line no-unused-vars
+        logger.info('calling updateLicenseStock');
+        try {
+            let params = {
+                TableName: DB.LICENSESTOCK.TableName,
+                Item: {
+                    id: licenseItem.id,
+                    blobKey: licenseItem.blobKey,
+                    checksum: licenseItem.checksum,
+                    fileName: licenseItem.fileName,
+                    algorithm: licenseItem.algorithm
+                }
+            };
+            let result = await docClient.put(params).promise();
+            logger.info('called updateLicenseStock');
+            return !!result;
+        } catch (error) {
+            logger.info('called updateLicenseStock with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    async attacheInstanceToLoadBalancer(instanceArray, targetGroupArn) {
+        logger.info('calling attacheInstanceToLoadBalancer');
+        const params = {
+            TargetGroupArn: targetGroupArn,
+            Targets: instanceArray.map(instance => {
+                return {Id: instance.instanceId};
+            })
+        };
+        try {
+            let result = await elbv2.registerTargets(params).promise();
+            logger.info('called attacheInstanceToLoadBalancer.');
+            return result;
+        } catch (error) {
+            logger.info('called attacheInstanceToLoadBalancer. Error:', JSON.stringify(error));
+            throw error;
+        }
+    }
     // end of awsPlatform class
 }
 
@@ -1610,7 +1855,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      */
     /* eslint-enable max-len */
-    async handle(event, context, callback) {
+    async handle(event, context, callback) { // eslint-disable-line unused-vars
         this._step = 'initializing';
         let proxyMethod = 'httpMethod' in event && event.httpMethod,
             result;
@@ -1634,6 +1879,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 }
                 await this.parseInstanceInfo(this._requestInfo.instanceId);
 
+                await this.checkInstanceAuthorization(this._selfInstance);
                 if (proxyMethod === 'POST') {
                     this._step = 'fortigate:handleSyncedCallback';
                     // handle status messages
@@ -1929,20 +2175,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         let
             config,
             masterInfo,
-            params = {},
-            instanceId = this._requestInfo.instanceId;
-
-        // get instance object from platform
-        this._selfInstance = this._selfInstance ||
-            await this.platform.describeInstance({
-                instanceId: instanceId,
-                scalingGroupName: this.scalingGroupName
-            });
-        if (!this._selfInstance || this._selfInstance.virtualNetworkId !== process.env.VPC_ID) {
-            // not trusted
-            throw new Error(`Unauthorized calling instance (instanceId: ${instanceId}).` +
-                'Instance not found in VPC.');
-        }
+            params = {};
 
         let promiseEmitter = this.checkMasterElection.bind(this),
             validator = result => {
@@ -2320,6 +2553,17 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
+    /** @override */
+    async checkInstanceAuthorization(instance) {
+        if (!instance ||
+                instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
+            // not trusted
+            return await Promise.reject('Unauthorized calling instance (' +
+            `instanceId: ${instance.instanceId}). Instance not found in VPC.`);
+        }
+        return await Promise.resolve(true);
+    }
+
     async handleTgwVpnAttachment(event) {
         logger.info('calling handleTgwVpnAttachment');
         if (!event || !event.detail || !event.detail.EC2InstanceId) {
@@ -2631,6 +2875,11 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             `(id: ${attachmentId}) to become available.`);
         }
         return data;
+    }
+
+    async handleLoadBalancerAttachment(instance) {
+        return await this.platform.attacheInstanceToLoadBalancer([instance],
+            this._settings['fortigate-autoscale-target-group-arn']);
     }
     // end of AwsAutoscaleHandler class
 }

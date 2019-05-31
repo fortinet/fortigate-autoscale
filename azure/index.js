@@ -839,10 +839,28 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     reject(error);
                 } else {
                     if (data && data.entries) {
-                        let iterable = data.entries.map(item => {
-                            // FIXME: the etag should be enclosed with double quote
-                            return [this.genLicenseFileSimpleKey(item.name, `"${item.eTag}"`),
-                                item];
+                        // need to fire an extra call to get file content
+                        let contentQueries = data.entries.forEach(async item => {
+                            const blob = await platform.getBlobFromStorage({
+                                storageName: '',
+                                keyPrefix: prefix,
+                                fileName: item.name
+                            });
+                            return {
+                                filePath: item.properties.container,
+                                fileName: item.properties.name,
+                                fileETag: `"${item.properties.etag}"`,// the etag should be enclosed with double quote. //eslint-disable-line max-len
+                                content: blob.content
+                            };
+                        });
+                        let contents = await Promise.all(contentQueries);
+                        let iterable = contents.map(item => {
+                            let licenseItem = new AutoScaleCore.LicenseItem(
+                                    item.fileName,
+                                    item.fileETag,
+                                    item.content
+                            );
+                            return [licenseItem.blobKey, licenseItem];
                         });
                         resolve(new Map(iterable));
                     } else {
@@ -996,25 +1014,30 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return success;
     }
 
-    async handle(context, event) {
+    async handle(event, context, callback) {
         logger.info('start to handle autoscale');
         let proxyMethod = 'method' in event && event.method,
             result;
         try {
-            await this.init();
-            this.parseRequestInfo(event);
+            const platformInitSuccess = await this.init();
+            // return 500 error if script cannot finish the initialization.
+            if (!platformInitSuccess) {
+                result = 'fatal error, cannot initialize.';
+                this.logger.error(result);
+                callback(null, this.proxyResponse(500, result));
+                return;
+            }
+
             // authenticate the calling instance
+            this.parseRequestInfo(event);
             if (!this._requestInfo.instanceId) {
                 context.res = this.proxyResponse(403, 'Instance id not provided.');
                 return;
             }
             await this.parseInstanceInfo(this._requestInfo.instanceId);
 
-            if (!this.scalingGroupName) {
-                // not trusted
-                throw new Error('Unauthorized calling instance (vmid: ' +
-                `${this._requestInfo.instanceId}). Instance not found in scale set.`);
-            }
+            await this.checkInstanceAuthorization(this._selfInstance);
+
             if (proxyMethod === 'GET') {
                 // handle get config
                 result = await this.handleGetConfig(event);
@@ -1608,7 +1631,13 @@ exports.handle = async (context, req) => {
     handler.useLogger(logger);
     initModule();
     logger.log(`Incoming request: ${JSON.stringify(req)}`);
-    return await handler.handle(context, req);
+    let callback = (err, data) => {
+        if (err) {
+            logger.error(err);
+        }
+        context.res = data;
+    };
+    return await handler.handle(req, context, callback);
 };
 
 exports.handleGetLicense = async (context, req) => {

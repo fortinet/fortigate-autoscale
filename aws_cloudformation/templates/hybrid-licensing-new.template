@@ -87,7 +87,8 @@
             "Default": "Latest (6.0.5)",
             "AllowedValues": [
                 "Latest (6.0.5)",
-                "FortiOS 6.0.5"
+                "FortiOS 6.0.5",
+                "FortiOS 6.0.4"
             ],
             "ConstraintDescription": "must be a valid FortiOS version from the selection.",
             "Description": "Supported FortiOS versions."

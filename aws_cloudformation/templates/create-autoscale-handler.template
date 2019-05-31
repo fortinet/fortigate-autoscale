@@ -462,6 +462,60 @@
                                         }
                                     ]
                                 }
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "elasticloadbalancing:DescribeLoadBalancers",
+                                    "elasticloadbalancing:DescribeListeners",
+                                    "elasticloadbalancing:DescribeLoadBalancerAttributes",
+                                    "elasticloadbalancing:DescribeTargetGroupAttributes",
+                                    "elasticloadbalancing:DescribeTargetHealth",
+                                    "elasticloadbalancing:DescribeTargetGroups"
+                                ],
+                                "Resource": "*"
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "elasticloadbalancing:RegisterTargets",
+                                    "elasticloadbalancing:RemoveTags",
+                                    "elasticloadbalancing:DeregisterTargets"
+                                ],
+                                "Resource": [
+                                    {
+                                        "Fn::Sub": [
+                                            "arn:aws:elasticloadbalancing:${AWS_REGION}:${AWS_ACCOUNT_ID}:loadbalancer/net/${CUSTOM_ID}*/*",
+                                            {
+                                                "AWS_REGION": {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                "AWS_ACCOUNT_ID": {
+                                                    "Ref": "AWS::AccountId"
+                                                },
+                                                "CUSTOM_ID": {
+                                                    "Ref": "CustomIdentifier"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "Fn::Sub": [
+                                            "arn:aws:elasticloadbalancing:${AWS_REGION}:${AWS_ACCOUNT_ID}:targetgroup/${CUSTOM_ID}*/*",
+                                            {
+                                                "AWS_REGION": {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                "AWS_ACCOUNT_ID": {
+                                                    "Ref": "AWS::AccountId"
+                                                },
+                                                "CUSTOM_ID": {
+                                                    "Ref": "CustomIdentifier"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
                             }
                         ]
                     }

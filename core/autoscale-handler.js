@@ -464,11 +464,6 @@ module.exports = class AutoscaleHandler {
         // get selfinstance
         this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
 
-        if (!this._selfInstance) {
-            // not trusted
-            throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). ` +
-                'Instance not found in scale set.');
-        }
         // handle hb monitor
         // get self health check
         this._selfHealthCheck = this._selfHealthCheck ||
@@ -1107,6 +1102,73 @@ module.exports = class AutoscaleHandler {
                 case 'transitgatewayroutetableoutbound':
                     keyName = 'transit-gateway-route-table-outbound';
                     description = 'The Id of the Transit Gateway outbound route table.';
+                    break;
+                case 'enablehybridlicensing':
+                    keyName = 'enable-hybrid-licensing';
+                    description = 'Toggle ON / OFF the hybrid licensing feature.';
+                    editable = false;
+                    break;
+                case 'enablefortigateelb':
+                    keyName = 'enable-fortigate-elb';
+                    description = 'Toggle ON / OFF the elastic load balancing for the FortiGate ' +
+                    'scaling groups.';
+                    editable = false;
+                    break;
+                case 'enableinternalelb':
+                    keyName = 'enable-internal-elb';
+                    description = 'Toggle ON / OFF the internal elastic load balancing for ' +
+                    'the protected services by FortiGate.';
+                    editable = true;
+                    break;
+                case 'fortigateautoscaleelbdns':
+                    keyName = 'fortigate-autoscale-elb-dns';
+                    description = 'The DNS name of the elastic load balancer for the FortiGate ' +
+                    'scaling groups.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscaletargetgrouparn':
+                    keyName = 'fortigate-autoscale-target-group-arn';
+                    description = 'The ARN of the target group for FortiGate to receive ' +
+                    'load balanced traffic.';
+                    editable = false;
+                    break;
+                case 'fortigateprotectedinternalelbdns':
+                    keyName = 'fortigate-protected-internal-elb-dns';
+                    description = 'The DNS name of the elastic load balancer for the scaling ' +
+                    'groups of services protected by FortiGate';
+                    editable = true;
+                    break;
+                case 'enabledynamicnatgateway':
+                    keyName = 'enable-dynamic-nat-gateway';
+                    description = 'Toggle ON / OFF the dynamic NAT gateway feature.';
+                    editable = true;
+                    break;
+                case 'dynamicnatgatewayroutetables':
+                    keyName = 'dynamic-nat-gateway-route-tables';
+                    description = 'The dynamic NAT gateway managed route tables.';
+                    editable = true;
+                    break;
+                case 'enablevminfocache':
+                    keyName = 'enable-vm-info-cache';
+                    description = 'Toggle ON / OFF the vm info cache feature. It caches the ' +
+                    'vm info in db to reduce API calls to query a vm from the platform.';
+                    editable = true;
+                    break;
+                case 'vminfocachetime':
+                    keyName = 'vm-info-cache-time';
+                    description = 'The vm info cache time in seconds.';
+                    editable = true;
+                    break;
+                case 'fortigatelicensestoragekeyprefix':
+                    keyName = 'fortigate-license-storage-key-prefix';
+                    description = 'The key prefix for FortiGate licenses in the access storage.';
+                    editable = true;
+                    break;
+                case 'getlicensegraceperiod':
+                    keyName = 'get-license-grace-period';
+                    description = 'The period (time in seconds) for preventing a newly assigned ' +
+                    ' license to be recycled.';
+                    editable = true;
                     break;
                 default:
                     break;
