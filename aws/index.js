@@ -743,42 +743,56 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    async detachNetworkInterface(instance, nic) {
+    async detachNetworkInterface(instance, eni) {
         logger.info('calling detachNetworkInterface');
         if (!instance || !instance.networkInterfaces) {
             logger.warn(`invalid instance: ${JSON.stringify(instance)}`);
             return false;
-        } else if (!nic) {
-            logger.warn(`invalid network interface controller: ${JSON.stringify(nic)}`);
+        } else if (!eni) {
+            logger.warn('invalid network interface controller.');
             return false;
         }
-        let attachedNic = instance.networkInterfaces.some(item => {
-            return item.NetworkInterfaceId === nic.NetworkInterfaceId;
-        });
-        if (!attachedNic) {
-            logger.warn(`nic(id: ${nic.NetworkInterfaceId}) is not attached to ` +
-                `instance(id: ${instance.instanceId})`);
+
+        let attachment = eni.Attachment;
+        if (!attachment) {
+            logger.warn(`eni (id: ${eni.NetworkInterfaceId}) is not attached to any instance.`);
+            return true;
+        }
+        if (attachment.InstanceId && attachment.InstanceId !== instance.instanceId) {
+            logger.warn(`cannot detach a nic(id: ${eni.NetworkInterfaceId}, ` +
+                    `attached instance: ${attachment.InstanceId}) from the ` +
+                    `instance(id: ${instance.instanceId}) it's not attached to.`);
             return false;
         }
+
         try {
+            let result, interfaceId = eni.NetworkInterfaceId;
             let params = {
-                AttachmentId: nic.Attachment.AttachmentId
+                AttachmentId: attachment.AttachmentId
             };
-            await ec2.detachNetworkInterface(params).promise();
             let promiseEmitter = () => {
                     return ec2.describeNetworkInterfaces({
-                        NetworkInterfaceIds: [nic.NetworkInterfaceId]
+                        NetworkInterfaceIds: [interfaceId]
                     }).promise();
                 },
-                validator = result => {
-                    return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
-                        result.NetworkInterfaces[0] &&
-                        result.NetworkInterfaces[0].Status === 'available';
+                validator = check => {
+                    return check && check.NetworkInterfaces && check.NetworkInterfaces[0] &&
+                        check.NetworkInterfaces[0].Status === 'available';
                 };
-            let result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
-            logger.info('called detachNetworkInterface. ' +
-                `done.(nic status: ${result.NetworkInterfaces[0].Status})`);
-            return result.NetworkInterfaces[0].Status === 'available';
+
+            if (eni.Status !== 'available') {
+                // detach it if it's still attached to the target instance
+                if (attachment && attachment.Status === 'attached') {
+                    await ec2.detachNetworkInterface(params).promise();
+                }
+                // if the eni is not available, wait for it to become available
+                result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
+                eni = result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
+                result.NetworkInterfaces[0];
+            }
+
+            logger.info(`called detachNetworkInterface. done.(nic status: ${eni && eni.Status})`);
+            return eni && eni.Status === 'available';
         } catch (error) {
             logger.warn(`called detachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
             return false;
@@ -2078,17 +2092,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     ]
                 });
                 // updete attachment record for in transition
-                await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
-                    attachmentRecord.nicId, 'pending_detach', 'attached');
+                // await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
+                // attachmentRecord.nicId, 'pending_detach', 'attached');
                 // detach nic
-                await this.platform.detachNetworkInterface(this._selfInstance, nic);
-                // delete nic
-                await this.platform.deleteNetworkInterface({
-                    NetworkInterfaceId: attachmentRecord.nicId
-                });
-                // delete attachment record
-                await this.platform.deleteNicAttachmentRecord(
+                let detached = await this.platform.detachNetworkInterface(this._selfInstance, nic);
+                if (detached) {
+                    // delete nic
+                    await this.platform.deleteNetworkInterface({
+                        NetworkInterfaceId: attachmentRecord.nicId
+                    });
+                    // delete attachment record
+                    await this.platform.deleteNicAttachmentRecord(
                     attachmentRecord.instanceId, 'pending_detach');
+                }
                 // reload the instance info
                 this._selfInstance =
                     await this.platform.describeInstance({
