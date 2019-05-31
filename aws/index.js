@@ -239,7 +239,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         return false;
     }
 
-    async completeLifecycleAction(lifecycleItem, success) {
+    async completeLifecycleAction(lifecycleItem, success, deleteItem = true) {
         logger.info('calling completeLifecycleAction');
         try {
             await this.updateLifecycleItem(lifecycleItem);
@@ -253,8 +253,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             if (!process.env.DEBUG_MODE) {
                 await autoScaling.completeLifecycleAction(params).promise();
             }
-            // TODO: remove lifecycle Item here
-            await this.removeLifecycleItem(lifecycleItem);
+            if (deleteItem) {
+                await this.removeLifecycleItem(lifecycleItem);
+            }
+
             logger.info(
                 `[${params.LifecycleActionResult}] applied to hook[${params.LifecycleHookName}] with
             token[${params.LifecycleActionToken}] in auto scaling group
@@ -1780,9 +1782,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         const instanceId = event.detail.EC2InstanceId;
         let lifecycleItem, result, errorTasks = [], tasks = [];
         this._selfInstance = this._selfInstance ||
-                    await this.platform.describeInstance({
-                        instanceId: event.detail.EC2InstanceId
-                    });
+            await this.platform.describeInstance({
+                instanceId: event.detail.EC2InstanceId
+            });
         this.setScalingGroup(this._settings['master-auto-scaling-group-name'],
                     event.detail.AutoScalingGroupName);
         // attach nic2
@@ -1797,20 +1799,39 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 errorTasks.push('handleTgwVpnAttachment');
             }));
         }
+        // handle Hybrid licensing load balancer attachment
+        if (this._selfInstance && this._settings['enable-hybrid-licensing'] === 'true') {
+            tasks.push(this.handleLoadBalancerAttachment(this._selfInstance).catch(() => {
+                errorTasks.push('handleLoadBalancerAttachment');
+            }));
+        }
         await Promise.all(tasks);
         result = errorTasks.length === 0 && !!this._selfInstance;
         if (result) {
             // TODO: if any additional process here failed, should turn this lifecycle hook into
             // the abandon state then proceed to clean this instance and related components
 
-            // create a pending lifecycle item for this instance
-            lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+            await Promise.all(tasks);
+            result = errorTasks.length === 0 && !!this._selfInstance;
+            if (result) {
+                // create a pending lifecycle item for this instance
+                lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
                 AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
-            result = await this.platform.updateLifecycleItem(lifecycleItem);
-            logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
+                result = await this.platform.updateLifecycleItem(lifecycleItem);
+                logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
                 `lifecyclehook(${event.detail.LifecycleActionToken})`);
+                return result;
+            } else {
+                throw new Error(`The following tasks failed: ${JSON.stringify(errorTasks)}.`);
+            }
+        } catch (error) {
+            lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, true);
+            result = await this.platform.completeLifecycleAction(lifecycleItem, false, false);
+            logger.info(`called handleLaunchingInstanceHook. Error: ${JSON.stringify(error)}. ` +
+            `Abandon Launching Lifecycle Hook for instance (id:${instanceId}), done: ${result}`);
+            throw error;
         }
-        return result;
     }
 
     async handleTerminatingInstanceHook(event) {
