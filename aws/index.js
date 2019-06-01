@@ -1332,8 +1332,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         let params = {
             TableName: DB.VPNATTACHMENT.TableName,
             Key: {
-                instanceId: instance.instanceId,
-                publicIp: instance.primaryPublicIpAddress
+                instanceId: instance.instanceId
             }
         };
         try {
@@ -1355,8 +1354,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         logger.info('calling updateTgwVpnAttachmentRecord');
         let params = {
             Key: {
-                instanceId: instance.instanceId,
-                publicIp: instance.primaryPublicIpAddress
+                instanceId: instance.instanceId
             },
             TableName: DB.VPNATTACHMENT.TableName
         };
@@ -1381,8 +1379,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             vpnConnectionId: vpnConnection.VpnConnectionId,
             customerGatewayConfiguration: JSON.stringify(configuration)
         };
-        params.ConditionExpression = 'attribute_not_exists(instanceId) ' +
-            'OR (attribute_exists(instanceId) AND attribute_not_exists(publicIp))';
+        params.ConditionExpression = 'attribute_not_exists(instanceId)';
         let result = await docClient.put(params).promise();
         logger.info('called updateTgwVpnAttachmentRecord');
         return result;
@@ -1393,8 +1390,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         let params = {
             TableName: DB.VPNATTACHMENT.TableName,
             Key: {
-                instanceId: instance.instanceId,
-                publicIp: instance.primaryPublicIpAddress
+                instanceId: instance.instanceId
             }
         };
         try {
@@ -1620,6 +1616,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     return;
                 }
                 await this.parseInstanceInfo(this._requestInfo.instanceId);
+
                 if (proxyMethod === 'POST') {
                     this._step = 'fortigate:handleSyncedCallback';
                     // handle status messages

@@ -358,20 +358,12 @@ const DB = {
             {
                 AttributeName: 'instanceId',
                 AttributeType: 'S'
-            },
-            {
-                AttributeName: 'publicIp',
-                AttributeType: 'S'
             }
         ],
         KeySchema: [
             {
                 AttributeName: 'instanceId',
                 KeyType: 'HASH'
-            },
-            {
-                AttributeName: 'publicIp',
-                KeyType: 'RANGE'
             }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
