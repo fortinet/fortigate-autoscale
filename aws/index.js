@@ -773,7 +773,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`);
             return result.NetworkInterfaces[0].Attachment.AttachmentId;
         } catch (error) {
-            await this.deleteNicAttachmentRecord(instance.instanceId, 'pending_attach');
+            await this.deleteNicAttachmentRecord(instance.instanceId);
             logger.warn(`called attachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
             return false;
         }
@@ -2357,7 +2357,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     });
                     // delete attachment record
                     await this.platform.deleteNicAttachmentRecord(
-                    attachmentRecord.instanceId, 'pending_detach');
+                    attachmentRecord.instanceId);
                 }
                 // reload the instance info
                 this._selfInstance =
