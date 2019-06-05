@@ -32,7 +32,6 @@ const
     docClient = new AWS.DynamoDB.DocumentClient(),
     ec2 = new AWS.EC2(),
     lambda = new AWS.Lambda(),
-    apiGateway = new AWS.APIGateway(),
     s3 = new AWS.S3(),
     elbv2 = new AWS.ELBv2(),
     RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '',
@@ -51,11 +50,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         let attempts = 0, maxAttempts = 3, done = false, errors;
         while (attempts < maxAttempts) {
             errors = [];
-            attempts ++;
-            await Promise.all([
-                DB.AUTOSCALE, DB.ELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
-                DB.NICATTACHMENT, DB.CUSTOMLOG]
-                .map(table => this.tableExists(table).catch(err => errors.push(err)))
+            attempts++;
+            await Promise.all(Object.values(DB).map(
+                table => this.tableExists(table).catch(err => errors.push(err)))
             );
             errors.forEach(err => logger.error(err));
             if (errors.length === 0) {
@@ -115,37 +112,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         );
         errors.forEach(err => logger.error(err));
         return errors.length === 0;
-    }
-
-    /** @override */
-    async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
-        // DEBUG:
-        // if having issue in getting the remote api in local debug env, try this fake url
-        if (process.env.DEBUG_MODE === 'true') {
-            return 'http://localhost/no-where';
-        }
-        let position,
-            page;
-        const
-            gwName = process.env.API_GATEWAY_NAME,
-            region = process.env.AWS_REGION,
-            stage = process.env.API_GATEWAY_STAGE_NAME,
-            resource = process.env.API_GATEWAY_RESOURCE_NAME;
-        do {
-
-            this._step = 'handler:getApiGatewayUrl:getRestApis';
-            page = await apiGateway.getRestApis({
-                position
-            }).promise();
-            position = page.position;
-            const
-                gw = page.items.find(i => i.name === gwName);
-            if (gw) {
-                return `https://${gw.id}.execute-api.${region}.amazonaws.com/` +
-                    `${stage}/${resource}`;
-            }
-        } while (page.items.length);
-        throw new Error(`Api Gateway not found looking for ${gwName}`);
     }
 
     /**
@@ -915,59 +881,16 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    async getSettingItem(key, valueOnly = true) {
-        let params = {
-            TableName: DB.SETTINGS.TableName,
-            Key: {
-                settingKey: key
-            }
-        };
-        try {
-            let result = await docClient.get(params).promise();
-            if (result && result.Item) {
-                let value = result.Item.settingValue;
-                if (result.Item.jsonEncoded === 'true') {
-                    try {
-                        value = JSON.parse(result.Item.settingValue);
-                    } catch (error) {
-                        logger.warning(`getSettingItems error: ${result.Item.settingKey} has ` +
-                            `jsonEncoded (${result.Item.jsonEncoded}) value but unable to apply ` +
-                            `JSON.parse(). settingValue is: ${result.Item.settingValue}`);
-                    }
-                }
-                if (result.Item.settingValue === 'N/A') {
-                    result.Item.settingValue = '';
-                }
-                if (valueOnly) {
-                    return value;
-                } else {
-                    return {
-                        settingKey: result.Item.settingKey,
-                        settingValue: value,
-                        description: result.Item.description
-                    };
-                }
-            }
-        } catch (error) {
-            logger.warning(`getSettingItem > error: ${JSON.stringify(error)}`);
-            return null;
-        }
-    }
-
     /** @override */
     async getSettingItems(keyFilter = null, valueOnly = true) {
         try {
             const data = await docClient.scan({
                 TableName: DB.SETTINGS.TableName
             }).promise();
-            let items, result = {};
-            if (Array.isArray(keyFilter) && Array.isArray(data.Items) && data.Items.length) {
-                items = data.Items.filter(item => {
-                    return keyFilter.includes(item.settingKey);
-                });
-            } else {
-                items = data.Items;
-            }
+            let items = Array.isArray(data.Items) && data.Items;
+            let formattedItems = {};
+            let filteredItems = null, hasFilter = Array.isArray(keyFilter);
+
             items.forEach(item => {
                 if (item.jsonEncoded === 'true') {
                     try {
@@ -978,10 +901,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                             `JSON.parse(). settingValue is: ${item.settingValue}`);
                     }
                 }
-                result[item.settingKey] = valueOnly ? item.settingValue : item;
+                formattedItems[item.settingKey] = valueOnly ? item.settingValue : item;
+                if (hasFilter && keyFilter.includes(item.settingKey)) {
+                    filteredItems = filteredItems || {};
+                    filteredItems[item.settingKey] = formattedItems[item.settingKey];
+                }
             });
-            this._settings = result;
-            return result;
+            this._settings = formattedItems;
+            return keyFilter && filteredItems || formattedItems;
         } catch (error) {
             logger.warn(`getSettingItems > error: ${JSON.stringify(error)}`);
             return [];
@@ -1855,79 +1782,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-disable max-len */
     /**
      *
-     * @param {AWS.ProxyIntegrationEvent} event Event from the api-gateway.
-     * @param {*} context the runtime context of this function call from AWS Lambda service
-     * @param {*} callback the callback url from AWS Lambda service
+     * @param {AWSPlatform.RequestEvent} event Event from the api-gateway.
+     * @param {AWSPlatform.RequestContext} context the runtime context of this function
+     * call from the platform
+     * @param {AWSPlatform.RequestCallback} callback the callback function the platorm
+     * uses to end a request
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      */
     /* eslint-enable max-len */
     async handle(event, context, callback) { // eslint-disable-line unused-vars
-        this._step = 'initializing';
-        let proxyMethod = 'httpMethod' in event && event.httpMethod,
-            result;
-        try {
-            const platformInitSuccess = await this.init();
-            // return 500 error if script cannot finish the initialization.
-            if (!platformInitSuccess) {
-                result = 'fatal error, cannot initialize.';
-                logger.error(result);
-                callback(null, this.proxyResponse(500, result));
-            } else if (event.source === 'aws.autoscaling') {
-                this._step = 'aws.autoscaling';
-                result = await this.handleAutoScalingEvent(event);
-                callback(null, this.proxyResponse(200, result));
-            } else {
-                // authenticate the calling instance
-                this.parseRequestInfo(event);
-                if (!this._requestInfo.instanceId) {
-                    callback(null, this.proxyResponse(403, 'Instance id not provided.'));
-                    return;
-                }
-                await this.parseInstanceInfo(this._requestInfo.instanceId);
-
-                await this.checkInstanceAuthorization(this._selfInstance);
-                if (proxyMethod === 'POST') {
-                    this._step = 'fortigate:handleSyncedCallback';
-                    // handle status messages
-                    if (this._requestInfo.status) {
-                        result = await this.handleStatusMessage(event);
-                    } else {
-                        result = await this.handleSyncedCallback();
-                    }
-                    callback(null, this.proxyResponse(200, result));
-                } else if (proxyMethod === 'GET') {
-                    this._step = 'fortigate:getConfig';
-                    result = await this.handleGetConfig();
-                    callback(null, this.proxyResponse(200, result));
-                } else {
-                    this._step = '¯\\_(ツ)_/¯';
-
-                    logger.log(`${this._step} unexpected event!`, event);
-                    // probably a test call from the lambda console?
-                    // should do nothing in response
-                }
-            }
-
-        } catch (ex) {
-            if (ex.message) {
-                ex.message = `${this._step}: ${ex.message}`;
-            }
-            try {
-                console.error('ERROR while ', this._step, proxyMethod, ex);
-            } catch (ex2) {
-                console.error('ERROR while ', this._step, proxyMethod, ex.message, ex, ex2);
-            }
-            if (proxyMethod) {
-                callback(null,
-                    this.proxyResponse(500, {
-                        message: ex.message,
-                        stack: ex.stack
-                    }));
-            } else {
-                callback(ex);
-            }
-        }
+        // TODO: may need to change when using TS
+        await super.handle(event, context, callback);
     }
+
     async getFazIp() {
         try {
             let keyValue = settingItems.FortiAnalyzerSettingItem.SETTING_KEY;

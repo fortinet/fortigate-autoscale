@@ -25,10 +25,6 @@ const SCRIPT_TIMEOUT = isNaN(process.env.SCRIPT_TIMEOUT) ||
 var logger = new AutoScaleCore.DefaultLogger();
 var dbClient, computeClient, storageClient;
 
-// this variable is to store the anticipated script execution expire time (milliseconds)
-let scriptExecutionExpireTime,
-    electionWaitingTime = process.env.ELECTION_WAIT_TIME ?
-        parseInt(process.env.ELECTION_WAIT_TIME) * 1000 : 60000; // in ms
 
 class AzureLogger extends AutoScaleCore.DefaultLogger {
     constructor(loggerObject) {
@@ -154,15 +150,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             },
             initDB = async function() {
                 try {
+                    let collectionNames =
+                            Object.keys(DB).map(tableName => DB[tableName].TableName);
                     let available = await checkDatabaseAvailability();
                     if (!available) {
                         await createDatabase();
-                        // filter out those irrelevant DB
-                        const irrelevantDBNames = ['LIFECYCLEITEM', 'NICATTACHMENT'];
-                        let collectionNames = Object.keys(DB).filter(element => {
-                            return !irrelevantDBNames.includes(element);
-                        }).map(tableName => DB[tableName].TableName);
                         await createCollections(collectionNames);
+                    } else {
+                        await checkCollectionsAvailability(collectionNames)
+                            .then(missingCollections => createCollections(missingCollections));
                     }
                     return true;
                 } catch (error) {
@@ -187,10 +183,6 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         });
         this._initialized = true; // mark this platform class instance is initialized.
         return true;
-    }
-
-    async getCallbackEndpointUrl(fromContext = null) {
-        return await fromContext ? fromContext.originalUrl : null;
     }
 
     /**
@@ -238,6 +230,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async putMasterRecord(candidateInstance, voteState, method = 'new') {
         try {
+            let electionTimeout = parseInt(this._settings['master-election-timeout']);
             let document = {
                 id: this.masterScalingGroupName,
                 asgName: this.masterScalingGroupName,
@@ -245,7 +238,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 instanceId: candidateInstance.instanceId,
                 vpcId: candidateInstance.virtualNetworkId,
                 subnetId: candidateInstance.subnetId,
-                voteEndTime: Date.now() + electionWaitingTime,
+                voteEndTime: Date.now() + (electionTimeout - 5) * 1000,
                 voteState: voteState
             };
             const TABLE = DB.ELECTION;
@@ -572,7 +565,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
-    async getSettingItem(key, valueOnly = true) {
+    async getSettingItems(keyFilter = null, valueOnly = true) {
         try {
             const data = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.SETTINGS.TableName,
                 null, null, {crossPartition: true});
@@ -1014,47 +1007,19 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return success;
     }
 
-    async handle(event, context, callback) {
-        logger.info('start to handle autoscale');
-        let proxyMethod = 'method' in event && event.method,
-            result;
-        try {
-            const platformInitSuccess = await this.init();
-            // return 500 error if script cannot finish the initialization.
-            if (!platformInitSuccess) {
-                result = 'fatal error, cannot initialize.';
-                this.logger.error(result);
-                callback(null, this.proxyResponse(500, result));
-                return;
-            }
-
-            // authenticate the calling instance
-            this.parseRequestInfo(event);
-            if (!this._requestInfo.instanceId) {
-                context.res = this.proxyResponse(403, 'Instance id not provided.');
-                return;
-            }
-            await this.parseInstanceInfo(this._requestInfo.instanceId);
-
-            await this.checkInstanceAuthorization(this._selfInstance);
-
-            if (proxyMethod === 'GET') {
-                // handle get config
-                result = await this.handleGetConfig(event);
-                context.res = this.proxyResponse(200, result);
-            } else if (proxyMethod === 'POST') {
-                // handle status message
-                if (this._requestInfo.status) {
-                    result = await this.handleStatusMessage(event);
-                } else {
-                    result = await this.handleSyncedCallback();
-                }
-                context.res = this.proxyResponse(200, result);
-            }
-        } catch (error) {
-            logger.error(error);
-            context.res = this.proxyResponse(500, error);
-        }
+    /* eslint-disable max-len */
+    /**
+     *
+     * @param {AzurePlatform.RequestEvent} event Event from the api-gateway.
+     * @param {AzurePlatform.RequestContext} context the runtime context of this function
+     * call from the platform
+     * @param {AzurePlatform.RequestCallback} callback the callback function the platorm
+     * uses to end a request
+     */
+    /* eslint-enable max-len */
+    async handle(event, context, callback) { // eslint-disable-line unused-vars
+        // TODO: may need to change when using TS
+        await super.handle(event, context, callback);
     }
 
     /** @override */
@@ -1066,7 +1031,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await Promise.resolve(true);
     }
 
-    async handleGetConfig(event) {
+    async handleGetConfig() {
         logger.info('calling handleGetConfig');
         let config,
             masterInfo,
@@ -1118,7 +1083,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             },
             counter = currentCount => {
                 logger.info(`wait for master election (attempt: #${currentCount})`);
-                if (Date.now() < scriptExecutionExpireTime) {
+                if (Date.now() < process.env.SCRIPT_EXECUTION_EXPIRE_TIME) {
                     return false;
                 }
                 throw new Error(`failed to wait for a result within ${currentCount} attempts.`);
@@ -1150,14 +1115,14 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             this._step = 'handler:getConfig:getMasterConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
-            params.callbackUrl = await this.platform.getCallbackEndpointUrl(event);
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl();
             config = await this.getMasterConfig(params);
             logger.info('called handleGetConfig: returning master config' +
                 `(master-ip: ${masterIp || masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
-            params.callbackUrl = await this.platform.getCallbackEndpointUrl(event);
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl();
             params.masterIp = masterInfo.primaryPrivateIpAddress;
             config = await this.getSlaveConfig(params);
             logger.info('called handleGetConfig: returning slave config' +
@@ -1612,12 +1577,7 @@ exports.handle = async (context, req) => {
     // even earlier to bypass these issues.
     // now the script timeout is set to 200 seconds which is 30 seconds earlier.
     // Leave it some time for function finishing up.
-    let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
-        parseInt(process.env.SCRIPT_TIMEOUT) * 1000 : 200000;
-    if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
-        scriptTimeOut = 200000;
-    }
-    scriptExecutionExpireTime = Date.now() + scriptTimeOut;
+    process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + SCRIPT_TIMEOUT;
     logger = new AzureLogger(context.log);
     armClient.useLogger(logger);
     if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
@@ -1648,12 +1608,7 @@ exports.handleGetLicense = async (context, req) => {
     // even earlier to bypass these issues.
     // now the script timeout is set to 200 seconds which is 30 seconds earlier.
     // Leave it some time for function finishing up.
-    let scriptTimeOut = process.env.SCRIPT_TIMEOUT && !isNaN(process.env.SCRIPT_TIMEOUT) ?
-        parseInt(process.env.SCRIPT_TIMEOUT) * 1000 : 200000;
-    if (scriptTimeOut <= 0 || scriptTimeOut > 200000) {
-        scriptTimeOut = 200000;
-    }
-    scriptExecutionExpireTime = Date.now() + scriptTimeOut;
+    process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + SCRIPT_TIMEOUT;
     logger = new AzureLogger(context.log);
     armClient.useLogger(logger);
     if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&

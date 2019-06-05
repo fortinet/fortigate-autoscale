@@ -116,11 +116,14 @@ module.exports = class CloudPlatform {
     }
     /**
      * Get the url for the callback-url portion of the config.
-     * Abstract class method.
      * @param {Object} fromContext a context object to get the url, if needed.
      */
-    async getCallbackEndpointUrl(fromContext = null) {
-        await this.throwNotImplementedException();
+    async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
+        if (this._settings['autoscale-handler-url']) {
+            return await Promise.resolve(this._settings['autoscale-handler-url']);
+        } else {
+            throw new Error('Api Gateway setting: autoscale-handler-url, not found.');
+        }
     }
 
     /**
@@ -259,7 +262,20 @@ module.exports = class CloudPlatform {
     }
 
     async getSettingItem(key, valueOnly = true) {
-        await this.throwNotImplementedException();
+        // check _setting first
+        if (this._settings && this._settings.hasOwnProperty(key)) {
+            // if get full item object
+            if (!valueOnly && this._settings[key] && this._settings[key].settingKey) {
+                return this._settings[key];
+            }
+            // if not get full item object
+            // _settings is not an object of item objects
+            if (valueOnly && this._settings[key]) {
+                return this._settings[key].settingKey || this._settings[key];
+            }
+        }
+        await this.getSettingItems(key, valueOnly);
+        return this._settings[key];
     }
 
     /**
