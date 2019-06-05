@@ -37,7 +37,7 @@ function getPlatform() {
 }
 
 /**
- * AWS Lambda Entry.
+ * FortiGate Autoscale Handler Lambda function entry.
  * @param {Object} event The event been passed to
  * @param {Object} context The Lambda function runtime context
  * @param {Function} callback a callback function been triggered by AWS Lambda mechanism
@@ -45,6 +45,17 @@ function getPlatform() {
 exports.AutoscaleHandler = async (event, context, callback) => {
     console.log(`Incoming event: ${JSON.stringify(event)}`);
     await ftgtAutoscaleAws.handler(event, context, callback);
+};
+
+/**
+ * FortiGate Autoscale BYOL License handler Lambda function entry.
+ * @param {Object} event The event been passed to
+ * @param {Object} context The Lambda function runtime context
+ * @param {Function} callback a callback function been triggered by AWS Lambda mechanism
+ */
+exports.ByolLicenseHandler = async (event, context, callback) => {
+    console.log(`Incoming event: ${JSON.stringify(event)}`);
+    await ftgtAutoscaleAws.handleGetLicense(event, context, callback);
 };
 
 async function initiate(desiredCapacity, minSize, maxSize, subnetPairs) {

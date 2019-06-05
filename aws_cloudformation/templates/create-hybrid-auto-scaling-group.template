@@ -615,7 +615,7 @@
                     "UserData": {
                         "Fn::Base64": {
                             "Fn::Sub": [
-                                "{\"config-url\": \"${configUrl}\",\"productcode\":\"${productCode}\"}",
+                                "{\"config-url\": \"${configUrl}\",\"productcode\":\"${productCode}\",\"license-url\": \"${licenseUrl}\"}",
                                 {
                                     "configUrl": {
                                         "Fn::Sub": [
@@ -629,6 +629,21 @@
                                                 },
                                                 "stage": "prod",
                                                 "resource": "fgt-asg-handler"
+                                            }
+                                        ]
+                                    },
+                                    "licenseUrl": {
+                                        "Fn::Sub": [
+                                            "https://${api}.execute-api.${region}.amazonaws.com/${stage}/${resource}",
+                                            {
+                                                "region": {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                "api": {
+                                                    "Ref": "APIGatewayId"
+                                                },
+                                                "stage": "prod",
+                                                "resource": "byol-license"
                                             }
                                         ]
                                     },

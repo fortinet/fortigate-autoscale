@@ -109,6 +109,7 @@ exports.handler = async (event, context) => {
                             tasks.push(autoscaleHandler.checkAutoScalingGroupState(
                                 autoscaleHandler.getSettings()['byol-scaling-group-name']
                             ).then(byolGroupCheck => {
+                                logger.log(byolGroupCheck);
                                 return {checkName: 'byolGroupCheck',
                                     result: !byolGroupCheck || byolGroupCheck === 'stopped'};
                             }));
@@ -116,6 +117,7 @@ exports.handler = async (event, context) => {
                         tasks.push(autoscaleHandler.checkAutoScalingGroupState(
                             autoscaleHandler.getSettings()['payg-scaling-group-name']
                         ).then(paygGroupCheck => {
+                            logger.log(paygGroupCheck);
                             return {checkName: 'paygGroupCheck',
                                 result: !paygGroupCheck || paygGroupCheck === 'stopped'};
                         }));

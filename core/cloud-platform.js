@@ -293,19 +293,50 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
-    async updateLicenseUsage(parameters) {
+    async updateLicenseUsage(licenseRecord, replace = false) {
         await this.throwNotImplementedException();
     }
     /**
      * List license usage records
      * @param {Object} parameters parameter require to list and filter license usage records
-     * @returns {Map} must return a Map Key: checksum, Value: the record
+     * @returns {Map<licenseRecord>} must return a Map of licenseRecord with checksum as key,
+     * and LicenseItem as value
      */
     async listLicenseUsage(parameters) {
         await this.throwNotImplementedException();
     }
 
     async deleteLicenseUsage(parameters) {
+        await this.throwNotImplementedException();
+    }
+
+    /**
+     *  @returns {Map<licenseRecord>} must return a Map of LicenseItem with blochecksumbKey as key,
+     * and LicenseItem as value
+     */
+    async listLicenseStock() {
+        await this.throwNotImplementedException();
+    }
+
+    /**
+     * Find a recyclable license from those been previously used by a device but now the device
+     * has become unavailable. Hence, the licens it was assigned can be recycled.
+     * @param {Map<licenseRecord>} stockRecords the stock records to compare with
+     * @param {Map<licenseRecord>} usageRecords the usage records to compare with
+     * @param {Number} limit find how many items? set to a negative number for no limit
+     * @returns {Array<licenseRecord>} must return an Array of licenseRecord with checksum as key,
+     * and LicenseItem as value
+     */
+    async findRecyclableLicense(stockRecords, usageRecords, limit = -1) {
+        await this.throwNotImplementedException();
+    }
+
+    /**
+     * Update the given license item to db
+     * @param {LicenseItem} licenseItem the license item to update
+     * @param {Boolean} replace update method: replace existing or not. Default true
+     */
+    async updateLicenseStock(licenseItem, replace = true) {
         await this.throwNotImplementedException();
     }
 

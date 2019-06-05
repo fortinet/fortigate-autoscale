@@ -93,6 +93,16 @@
             "MaxValue": 65535,
             "ConstraintDescription": "must be a valid number between 1 and 65535.",
             "Description": "Number of consecutively lost heartbeats. When the Heartbeat loss count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
+        },
+        "CreateByolLicenseHandler": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "ConstraintDescription": "value must be chosen from the provided options.",
+            "Description": "Deployment options for creating the BYOL license handler function."
         }
     },
     "Conditions": {
@@ -111,6 +121,13 @@
                     ""
                 ]
             }]
+        },
+        "CreateByolLicenseHandler": {
+            "Fn::Equals": [{
+                    "Ref": "CreateByolLicenseHandler"
+                },
+                "yes"
+            ]
         }
     },
     "Resources": {
@@ -264,6 +281,59 @@
                                 {
                                     "Fn::GetAtt": [
                                         "FgtAsgLambdaFunctionAsgHandler",
+                                        "Arn"
+                                    ]
+                                },
+                                "/invocations"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "FgtAsgApiGatewayByolLicenseHandlerResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Condition": "CreateByolLicenseHandler",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "FgtAsgApiGateway"
+                },
+                "PathPart": "byol-license",
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "FgtAsgApiGateway",
+                        "RootResourceId"
+                    ]
+                }
+            }
+        },
+        "FgtAsgApiGatewayByolLicenseHandlerMethodGet": {
+            "Type": "AWS::ApiGateway::Method",
+            "Condition": "CreateByolLicenseHandler",
+            "Properties": {
+                "ResourceId": {
+                    "Ref": "FgtAsgApiGatewayByolLicenseHandlerResource"
+                },
+                "RestApiId": {
+                    "Ref": "FgtAsgApiGateway"
+                },
+                "AuthorizationType": "NONE",
+                "HttpMethod": "GET",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "arn:aws:apigateway:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":lambda:path/2015-03-31/functions/",
+                                {
+                                    "Fn::GetAtt": [
+                                        "FgtAsgLambdaFunctionByolLicenseHandler",
                                         "Arn"
                                     ]
                                 },
@@ -842,12 +912,115 @@
                 "StackCopyLambdaSource"
             ]
         },
-        "FgtAsgLambdaPermissionApiGatewayInvokation": {
+        "LambdaPermissionFgtAsgHandler": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
                 "FunctionName": {
                     "Fn::GetAtt": [
                         "FgtAsgLambdaFunctionAsgHandler",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": [
+                        "arn:aws:execute-api:${region}:${account}:${api}/*",
+                        {
+                            "region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "account": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "api": {
+                                "Ref": "FgtAsgApiGateway"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "FgtAsgLambdaFunctionByolLicenseHandler": {
+            "Type": "AWS::Lambda::Function",
+            "Condition": "CreateByolLicenseHandler",
+            "Properties": {
+                "Description": "FortiGate Autoscale BYOL license handler function.",
+                "FunctionName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "CustomIdentifier"
+                            }, {
+                                "Ref": "UniqueId"
+                            },
+                            "fortigate-autoscale-byol-license"
+                        ]
+                    ]
+                },
+                "Runtime": "nodejs8.10",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "FgtAsgHandlerIamRole",
+                        "Arn"
+                    ]
+                },
+                "Handler": "index.ByolLicenseHandler",
+                "Timeout": {
+                    "Ref": "HandlerScriptTimeout"
+                },
+                "Code": {
+                    "S3Bucket": {
+                        "Fn::GetAtt": [
+                            "StackCopyLambdaSource",
+                            "Outputs.DestinationBucket"
+                        ]
+                    },
+                    "S3Key": {
+                        "Fn::Sub": [
+                            "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
+                            {
+                                "KeyPrefix": {
+                                    "Fn::GetAtt": [
+                                        "StackCopyLambdaSource",
+                                        "Outputs.KeyPrefix"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "Environment": {
+                    "Variables": {
+                        "EXPIRE_LIFECYCLE_ENTRY": {
+                            "Ref": "LifecycleHookTimeout"
+                        },
+                        "RESOURCE_TAG_PREFIX": {
+                            "Ref": "ResourceTagPrefix"
+                        },
+                        "CUSTOM_ID": {
+                            "Ref": "ResourceTagPrefix"
+                        },
+                        "UNIQUE_ID": ""
+                    }
+                },
+                "Tags": [{
+                    "Key": "ResourceGroup",
+                    "Value": {
+                        "Ref": "ResourceTagPrefix"
+                    }
+                }]
+            },
+            "DependsOn": [
+                "StackCopyLambdaSource"
+            ]
+        },
+        "LambdaPermissionByolLicenseHandler": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "FgtAsgLambdaFunctionByolLicenseHandler",
                         "Arn"
                     ]
                 },
@@ -920,6 +1093,22 @@
             "Value": {
                 "Fn::GetAtt": [
                     "FgtAsgLambdaFunctionCfnService",
+                    "Arn"
+                ]
+            }
+        },"ByolLicenseHandlerFunctionName": {
+            "Condition": "CreateByolLicenseHandler",
+            "Description": "FortiGate Autoscale BYOL license handler function Name",
+            "Value": {
+                "Ref": "FgtAsgLambdaFunctionByolLicenseHandler"
+            }
+        },
+        "ByolLicenseHandlerFunctionArn": {
+            "Condition": "CreateByolLicenseHandler",
+            "Description": "FortiGate Autoscale BYOL license handler function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FgtAsgLambdaFunctionByolLicenseHandler",
                     "Arn"
                 ]
             }

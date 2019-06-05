@@ -890,7 +890,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
-    async updateLicenseUsage(parameters) {
+    async updateLicenseUsage(licenseRecord, replace = false) {
         let document = {
             id: parameters.stockItem.checksum,
             'sha1-checksum': parameters.stockItem.checksum,

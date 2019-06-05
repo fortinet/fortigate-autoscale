@@ -1641,7 +1641,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async getLicenseFileContent(fileName) {
         const blob = await this.getBlobFromStorage({
             storageName: this._settings['asset-storage-name'],
-            keyPrefix: this._settings['fortigate-license-storage-key-prefix'],
+            keyPrefix: path.join(
+                this._settings['asset-storage-key-prefix'],
+                this._settings['fortigate-license-storage-key-prefix']
+            ),
             fileName: fileName
         });
         return blob.content;
@@ -1704,7 +1707,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
 
     /** @override */
-    async updateLicenseUsage(licenseRecord) {
+    async updateLicenseUsage(licenseRecord, replace = false) {
         logger.info('calling updateLicenseUsage');
 
         try {
@@ -1721,6 +1724,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     assignedTime: licenseRecord.assignedTime
                 }
             };
+            if (!replace) {
+                params.ConditionExpression = 'attribute_not_exists(id)'; // prevent replacing
+            }
             let result = await docClient.put(params).promise();
             logger.info('called updateLicenseUsage');
             return !!result;
@@ -1749,7 +1755,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 const licenseRecord = AutoScaleCore.LicenseRecord.fromDb(item);
                 return [licenseRecord.checksum, licenseRecord];
             });
-            logger.info(`called listLicenseStock: (${recordCount}) licenses in use.`);
+            logger.info(`called listLicenseStock: (${recordCount}) licenses in stock.`);
             return new Map(iterable);
         } catch (error) {
             logger.warn('called listLicenseStock: error:', error);
@@ -2084,11 +2090,13 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling handleTerminatingInstanceHook');
         let result, errorTasks = [], tasks = [], instanceId = event.detail.EC2InstanceId;
         this._selfInstance = this._selfInstance ||
-                    await this.platform.describeInstance({
-                        instanceId: event.detail.EC2InstanceId
-                    });
-        this.setScalingGroup(this._settings['master-auto-scaling-group-name'],
-                    event.detail.AutoScalingGroupName);
+            await this.platform.describeInstance({
+                instanceId: event.detail.EC2InstanceId
+            });
+        await this.parseInstanceInfo(instanceId);
+
+        await this.checkInstanceAuthorization(this._selfInstance);
+
         // detach nic2
         if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
             tasks.push(this.handleNicDetachment(event).catch(() => {
@@ -2250,6 +2258,92 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
+    async findRecyclableLicense(stockRecords, usageRecords, limit = -1) {
+        if (stockRecords instanceof Map && usageRecords instanceof Map) {
+            let gracePeriod = (parseInt(this._settings['get-license-grace-period']) || 600) * 1000;
+            // do health check on each item
+            let queries = [],
+                healthCheckResults, recyclableRecords = [],
+                count = 0,
+                maxCount,
+                interval = 3600000, // giving a big fake interval so healthcheck should never fail
+                // by this interval. unless the healthcheck state is
+                // 'out-of-sync'
+                platform = this.platform;
+            if (limit === 'all' || isNaN(limit) || parseInt(limit) <= 0) {
+                maxCount = -1; // set a negative max count to indicate no limit
+            } else {
+                maxCount = parseInt(limit); // set a positive maxcount
+            }
+            usageRecords.forEach(item => {
+                if (item.instanceId && item.scalingGroupName) {
+                    queries.push(async function(rec) {
+                        // get instance health check and instance info
+                        let tasks = [];
+                        tasks.push(
+                            platform.getInstanceHealthCheck({
+                                instanceId: rec.instanceId,
+                                asgName: rec.asgName
+                            }, interval).catch(() => null));
+                        tasks.push(
+                            platform.describeInstance({
+                                instanceId: item.instanceId,
+                                scalingGroupName: item.asgName,
+                                readCache: false
+                            }).catch(() => null));
+                        let [healthCheck, instance] = await Promise.all(tasks);
+                        return {
+                            checksum: rec.checksum,
+                            usageRecord: rec,
+                            healthCheck: healthCheck,
+                            instance: instance
+                        };
+                    }(item));
+                }
+            }, this);
+            healthCheckResults = await Promise.all(queries);
+            for (let result of healthCheckResults) {
+                // recycle this stock record if checksum (of a license file) exists and the
+                // corresponding instance which used this license doesn't exist or state isn't
+                // in-sync
+                // there's a situation when one fgt was assigned one license, the fgt need time
+                // to get config, boot up, become available, and start to send hb.
+                // until then the health check of that fgt won't be available. therefore, here
+                // the script sets a grace period to allow for the fgt to become fully available.
+                // if the fgt instance cannot come up and runniing by the grace period. it's
+                // license will be recycled.
+                // the health check here only verifies the in-sync state of any fgt instance but
+                // it doesn't trigger failover.
+                if (stockRecords.has(result.checksum)) {
+                    let recyclable = false;
+                    // if instance is gone? recycle the license
+                    if (!result.instance) {
+                        recyclable = true;
+                    } else if (result.instance && result.healthCheck &&
+                        !result.healthCheck.inSync) {
+                        // if instance exists but instance state isn't in-sync? recycle the license
+                        recyclable = true;
+                    } else if (result.instance && !result.healthCheck && result.usageRecord &&
+                        Date.now() > result.usageRecord.assignedTime + gracePeriod) {
+                        // if instance exists but no healthcheck and grace period has passed?
+                        recyclable = true;
+                    }
+                    // recycle the recyclable license
+                    if (recyclable) {
+                        count++;
+                        if (maxCount < 0 || count <= maxCount) {
+                            recyclableRecords.push(stockRecords.get(result.checksum));
+                            if (count === maxCount) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            return recyclableRecords;
+        }
+    }
+
     /* ==== Utilities ==== */
 
     async handleNicAttachment(event) {
@@ -2356,8 +2450,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         NetworkInterfaceId: attachmentRecord.nicId
                     });
                     // delete attachment record
-                    await this.platform.deleteNicAttachmentRecord(
-                    attachmentRecord.instanceId);
+                    await this.platform.deleteNicAttachmentRecord(attachmentRecord.instanceId);
                 }
                 // reload the instance info
                 this._selfInstance =
@@ -2520,41 +2613,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await this.platform.terminateInstanceInAutoScalingGroup(instance);
     }
 
-    async parseInstanceInfo(instanceId) {
-        // look for this vm in both byol and payg vmss
-        // look from byol first
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance({
-            instanceId: instanceId,
-            scalingGroupName: process.env.SCALING_GROUP_NAME_BYOL
-        });
-        if (this._selfInstance) {
-            this.setScalingGroup(
-                process.env.MASTER_SCALING_GROUP_NAME,
-                process.env.SCALING_GROUP_NAME_BYOL
-            );
-        } else { // not found in byol vmss, look from payg
-            this._selfInstance = await this.platform.describeInstance({
-                instanceId: instanceId,
-                scalingGroupName: process.env.SCALING_GROUP_NAME_PAYG
-            });
-            if (this._selfInstance) {
-                this.setScalingGroup(
-                    process.env.MASTER_SCALING_GROUP_NAME,
-                    process.env.SCALING_GROUP_NAME_PAYG
-                );
-            }
-        }
-        if (this._selfInstance) {
-            logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
-                `scaling group self: ${this.scalingGroupName}, ` +
-                `master: ${this.masterScalingGroupName})`);
-        } else {
-            logger.warn(`cannot identify instance: vmid:(${instanceId})`);
-        }
-    }
-
     /** @override */
     async checkInstanceAuthorization(instance) {
+        // TODO: can we generalize this method to core?
         if (!instance ||
                 instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
             // not trusted
