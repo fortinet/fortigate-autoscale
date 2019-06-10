@@ -1,11 +1,10 @@
-[
-    {
+[{
         "ParameterKey": "ResourceTagPrefix",
-        "ParameterValue": "taskcat"
+        "ParameterValue": "fortigate-autoscale-has-a-very-long-res-tag-prefix"
     },
     {
         "ParameterKey": "CustomIdentifier",
-        "ParameterValue": "fgtASG"
+        "ParameterValue": "customId00"
     },
     {
         "ParameterKey": "S3BucketName",
@@ -13,7 +12,7 @@
     },
     {
         "ParameterKey": "S3KeyPrefix",
-        "ParameterValue": "quickstart-fortinet-fortigate/"
+        "ParameterValue": "fortigate-autoscale-ci/"
     },
     {
         "ParameterKey": "AvailabilityZones",
@@ -21,15 +20,15 @@
     },
     {
         "ParameterKey": "VpcCidr",
-        "ParameterValue": "192.168.128.0/23"
+        "ParameterValue": "192.168.0.0/16"
     },
     {
         "ParameterKey": "PublicSubnet1Cidr",
-        "ParameterValue": "192.168.128.0/24"
+        "ParameterValue": "192.168.1.0/24"
     },
     {
         "ParameterKey": "PublicSubnet2Cidr",
-        "ParameterValue": "192.168.129.0/24"
+        "ParameterValue": "192.168.2.0/24"
     },
     {
         "ParameterKey": "FortiGateInstanceType",
@@ -102,14 +101,6 @@
     {
         "ParameterKey": "TransitGatewayId",
         "ParameterValue": ""
-    },
-    {
-        "ParameterKey": "FgtInterfaceTrafficIn",
-        "ParameterValue": "port1"
-    },
-    {
-        "ParameterKey": "FgtInterfaceTrafficOut",
-        "ParameterValue": "port1"
     },
     {
         "ParameterKey": "BgpAsn",
