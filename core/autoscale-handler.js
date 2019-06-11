@@ -139,9 +139,9 @@ module.exports = class AutoscaleHandler {
                 .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
                 .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
                 .replace(new RegExp('{TRAFFIC_PORT}', 'gm'),
-                    process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
+                    process.env.FORTIGATE_TRAFFIC_PORT || 443)
                 .replace(new RegExp('{ADMIN_PORT}', 'gm'),
-                    process.env.FORTIGATE_ADMIN_PORT ? process.env.FORTIGATE_ADMIN_PORT : 8443)
+                    process.env.FORTIGATE_ADMIN_PORT || 8443)
                 .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
                     process.env.FORTIGATE_INTERNAL_ELB_DNS ?
                         process.env.FORTIGATE_INTERNAL_ELB_DNS : '');

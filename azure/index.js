@@ -19,7 +19,9 @@ const DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
 const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
-const HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
+// time in ms allowed to offset the network latency
+const HEART_BEAT_DELAY_ALLOWANCE = process.env.HEART_BEAT_DELAY_ALLOWANCE || 2000;
+const HEART_BEAT_LOSS_COUNT = process.env.HEART_BEAT_LOSS_COUNT || 3; // heartbeat loss count
 
 var logger = new AutoScaleCore.DefaultLogger();
 var dbClient, computeClient, storageClient;
@@ -157,8 +159,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     if (!available) {
                         await createDatabase();
                         // filter out those irrelevant DB
-                        const irrelevantDBNames = ['LIFECYCLEITEM', 'NICATTACHMENT',
-                            'LICENSESTOCK', 'LICENSEUSAGE'];
+                        const irrelevantDBNames = ['LIFECYCLEITEM', 'NICATTACHMENT'];
                         let collectionNames = Object.keys(DB).filter(element => {
                             return !irrelevantDBNames.includes(element);
                         }).map(tableName => DB[tableName].TableName);
@@ -331,9 +332,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 }
             ];
         try {
-            let compensatedScriptTime,
+            let scriptExecutionStartTime,
                 healthy,
                 heartBeatLossCount,
+                heartBeatDelays,
+                inevitableFailToSyncTime,
                 interval,
                 healthCheckRecord,
                 items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
@@ -345,25 +348,59 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             healthCheckRecord = items[0];
             // to get a more accurate heart beat elapsed time, the script execution time so far
             // is compensated.
-            compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
+            scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
             interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
                 heartBeatInterval : healthCheckRecord.heartBeatInterval;
-            if (compensatedScriptTime <
-                healthCheckRecord.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE) {
+            heartBeatDelays = scriptExecutionStartTime - healthCheckRecord.nextHeartBeatTime;
+            if (heartBeatDelays <= HEART_BEAT_DELAY_ALLOWANCE) {
                 // reset hb loss cound if instance sends hb within its interval
                 healthy = true;
                 heartBeatLossCount = 0;
             } else {
                 // if the current sync heartbeat is late, the instance is still considered
-                // healthy unless 3 times of heartBeatInterval amount of time has passed.
-                // where the instance have 0% chance to catch up with a heartbeat sync
-                healthy = healthCheckRecord.heartBeatLossCount < 3 &&
-                    Date.now() < healthCheckRecord.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE +
-                        interval * 1000 * (2 - healthCheckRecord.heartBeatLossCount);
+                // healthy unless the the inevitable-fail-to-sync time has passed.
+                // The the inevitable-fail-to-sync time is defined as:
+                // the maximum amount of time for an instance to be able to sync without being
+                // deemed unhealth. For example:
+                // the instance has x (x < hb loss count allowance) loss count recorded.
+                // the hb loss count allowance is X.
+                // the hb interval is set to i second.
+                // its hb sync time delay allowance is I ms.
+                // its current hb sync time is t.
+                // its expected next hb sync time is T.
+                // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
+                // inevitable-fail-to-sync time. This means the instance can never catch up with a
+                // heartbeat sync that makes it possile to deem health again.
+                inevitableFailToSyncTime = healthCheckRecord.nextHeartBeatTime +
+                    (HEART_BEAT_LOSS_COUNT - healthCheckRecord.heartBeatLossCount - 1) *
+                    (interval * 1000 + HEART_BEAT_DELAY_ALLOWANCE);
+                healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
                 heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
+                logger.info('hb sync is late again.\n' +
+                    `hb loss count goes from ${healthCheckRecord.heartBeatLossCount} to ` +
+                    `${heartBeatLossCount},\n` +
+                    `hb sync delay allowance: ${HEART_BEAT_DELAY_ALLOWANCE} ms\n` +
+                    'expected hb arrived time: ' +
+                    `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
+                    'current hb sync check time: ' +
+                    `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                    `this hb sync delay is: ${heartBeatDelays} ms`);
+                // log the math why this instance is deemed unhealthy
+                if (!healthy) {
+                    logger.info('Instance is deemed unhealthy. reasons:\n' +
+                    `previous hb loss count: ${healthCheckRecord.heartBeatLossCount},\n` +
+                    `hb sync delay allowance: ${HEART_BEAT_DELAY_ALLOWANCE} ms\n` +
+                    'expected hb arrived time: ' +
+                    `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
+                    'current hb sync check time: ' +
+                    `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                    `this hb sync delays: ${heartBeatDelays} ms\n` +
+                    'the inevitable-fail-to-sync time: ' +
+                    `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
+                }
             }
-            logger.info(`called getInstanceHealthCheck. (time: ${compensatedScriptTime}, ` +
-                `interval:${heartBeatInterval}) healthcheck record:`,
+            logger.info(`called getInstanceHealthCheck. (time: ${scriptExecutionStartTime}, ` +
+                `interval:${heartBeatInterval} delay: ${heartBeatDelays}) healthcheck record:`,
                 JSON.stringify(healthCheckRecord));
             return {
                 instanceId: instance.instanceId,
@@ -645,7 +682,13 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     // eslint-disable-next-line no-unused-vars
-    async listLogFromDb(timeFrom, timeTo = null) {
+    /**
+     * List logs from DB
+     * @param {UnixTimeStamp} timeFrom unix timestamp in UTC
+     * @param {UnixTimeStamp} timeTo unix timestamp in UTC
+     * @param {Integer} timeZoneOffset timezone offset from UTC
+     */
+    async listLogFromDb(timeFrom, timeTo = null, timeZoneOffset = 0) {
         try {
             let logContent = '', queryDone = false,
                 rowCount = 0, currentCount = 0,
@@ -655,17 +698,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 if (timeFrom) {
                     filterExp.push({
                         keys: ['timestamp'],
-                        exp: `:timestamp > ${(new Date(timeFrom)).getTime()}`
+                        exp: `:timestamp > ${timeFrom}`
                     });
                 }
                 if (timeTo) {
                     filterExp.push({
                         keys: ['timestamp'],
-                        exp: `:timestamp < ${(new Date(timeTo)).getTime()}`
+                        exp: `:timestamp < ${timeTo}`
                     });
                 }
-                // local debug console
-                console.info(`fetching from ${(new Date(timeFrom))} to ${timeTo}`);
                 let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
                     DB.CUSTOMLOG.TableName,
                     null, filterExp, null, {
@@ -686,23 +727,45 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     if (!logTimeTo || item.timestamp > logTimeTo) {
                         logTimeTo = item.timestamp;
                     }
+                    let regMatches = null, nTime = null;
+                    do {
+                        regMatches = /\[(_t:([0-9]+))\]/g.exec(item.logContent);
+                        if (regMatches) {
+                            nTime = AutoScaleCore.Functions.toGmtTime(regMatches[2]);
+                            nTime = nTime && new Date(nTime.getTime() + timeZoneOffset * 3600000);
+                            let timeString = nTime ? nTime.toUTCString() :
+                                `unknown ${regMatches[2]}`;
+                            item.logContent =
+                                item.logContent.replace(new RegExp(regMatches[1], 'g'),
+                                    `[time]${timeString}${timeZoneOffset}[/time]`);
+                        }
+                    } while (regMatches);
                     logContent += item.logContent;
                 });
                 rowCount += currentCount;
-                if (timeTo && ((new Date(timeTo)).getTime() > logTimeTo) && currentCount > 0) {
+                if (timeTo && (timeTo > logTimeTo) && currentCount > 0) {
                     timeFrom = logTimeTo;
                 } else {
                     queryDone = true;
                 }
             }
-
-            return `Log count:${rowCount}, Time from: ${new Date(logTimeFrom)} to: ` +
-            `${new Date(logTimeTo)}\n${logContent}`;
+            logTimeFrom = logTimeFrom || timeFrom;
+            logTimeTo = logTimeTo || timeTo;
+            logTimeFrom += timeZoneOffset * 3600000;
+            logTimeTo += timeZoneOffset * 3600000;
+            return `Log count:${rowCount}, Time from: ` +
+            `${(new Date(logTimeFrom)).toUTCString()}${timeZoneOffset}` +
+            ` to: ${(new Date(logTimeTo)).toUTCString()}${timeZoneOffset}\n${logContent}`;
         } catch (error) {
             return '';
         }
     }
 
+    /**
+     * delete logs from DB
+     * @param {UnixTimeStamp} timeFrom unix timestamp in UTC
+     * @param {UnixTimeStamp} timeTo unix timestamp in UTC
+     */
     async deleteLogFromDb(timeFrom, timeTo = null) {
         try {
             let timeRangeFrom = timeFrom && !isNaN(timeFrom) ? parseInt(timeFrom) : 0,
@@ -723,7 +786,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     deletionTasks.push(
                         dbClient.deleteDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
                         item.id).catch(e => {
-                            errorTasks.push(item);
+                            errorTasks.push({item: item,error: e});
                             return e;
                         }));
                 }
@@ -742,6 +805,13 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async listLicenseFiles() {
         let blobService = storageClient.refBlobService();
         return await new Promise((resolve, reject) => {
+            // NOTE: the etag of each object returned by Azure API function:
+            // listBlobsSegmented
+            // is NOT wrapped with double quotes.
+            // however, it would be wrapped with double quotes
+            // in the Azure API function:
+            // getBlobToText and getBlobProperties
+            // see: https://github.com/Azure/azure-storage-node/issues/586
             blobService.listBlobsSegmented('fgt-asg-license', null,
             (error, data) => {
                 if (error) {
@@ -749,7 +819,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 } else {
                     if (data && data.entries) {
                         let iterable = data.entries.map(item => {
-                            return [this.genLicenseFileSimpleKey(item.name, item.eTag),
+                            // FIXME: the etag should be enclosed with double quote
+                            return [this.genLicenseFileSimpleKey(item.name, `"${item.eTag}"`),
                                 item];
                         });
                         resolve(new Map(iterable));
@@ -820,14 +891,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async updateLicenseStock(parameters) {
         // eTag is originally wrapped with a pair of double quotes.
-        let eTag = parameters.item.properties.etag.replace(new RegExp('"', 'g'), '');
+        // NOTE: decide to use whatever the etag is passed in here. the double quotes should
+        // be handled in the caller. (May 17, 2019)
         let document = {
             id: parameters.checksum,
             checksum: parameters.checksum,
             filePath: parameters.item.properties.container,
             fileName: parameters.item.properties.name,
             algorithm: parameters.algorithm,
-            fileETag: eTag
+            fileETag: parameters.item.properties.etag
         };
 
         try {
@@ -922,6 +994,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling handleGetConfig');
         let config,
             masterInfo;
+        let duplicatedGetConfigCall = false, masterIp;
 
         // FortiGate actually returns its vmId instead of instanceid
         const instanceId = this._requestInfo.instanceId;
@@ -941,6 +1014,17 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // let result = await this.checkMasterElection();
         let promiseEmitter = this.checkMasterElection.bind(this),
             validator = result => {
+                // TODO: remove the workaround if mantis item: #0534971 is resolved
+                // if i am the master, don't wait, continue, if not, wait
+                // this if-condition is to work around the double GET config calls.
+                if (this._masterRecord && this._masterRecord.voteState === 'pending' &&
+                this._selfInstance &&
+                this._masterRecord.instanceId === this._selfInstance.instanceId &&
+                this._masterRecord.asgName === this.scalingGroupName) {
+                    duplicatedGetConfigCall = true;
+                    masterIp = this._masterRecord.ip;
+                    return true;
+                }
                 // if i am the master, don't wait, continue, if not, wait
                 if (result &&
                 result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
@@ -981,13 +1065,17 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
         // the master ip same as mine? (diagram: master IP same as mine?)
-        if (masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
+        // this checking for 'duplicatedGetConfigCall' is to work around
+        // the double GET config calls.
+        // TODO: remove the workaround if mantis item: #0534971 is resolved
+        if (duplicatedGetConfigCall ||
+            masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
             config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl(event));
             logger.info('called handleGetConfig: returning master config' +
-                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${masterIp || masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
@@ -1082,6 +1170,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         try {
             await this.platform.init();
             // authenticate the calling instance
+            this.parseRequestInfo(event);
             if (!this._requestInfo.instanceId) {
                 context.res = this.proxyResponse(403, 'Instance id not provided.');
                 return;
@@ -1108,6 +1197,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
             let itemKey, itemValue;
 
+            // TODO: remove the workaround if mantis item: #0534971 is resolved
+            // a workaround for double get call:
             // check if a license is already assigned to one fgt, if it makes a second get call
             // for license, returns the tracked usage record.
 
@@ -1308,21 +1399,32 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // TODO: this function should be inaccessible on production
         try {
             let psksecret, proxyMethod = 'method' in event && event.method, result = '';
-            let timeFrom, timeTo;
+            let timeFrom, timeTo, timeZoneOffset;
             await this.platform.init();
             if (event && event.headers) {
                 if (event.headers.psksecret) {
                     psksecret = event.headers.psksecret;
                 }
+                // time from and time to could be Date Formattable string or valid unix timestamp
                 timeFrom = event.headers.timefrom ? event.headers.timefrom : 0;
-                timeTo = event.headers.timeto ? event.headers.timeto : null;
+                timeTo = event.headers.timeto ? event.headers.timeto : Date.now();
+                timeZoneOffset = event.headers.timezoneoffset ? event.headers.timezoneoffset : 0;
+                timeFrom = AutoScaleCore.Functions.toGmtTime(timeFrom);
+                if (!timeFrom) {
+                    throw new Error(`TimeFrom (${timeFrom}) is invalid `);
+                }
+                timeTo = AutoScaleCore.Functions.toGmtTime(timeTo);
+                if (!timeTo) {
+                    throw new Error(`timeTo (${timeTo}) is invalid `);
+                }
             }
             if (!(psksecret && psksecret === process.env.FORTIGATE_PSKSECRET)) {
                 return;
             }
             switch (proxyMethod && proxyMethod.toUpperCase()) {
                 case 'GET':
-                    result = await this.platform.listLogFromDb(timeFrom, timeTo);
+                    result = await this.platform.listLogFromDb(timeFrom.getTime(), timeTo.getTime(),
+                        timeZoneOffset);
                     break;
                 case 'DELETE':
                     if (timeFrom && isNaN(timeFrom)) {
@@ -1339,7 +1441,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                             timeTo = null;
                         }
                     }
-                    result = await this.platform.deleteLogFromDb(timeFrom, timeTo);
+                    result = await this.platform.deleteLogFromDb(
+                        timeFrom.getTime(), timeTo.getTime());
                     break;
                 default:
                     break;
