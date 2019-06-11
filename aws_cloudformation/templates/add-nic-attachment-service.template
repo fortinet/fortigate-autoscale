@@ -2,13 +2,13 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "A service to handle additional network interface attachment / detachment to an EC2 instance in a given VPC.",
     "Parameters": {
-        "DeploymentPackageS3BucketName": {
+        "S3BucketName": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
-        "DeploymentPackageS3KeyPrefix": {
+        "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
@@ -60,10 +60,10 @@
             "Properties": {
                 "Parameters": {
                     "S3BucketName": {
-                        "Ref": "DeploymentPackageS3BucketName"
+                        "Ref": "S3BucketName"
                     },
                     "S3KeyPrefix": {
-                        "Ref": "DeploymentPackageS3KeyPrefix"
+                        "Ref": "S3KeyPrefix"
                     },
                     "ObjectPaths": "functions/packages/nic-attachment.zip"
                 },
@@ -79,10 +79,10 @@
                                 ]
                             },
                             "S3BucketName": {
-                                "Ref": "DeploymentPackageS3BucketName"
+                                "Ref": "S3BucketName"
                             },
                             "S3KeyPrefix": {
-                                "Ref": "DeploymentPackageS3KeyPrefix"
+                                "Ref": "S3KeyPrefix"
                             }
                         }
                     ]

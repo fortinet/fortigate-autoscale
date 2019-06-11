@@ -10,13 +10,13 @@ const url = require('url');
 const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./azure-arm-client');
 const UNIQUE_ID = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '';
-const CUSTOM_ID = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '';
 const SUBSCRIPTION_ID = process.env.SUBSCRIPTION_ID;
 const RESOURCE_GROUP = process.env.RESOURCE_GROUP;
-const DATABASE_NAME = `${CUSTOM_ID ? `${CUSTOM_ID}-` : ''}` +
-    `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
-const DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID);
-const moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
+const RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '';
+const DATABASE_NAME = `FortiGateAutoscale${UNIQUE_ID ? `-${UNIQUE_ID}` : ''}`;
+const DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
+const moduleId = AutoScaleCore.Functions.uuidGenerator(
+    JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
 const VM_INFO_CACHE_TIME = 3600000;// in ms. default 3600 * 1000
 // time in ms allowed to offset the network latency
@@ -524,21 +524,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         let blobService = storageClient.refBlobService();
         let queries = [];
         queries.push(new Promise((resolve, reject) => {
-            blobService.getBlobToText(parameters.path, parameters.fileName,
-            (error, text, result, response) => {
-                if (error) {
-                    reject(error);
-                } else if (response && response.statusCode === 200 || response.isSuccessful) {
-                    resolve(response.body);
-                } else {
-                    reject(response);
-                }
-            });
-        }));
-        if (parameters.getProperties) {
-            queries.push(new Promise((resolve, reject) => {
-                blobService.getBlobProperties(parameters.path, parameters.fileName,
-                (error, result, response) => {
+            blobService.getBlobToText(parameters.keyPrefix, parameters.fileName,
+                (error, text, result, response) => {
                     if (error) {
                         reject(error);
                     } else if (response && response.statusCode === 200 || response.isSuccessful) {
@@ -547,6 +534,19 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                         reject(response);
                     }
                 });
+        }));
+        if (parameters.getProperties) {
+            queries.push(new Promise((resolve, reject) => {
+                blobService.getBlobProperties(parameters.keyPrefix, parameters.fileName,
+                    (error, result, response) => {
+                        if (error) {
+                            reject(error);
+                        } else if (response && response.statusCode === 200 || response.isSuccessful) {
+                            resolve(result);
+                        } else {
+                            reject(response);
+                        }
+                    });
             }));
         }
         let result = await Promise.all(queries);
@@ -574,7 +574,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
-    async getSettingItem(key) {
+    async getSettingItem(key, valueOnly = true) {
         try {
             const keyExpression = {
                 name: 'settingKey',
@@ -585,18 +585,28 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             if (!Array.isArray(items) || items.length === 0) {
                 return null;
             }
-            return JSON.parse(items[0].settingValue);
+            let value = items[0].jsonEncoded && items[0].jsonEncoded !== 'false' ?
+                JSON.parse(items[0].settingValue) : items[0].settingValue;
+            if (valueOnly) {
+                return value;
+            } else {
+                return {settingKey: items[0].settingKey, settingValue: value,
+                    description: items[0].description};
+            }
         } catch (error) {
             logger.warn(`called getSettingItem (key: ${key}) > error: `, error);
             return null;
         }
     }
 
-    async setSettingItem(key, jsonValue) {
+    async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
         let document = {
             id: key,
             settingKey: key,
-            settingValue: JSON.stringify(jsonValue)
+            settingValue: jsonEncoded ? JSON.stringify(value) : value,
+            description: description ? description : '',
+            jsonEncoded: jsonEncoded ? 'true' : 'false',
+            editable: editable ? 'true' : 'false'
         };
         try {
             return !!await dbClient.createDocument(DATABASE_NAME, DB.SETTINGS.TableName,
@@ -661,7 +671,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return !!await dbClient.createDocument(DATABASE_NAME, DB.VMINFOCACHE.TableName,
                 document, true);// create new or replace existing
         } catch (error) {
-            logger.warn('called setSettingItem > error: ', error, 'setSettingItem:', document);
+            logger.warn('called setVmInfoCache > error: ', error, 'setVmInfoCache:', document);
             return false;
         }
     }
@@ -993,8 +1003,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleGetConfig(event) {
         logger.info('calling handleGetConfig');
         let config,
-            masterInfo;
-        let duplicatedGetConfigCall = false, masterIp;
+            masterInfo,
+            params = {};
 
         // FortiGate actually returns its vmId instead of instanceid
         const instanceId = this._requestInfo.instanceId;
@@ -1049,7 +1059,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             };
 
         try {
-            masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+            masterInfo = await AutoScaleCore.Functions.waitFor(
+                    promiseEmitter, validator, 5000, counter);
         } catch (error) {
             logger.warn(error);
             // if error occurs, check who is holding a master election, if it is this instance,
@@ -1073,14 +1084,16 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             this._step = 'handler:getConfig:getMasterConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
-            config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl(event));
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl(event);
+            config = await this.getMasterConfig(params);
             logger.info('called handleGetConfig: returning master config' +
                 `(master-ip: ${masterIp || masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
-            config = await this.getSlaveConfig(masterInfo.primaryPrivateIpAddress,
-                await this.platform.getCallbackEndpointUrl(event));
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl(event);
+            params.masterIp = masterInfo.primaryPrivateIpAddress;
+            config = await this.getSlaveConfig(params);
             logger.info('called handleGetConfig: returning slave config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
@@ -1236,7 +1249,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
 
             let licenseFile = await this.platform.getBlobFromStorage({
-                path: availStockItem.filePath,
+                storageName: '',
+                keyPrefix: availStockItem.filePath,
                 fileName: availStockItem.fileName
             });
 
@@ -1285,7 +1299,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 fileObjects.forEach(item => {
                     if (item) {
                         let algorithm = 'sha1',
-                            checksum = AutoScaleCore.calStringChecksum(item.content, algorithm);
+                            checksum = AutoScaleCore.Functions.calStringChecksum(
+                                item.content, algorithm);
                         // duplicate license
                         if (stockRecords.has(checksum)) {
                             logger.warn('updateLicenseStockRecord > warning: duplicate' +

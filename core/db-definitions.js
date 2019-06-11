@@ -182,6 +182,18 @@ const DB = {
             {
                 AttributeName: 'settingValue',
                 AttributeType: 'S'
+            },
+            {
+                AttributeName: 'description',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'jsonEncoded',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'editable',
+                AttributeType: 'S'
             }
         ]
     },
@@ -337,6 +349,36 @@ const DB = {
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'logContent',
+                AttributeType: 'S'
+            }
+        ]
+    },
+    VPNATTACHMENT: {
+        AttributeDefinitions: [
+            {
+                AttributeName: 'instanceId',
+                AttributeType: 'S'
+            }
+        ],
+        KeySchema: [
+            {
+                AttributeName: 'instanceId',
+                KeyType: 'HASH'
+            }
+        ],
+        ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
+        TableName: 'VpnAttachment',
+        AdditionalAttributeDefinitions: [
+            {
+                AttributeName: 'customerGatewayId',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'vpnConnectionId',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'configuration',
                 AttributeType: 'S'
             }
         ]

@@ -213,6 +213,29 @@ function calStringChecksum(str, algorithm = 'sha1') {
     return crypto.createHash(algorithm).update(str, 'utf8').digest('hex');
 }
 
+function configSetResourceFinder(resObject, nodePath) {
+    nodePath = nodePath.match(/^{(.+)}$/i);
+    if (!resObject || !nodePath) {
+        return '';
+    }
+    let nodes = nodePath[1].split('.');
+    let ref = resObject;
+
+    nodes.find(nodeName => {
+        let matches = nodeName.match(/^([A-Za-z_@-]+)#([0-9])+$/i);
+        if (matches && Array.isArray(ref[matches[1]]) && ref[matches[1]].length > matches[2]) {
+            ref = ref[matches[1]][matches[2]];
+        } else if (!ref[nodeName]) {
+            ref = null;
+            return false;
+        } else {
+            ref = Array.isArray(ref[nodeName]) && ref[nodeName].length > 0 ?
+                ref[nodeName][0] : ref[nodeName];
+        }
+    });
+    return ref;
+}
+
 
 exports.DefaultLogger = DefaultLogger;
 exports.moduleRuntimeId = () => moduleId;
@@ -221,3 +244,4 @@ exports.sleep = sleep;
 exports.waitFor = waitFor;
 exports.calStringChecksum = calStringChecksum;
 exports.toGmtTime = toGmtTime;
+exports.configSetResourceFinder = configSetResourceFinder;

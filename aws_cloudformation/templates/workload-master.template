@@ -17,18 +17,16 @@
             "ConstraintDescription": "must only contain uppercase and lowercase letters and numbers",
             "Description": "An alternative name prefix. This shorter version of prefix is used on a resource that Resource tag prefix cannot apply to. Must be at most 10 characters long and only contain uppercase, lowercase letters, and numbers. Max length is 10."
         },
-        "DeploymentPackageS3BucketName": {
+        "S3BucketName": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
-            "Default": "jliang01-fortigate-autoscale-us-west-2",
             "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
-        "DeploymentPackageS3KeyPrefix": {
+        "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
-            "Default": "transit-gateway/",
             "Description": "S3 key prefix for the deployment package. Key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
         },
         "AvailabilityZones": {
@@ -37,21 +35,21 @@
         },
         "VpcCidr": {
             "Type": "String",
-            "Default": "192.168.128.0/23",
+            "Default": "192.168.0.0/16",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
             "ConstraintDescription": "must be a valid CIDR block format.",
             "Description": "The CIDR block for the FortiGate Autoscale VPC."
         },
         "PublicSubnet1Cidr": {
             "Type": "String",
-            "Default": "192.168.128.0/24",
+            "Default": "192.168.0.0/24",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
             "ConstraintDescription": "must be a valid CIDR block format.",
             "Description": "The CIDR block for the subnet located in Availability Zone 1 where the FortiGate Autoscale instances will be deployed to."
         },
         "PublicSubnet2Cidr": {
             "Type": "String",
-            "Default": "192.168.129.0/24",
+            "Default": "192.168.1.0/24",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
             "ConstraintDescription": "must be a valid CIDR block format.",
             "Description": "The CIDR block for the subnet located in Availability Zone 2 where the FortiGate Autoscale instances will be deployed to."
@@ -70,9 +68,21 @@
             "ConstraintDescription": "must be a valid EC2 instance type.",
             "Description": "Instance type to launch as FortiGate On-Demand instances. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
         },
+        "FortiOSVersion": {
+            "Type": "String",
+            "Default": "Latest (6.2.0)",
+            "AllowedValues": [
+                "Latest (6.2.0)",
+                "FortiOS 6.0.3",
+                "FortiOS 6.0.4",
+                "FortiOS 6.2.0"
+            ],
+            "ConstraintDescription": "must be a valid FortiOS version from the selection.",
+            "Description": "Supported FortiOS versions."
+        },
         "LifecycleHookTimeout": {
             "Type": "Number",
-            "Default": 400,
+            "Default": 480,
             "MinValue": 60,
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
@@ -155,6 +165,14 @@
             "ConstraintDescription": "must specify an admin access key pair for FortiGate instances.",
             "Description": "Amazon EC2 Key Pair for admin access."
         },
+        "HeartBeatInterval": {
+            "Type": "Number",
+            "Default": 30,
+            "MinValue": 30,
+            "MaxValue": 90,
+            "ConstraintDescription": "must be a valid number between 30 and 90.",
+            "Description": "The amount of time (in seconds) for FortiGate to send a heartbeat to the Autoscale handler. Minimum is 30. Maximum is 90."
+        },
         "HeartBeatLossCount": {
             "Type": "Number",
             "Default": 3,
@@ -175,7 +193,15 @@
         },
         "TransitGatewayId": {
             "Type": "String",
+            "Default": "",
             "Description": "If you use an existing Transit Gateway, specify the ID of the Transit Gateway that the FortiGate Autoscale VPC is attached to."
+        },
+        "BgpAsn": {
+            "Type": "Number",
+            "MinValue": 64512,
+            "Default": 65000,
+            "MaxValue": 65534,
+            "Description": "The Border Gateway Protocol (BGP) Autonomous System Number of the Customer Gateway of each FortiGate instance in the Auto Scaling Group. This value rangess from 64512 to 65534."
         }
     },
     "Conditions": {
@@ -200,6 +226,13 @@
                     "Ref": "TransitGatewaySupportOptions"
                 },
                 "create one"
+            ]
+        },
+        "UseLatestFortiOSVersion": {
+            "Fn::Equals": [{
+                    "Ref": "FortiOSVersion"
+                },
+                "Latest (6.2.0)"
             ]
         }
     },
@@ -294,11 +327,11 @@
                             }
                         ]
                     },
-                    "DeploymentPackageS3BucketName": {
-                        "Ref": "DeploymentPackageS3BucketName"
+                    "S3BucketName": {
+                        "Ref": "S3BucketName"
                     },
-                    "DeploymentPackageS3KeyPrefix": {
-                        "Ref": "DeploymentPackageS3KeyPrefix"
+                    "S3KeyPrefix": {
+                        "Ref": "S3KeyPrefix"
                     },
                     "AvailabilityZones": {
                         "Fn::Join": [
@@ -319,6 +352,35 @@
                     },
                     "FortiGateInstanceType": {
                         "Ref": "FortiGateInstanceType"
+                    },
+                    "FortiOSVersion": {
+                        "Fn::If": [
+                            "UseLatestFortiOSVersion",
+                            "LATEST",
+                            {
+                                "Fn::Join":[
+                                    "",
+                                    {
+                                        "Fn::Split":[
+                                            ".",
+                                            {
+                                                "Fn::Select": [
+                                                    1,
+                                                    {
+                                                        "Fn::Split": [
+                                                            " ",
+                                                            {
+                                                                "Ref": "FortiOSVersion"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
                     },
                     "LifecycleHookTimeout": {
                         "Ref": "LifecycleHookTimeout"
@@ -356,6 +418,9 @@
                     "KeyPairName": {
                         "Ref": "KeyPairName"
                     },
+                    "HeartBeatInterval": {
+                        "Ref": "HeartBeatInterval"
+                    },
                     "HeartBeatLossCount": {
                         "Ref": "HeartBeatLossCount"
                     },
@@ -364,11 +429,14 @@
                     },
                     "TransitGatewayId": {
                         "Ref": "TransitGatewayId"
+                    },
+                    "BgpAsn": {
+                        "Ref": "BgpAsn"
                     }
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
-                        "https://${DeploymentPackageS3BucketName}.${S3Region}.amazonaws.com/${DeploymentPackageS3KeyPrefix}templates/workload.template",
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/workload.template",
                         {
                             "S3Region": {
                                 "Fn::If": [
@@ -380,7 +448,7 @@
                         }
                     ]
                 },
-                "TimeoutInMinutes": "30"
+                "TimeoutInMinutes": 30
             }
         }
     },
@@ -412,10 +480,12 @@
                     },
                     "Parameters": [
                         "FortiGateInstanceType",
+                        "FortiOSVersion",
                         "FortiGatePskSecret",
                         "FortiGateAdminPort",
                         "FortiGateAdminCidr",
-                        "KeyPairName"
+                        "KeyPairName",
+                        "BgpAsn"
                     ]
                 },
                 {
@@ -447,7 +517,8 @@
                         "default": "Failover management configuration"
                     },
                     "Parameters": [
-                        "HeartBeatLossCount"
+                        "HeartBeatLossCount",
+                        "HeartBeatInterval"
                     ]
                 },
                 {
@@ -455,8 +526,8 @@
                         "default": "Deployment resources configuration"
                     },
                     "Parameters": [
-                        "DeploymentPackageS3BucketName",
-                        "DeploymentPackageS3KeyPrefix"
+                        "S3BucketName",
+                        "S3KeyPrefix"
                     ]
                 }
             ],
@@ -479,10 +550,13 @@
                 "FortiGateInstanceType": {
                     "default": "Instance type"
                 },
-                "DeploymentPackageS3BucketName": {
+                "FortiOSVersion": {
+                    "default": "FortiOS version"
+                },
+                "S3BucketName": {
                     "default": "S3 bucket name"
                 },
-                "DeploymentPackageS3KeyPrefix": {
+                "S3KeyPrefix": {
                     "default": "S3 key prefix"
                 },
                 "LifecycleHookTimeout": {
@@ -521,6 +595,9 @@
                 "FortiGatePskSecret": {
                     "default": "FortiGate PSK secret"
                 },
+                "HeartBeatInterval": {
+                    "default": "Heart beat interval"
+                },
                 "HeartBeatLossCount": {
                     "default": "Heart beat loss count"
                 },
@@ -532,6 +609,9 @@
                 },
                 "ResourceTagPrefix": {
                     "default": "Resource tag prefix"
+                },
+                "BgpAsn": {
+                    "default": "BGP ASN"
                 }
             }
         }

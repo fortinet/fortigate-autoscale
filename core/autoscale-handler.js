@@ -20,12 +20,14 @@ Author: Fortinet
 * needed for the FortiGate config's callback-url parameter.
 */
 
+const path = require('path');
 const Logger = require('./logger');
 const CoreFunctions = require('./core-functions');
 const
     AUTOSCALE_SECTION_EXPR =
     /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/;
 const NO_HEART_BEAT_INTERVAL_SPECIFIED = -1;
+const DEFAULT_HEART_BEAT_INTERVAL = 30;
 
 module.exports = class AutoscaleHandler {
 
@@ -41,6 +43,18 @@ module.exports = class AutoscaleHandler {
 
     static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
         return NO_HEART_BEAT_INTERVAL_SPECIFIED;
+    }
+
+    static get DEFAULT_HEART_BEAT_INTERVAL() {
+        return DEFAULT_HEART_BEAT_INTERVAL;
+    }
+
+    /**
+     * Get the read-only settings object from the platform. To modify the settings object,
+     * do it via the platform instance but not here.
+     */
+    get _settings() {
+        return this.platform && this.platform._settings;
     }
 
     /**
@@ -60,16 +74,41 @@ module.exports = class AutoscaleHandler {
     }
 
     async init() {
-        const success = await this.platform.init();
-        // retrieve base config from a blob storage
-        this._baseConfig = await this.getBaseConfig();
+        this.logger.info('calling init [Autoscale handler ininitialization]');
+        const success = await this.platform.init();// do the cloud platform initialization
+        // ensure that the settings are saved properly.
+        // check settings availability
+
+        // if there's limitation for a platform that it cannot save settings to db during
+        // deployment. the deployment template must create a service function that takes all
+        // deployment settings as its environment variables. The CloudPlatform class must
+        // invoke this service function to store all settings to db. and also create a flag
+        // setting item 'deployment-settings-saved' with value set to 'true'.
+        // from then on, it can load item from db.
+        // if this process cannot be done during the deployment, it must be done once here in the
+        // init function of the platform-specific autoscale-handler.
+        // by doing so, catch the error 'Deployment settings not saved.' and handle it.
+        this.logger.info('checking deployment setting items');
+        if (!this._settings) {
+            await this.platform.getSettingItems();// initialize the platform settings
+        }
+        if (!this._settings || this._settings &&
+            this._settings['deployment-settings-saved'] !== 'true') {
+            // in the init function of each platform autoscale-handler, this error must be caught
+            // and provide addtional handling code to save the settings
+            throw new Error('Deployment settings not saved.');
+        }
+
         return success;
     }
 
     async getConfigSet(configName) {
         try {
+            let keyPrefix = this._settings['asset-storage-key-prefix'] ?
+                path.join(this._settings['asset-storage-key-prefix'], 'configset') : 'configset';
             const parameters = {
-                path: 'configset',
+                storageName: this._settings['asset-storage-name'],
+                keyPrefix: keyPrefix,
                 fileName: configName
             };
             let blob = await this.platform.getBlobFromStorage(parameters);
@@ -94,14 +133,21 @@ module.exports = class AutoscaleHandler {
 
     async getBaseConfig() {
         let baseConfig = await this.getConfigSet('baseconfig');
-        let psksecret = process.env.FORTIGATE_PSKSECRET,
+        let psksecret = this._settings['fortigate-psk-secret'],
+            requiredConfigSet = this._settings['fortigate-psk-secret'] &&
+            this._settings['fortigate-psk-secret'].split(',') || [],
+            heartBeatInterval = this._settings['heartbeat-interval'] ||
+                AutoscaleHandler.DEFAULT_HEART_BEAT_INTERVAL,
             fazConfig = '',
             fazIp;
         if (baseConfig) {
             // check if other config set are required
-            let requiredConfigSet = process.env.REQUIRED_CONFIG_SET ?
-                process.env.REQUIRED_CONFIG_SET.split(',') : [];
             let configContent = '';
+            // check if second nic is enabled, config for the second nic must be prepended to
+            // base config
+            if (this._settings['enable-second-nic'] === 'true') {
+                baseConfig = await this.getConfigSet('port2config') + baseConfig;
+            }
             for (let configset of requiredConfigSet) {
                 let [name, selected] = configset.trim().split('-');
                 if (selected && selected.toLowerCase() === 'yes') {
@@ -329,10 +375,9 @@ module.exports = class AutoscaleHandler {
             // so in this case, should keep track of the update of default password.
             if (this._selfInstance.instanceId === this._masterInfo.instanceId &&
                     this.scalingGroupName === this.masterScalingGroupName) {
-                await this.platform.setSettingItem('fortigate-default-password', {
-                    value: this._selfInstance.instanceId,
-                    description: 'default password comes from the new elected master.'
-                });
+                await this.platform.setSettingItem('fortigate-default-password',
+                    this._selfInstance.instanceId,
+                    'default password comes from the new elected master.', false, false);
             }
             return '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
@@ -390,12 +435,46 @@ module.exports = class AutoscaleHandler {
         return '';
     }
 
-    async getMasterConfig(callbackUrl) {
-        // no dollar sign in place holders
-        return await this._baseConfig.replace(/\{CALLBACK_URL}/, callbackUrl);
+    /**
+     * Parse a configset with given data sources. This function should be implemented in
+     * a platform-specific one if needed.
+     * @param {String} configSet a config string with placeholders. The placeholder looks like:
+     * {@device.networkInterfaces#0.PrivateIpAddress}, where @ + device incidates the data source,
+     * networkInterfaces + # + number incidates the nth item of networkInterfaces, so on and so
+     * forth. The # index starts from 0. For referencing the 0th item, it can get rid of
+     * the # + number, e.g. {@device.networkInterfaces#0.PrivateIpAddress} can be written as
+     * {@device.networkInterfaces.PrivateIpAddress}
+     * @param {Object} dataSources a json object of multiple key/value pairs with data
+     * to relace some placeholders in the configSet parameter. Each key must start with an
+     * asperand (@ symbol) to form a category of data such as: @vpc, @device, @vpn_connection, etc.
+     * The value of each key must be an object {}. Each property of this object could be
+     * a primitive, a nested object, or an array of the same type of primitives or nested object.
+     * The leaf property of a nested object must be a primitive.
+     * @returns {String} a pasred config string
+     */
+    async parseConfigSet(configSet, dataSources) { // eslint-disable-line no-unused-vars
+        return await configSet;
     }
 
-    async getSlaveConfig(masterIp, callbackUrl) {
+    async getMasterConfig(parameters) {
+        // no dollar sign in place holders
+        let config = '';
+        this._baseConfig = await this.getBaseConfig();
+        // parse TGW VPN
+        if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
+            // append vpnConfig to base config
+            config = await this.getConfigSet(parameters.vpnConfigSetName);
+            config = await this.parseConfigSet(config,
+                {'@vpn_connection': parameters.vpnConfiguration});
+            this._baseConfig += config;
+        }
+        config = this._baseConfig.replace(/\{CALLBACK_URL}/,parameters.callbackUrl ?
+            parameters.callbackUrl : '');
+        return config;
+    }
+
+    async getSlaveConfig(parameters) {
+        this._baseConfig = await this.getBaseConfig();
         const
             autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
@@ -404,29 +483,37 @@ module.exports = class AutoscaleHandler {
                 /set\s+psksecret\s+(.+)/.exec(autoScaleSection)
             ];
         const [syncInterface, pskSecret] = matches.map(m => m && m[1]),
-            apiEndpoint = callbackUrl;
-        let errorMessage;
+            apiEndpoint = parameters.callbackUrl;
+        let config = '', errorMessage;
         if (!apiEndpoint) {
             errorMessage = 'Api endpoint is missing';
         }
-        if (!masterIp) {
+        if (!parameters.masterIp) {
             errorMessage = 'Master ip is missing';
         }
         if (!pskSecret) {
             errorMessage = 'psksecret is missing';
         }
-        if (!pskSecret || !apiEndpoint || !masterIp) {
+        if (!pskSecret || !apiEndpoint || !parameters.masterIp) {
             throw new Error(`Base config is invalid (${errorMessage}): ${
                 JSON.stringify({
-                    syncInterface,
-                    apiEndpoint,
-                    masterIp,
+                    syncInterface: syncInterface,
+                    apiEndpoint: apiEndpoint,
+                    masterIp: parameters.masterIp,
                     pskSecret: pskSecret && typeof pskSecret
                 })}`);
         }
+        // parse TGW VPN
+        if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
+            // append vpnConfig to base config
+            config = await this.getConfigSet(parameters.vpnConfigSetName);
+            config = await this.parseConfigSet(config,
+                {'@vpn_connection': parameters.vpnConfiguration});
+            this._baseConfig += config;
+        }
         return await this._baseConfig.replace(new RegExp('set role master', 'gm'),
-                `set role slave\n    set master-ip ${masterIp}`)
-            .replace(new RegExp('{CALLBACK_URL}', 'gm'), callbackUrl);
+                `set role slave\n    set master-ip ${parameters.masterIp}`)
+            .replace(new RegExp('{CALLBACK_URL}', 'gm'), parameters.callbackUrl);
     }
 
     async checkMasterElection() {
@@ -584,20 +671,196 @@ module.exports = class AutoscaleHandler {
     }
 
     async saveSubnetPairs(subnetPairs) {
-        return await this.platform.setSettingItem('subnets-pairs', subnetPairs);
+        return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true, false);
     }
 
-    async loadSettings() {
-        return await this.platform.getSettingItem('auto-scaling-group');
+    async loadAutoScalingSettings() {
+        let [desiredCapacity, minSize, maxSize, groupSetting] = await Promise.all([
+            this.platform.getSettingItem('scaling-group-desired-capacity'),
+            this.platform.getSettingItem('scaling-group-min-size'),
+            this.platform.getSettingItem('scaling-group-max-size'),
+            this.platform.getSettingItem('auto-scaling-group')
+        ]);
+
+        if (!(desiredCapacity && minSize && maxSize) && groupSetting) {
+            return groupSetting;
+        }
+        return {desiredCapacity: desiredCapacity, minSize: minSize, maxSize: maxSize};
     }
 
-    async saveSettings(desiredCapacity, minSize, maxSize) {
-        let settingValues = {
-            desiredCapacity: desiredCapacity,
-            minSize: minSize,
-            maxSize: maxSize
-        };
-        return await this.platform.setSettingItem('auto-scaling-group', settingValues);
+    /**
+     * Save settings to DB. This function doesn't do value validation. The caller should be
+     * responsible for it.
+     * @param {Object} settings settings to save
+     */
+    async saveSettings(settings) {
+        let tasks = [], errorTasks = [];
+        for (let [key, value] of Object.entries(settings)) {
+            let keyName = null, description = null, jsonEncoded = false, editable = false;
+            switch (key.toLowerCase()) {
+                case 'servicetype':
+                    // ignore service type
+                    break;
+                case 'deploymentsettingssaved':
+                    keyName = 'deployment-settings-saved';
+                    description = 'A flag setting item that indicates all deployment' +
+                    'settings have been saved.';
+                    editable = false;
+                    break;
+                case 'desiredcapacity':
+                    keyName = 'scaling-group-desired-capacity';
+                    description = 'Scaling group desired capacity.';
+                    editable = true;
+                    break;
+                case 'minsize':
+                    keyName = 'scaling-group-min-size';
+                    description = 'Scaling group min size.';
+                    editable = true;
+                    break;
+                case 'maxsize':
+                    keyName = 'scaling-group-max-size';
+                    description = 'Scaling group max size.';
+                    editable = true;
+                    break;
+                case 'resourcetagprefix':
+                    keyName = 'resource-tag-prefix';
+                    description = 'Resource tag prefix.';
+                    editable = false;
+                    break;
+                case 'customidentifier':
+                    keyName = 'custom-id';
+                    description = 'Custom Identifier.';
+                    editable = false;
+                    break;
+                case 'uniqueid':
+                    keyName = 'unique-id';
+                    description = 'Unique ID.';
+                    editable = false;
+                    break;
+                case 'assetstoragename':
+                    keyName = 'asset-storage-name';
+                    description = 'Asset storage name.';
+                    editable = false;
+                    break;
+                case 'assetstoragekeyprefix':
+                    keyName = 'asset-storage-key-prefix';
+                    description = 'Asset storage key prefix.';
+                    editable = false;
+                    break;
+                case 'vpcid':
+                    keyName = 'vpc-id';
+                    description = 'VPC ID of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
+                case 'fortigatepsksecret':
+                    keyName = 'fortigate-psk-secret';
+                    description = 'The PSK for FortiGate Autoscale Synchronization.';
+                    break;
+                case 'fortigateadminport':
+                    keyName = 'fortigate-admin-port';
+                    description = 'The port number for administrative login to FortiGate.';
+                    break;
+                case 'fortigatesyncinterface':
+                    keyName = 'fortigate-sync-interface';
+                    description = 'The interface the FortiGate uses for configuration ' +
+                        'synchronization.';
+                    editable = true;
+                    break;
+                case 'lifecyclehooktimeout':
+                    keyName = 'lifecycle-hook-timeout';
+                    description = 'The auto scaling group lifecycle hook timeout time in second.';
+                    editable = true;
+                    break;
+                case 'heartbeatinterval':
+                    keyName = 'heartbeat-interval';
+                    description = 'The FortiGate sync heartbeat interval in second.';
+                    editable = true;
+                    break;
+                case 'heartbeatlosscount':
+                    keyName = 'heartbeat-loss-count';
+                    description = 'The FortiGate sync heartbeat loss count.';
+                    editable = true;
+                    break;
+                case 'autoscalehandlerurl':
+                    keyName = 'autoscale-handler-url';
+                    description = 'The FortiGate Autoscale handler URL.';
+                    editable = false;
+                    break;
+                case 'masterautoscalinggroupname':
+                    keyName = 'master-auto-scaling-group-name';
+                    description = 'The name of the master auto scaling group.';
+                    editable = false;
+                    break;
+                case 'paygautoscalinggroupname':
+                    keyName = 'payg-auto-scaling-group-name';
+                    description = 'The name of the PAYG auto scaling group.';
+                    editable = false;
+                    break;
+                case 'byolautoscalinggroupname':
+                    keyName = 'byol-auto-scaling-group-name';
+                    description = 'The name of the BYOL auto scaling group.';
+                    editable = false;
+                    break;
+                case 'requiredconfigset':
+                    keyName = 'required-configset';
+                    description = 'A comma-delimited list of required configsets.';
+                    editable = false;
+                    break;
+                case 'transitgatewayid':
+                    keyName = 'transit-gateway-id';
+                    description = 'The ID of the Transit Gateway the FortiGate Autoscale is ' +
+                    'attached to.';
+                    editable = false;
+                    break;
+                case 'enabletransitgatewayvpn':
+                    keyName = 'enable-transit-gateway-vpn';
+                    value = value && value !== 'false' ? 'true' : 'false';
+                    description = 'Toggle ON / OFF the Transit Gateway VPN creation on each ' +
+                    'FortiGate instance';
+                    editable = false;
+                    break;
+                case 'enablesecondnic':
+                    keyName = 'enable-second-nic';
+                    value = value && value !== 'false' ? 'true' : 'false';
+                    description = 'Toggle ON / OFF the secondary eni creation on each ' +
+                    'FortiGate instance';
+                    editable = false;
+                    break;
+                case 'bgpasn':
+                    keyName = 'bgp-asn';
+                    description = 'The BGP Autonomous System Number of the Customer Gateway ' +
+                    'of each FortiGate instance in the Auto Scaling Group.';
+                    editable = true;
+                    break;
+                case 'transitgatewayvpnhandlername':
+                    keyName = 'transit-gateway-vpn-handler-name';
+                    description = 'The Transit Gateway VPN handler function name.';
+                    editable = false;
+                    break;
+                case 'transitgatewayroutetableinbound':
+                    keyName = 'transit-gateway-route-table-inbound';
+                    description = 'The Id of the Transit Gateway inbound route table.';
+                    editable = true;
+                    break;
+                case 'transitgatewayroutetableoutbound':
+                    keyName = 'transit-gateway-route-table-outbound';
+                    description = 'The Id of the Transit Gateway outbound route table.';
+                    break;
+                default:
+                    break;
+            }
+            if (keyName) {
+                tasks.push(this.platform
+                    .setSettingItem(keyName, value, description, jsonEncoded, editable)
+                    .catch(error => {
+                        this.logger.error(`failed to save setting for key: ${keyName}. ` +
+                            `Error: ${JSON.stringify(error)}`);
+                        errorTasks.push({key: keyName, value: value});
+                    }));
+            }
+        }
+        await Promise.all(tasks);
+        return errorTasks.length === 0;
     }
 
     async updateCapacity(desiredCapacity, minSize, maxSize) {
@@ -612,6 +875,7 @@ module.exports = class AutoscaleHandler {
     async resetMasterElection() {
         this.logger.info('calling resetMasterElection');
         try {
+            this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME);
             await this.platform.removeMasterRecord();
             this.logger.info('called resetMasterElection. done.');
             return true;
@@ -694,9 +958,13 @@ module.exports = class AutoscaleHandler {
     }
 
     setScalingGroup(master, self) {
-        this.masterScalingGroupName = master;
-        this.platform.setMasterScalingGroup(master);
-        this.scalingGroupName = self;
-        this.platform.setScalingGroup(self);
+        if (master) {
+            this.masterScalingGroupName = master;
+            this.platform.setMasterScalingGroup(master);
+        }
+        if (self) {
+            this.scalingGroupName = self;
+            this.platform.setScalingGroup(self);
+        }
     }
 };
