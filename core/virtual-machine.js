@@ -101,7 +101,7 @@ class VirtualMachine {
             virtualMachine._subnetId = subnetId;
             virtualMachine._primaryPrivateIp = ipv4;
         }
-        this._scalingGroupName = scalingGroupName;
+        virtualMachine._scalingGroupName = scalingGroupName;
         return virtualMachine;
     }
 }

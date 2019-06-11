@@ -72,8 +72,13 @@ exports.handler = async (event, context) => {
                 case 'updateCapacity':
                     // manually change current desired capacity & adjust min size
                     await autoscaleHandler.init();
+                    if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
+                        await autoscaleHandler.updateCapacity(
+                            autoscaleHandler.getSettings()['byol-scaling-group-name'],
+                        params.desiredCapacity, params.minSize, params.maxSize);
+                    }
                     await autoscaleHandler.updateCapacity(
-                        autoscaleHandler.getSettings()['payg-auto-scaling-group-name'],
+                        autoscaleHandler.getSettings()['payg-scaling-group-name'],
                         params.desiredCapacity, params.minSize, params.maxSize);
                     break;
                 case 'stopAutoscale':
@@ -102,14 +107,14 @@ exports.handler = async (event, context) => {
                         }
                         if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
                             tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                                autoscaleHandler.getSettings()['byol-auto-scaling-group-name']
+                                autoscaleHandler.getSettings()['byol-scaling-group-name']
                             ).then(byolGroupCheck => {
                                 return {checkName: 'byolGroupCheck',
                                     result: !byolGroupCheck || byolGroupCheck === 'stopped'};
                             }));
                         }
                         tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                            autoscaleHandler.getSettings()['payg-auto-scaling-group-name']
+                            autoscaleHandler.getSettings()['payg-scaling-group-name']
                         ).then(paygGroupCheck => {
                             return {checkName: 'paygGroupCheck',
                                 result: !paygGroupCheck || paygGroupCheck === 'stopped'};

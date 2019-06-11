@@ -346,7 +346,8 @@ class CosmosDbApiClient {
             'x-ms-max-item-count': options && options.itemCount ? options.itemCount : -1,
             'Content-Type': 'application/query+json'
         };
-            // see: https://docs.microsoft.com/en-us/azure/cosmos-db/partitioning-overview
+        // eslint-disable-next-line max-len
+        // see: https://docs.microsoft.com/en-us/rest/api/cosmos-db/querying-cosmosdb-resources-using-the-rest-api
         if (partitioning && partitioning.crossPartition) {
             headers['x-ms-documentdb-query-enablecrosspartition'] = true;
             if (partitioning.partitionKey) {
@@ -475,9 +476,11 @@ class CosmosDbApiClient {
      * @param {String} dbName the db name to create this document
      * @param {String} collectionName the collection name to create this document
      * @param {Object} document the structure of the document to create.
+     * @param {String} partitionKey must provide the name of the partition key specified
+     * in the collection if the collection is created with a partition key. leave it null otherwise.
      * @param {boolean} replaced whether replace the document with the same key
      */
-    async createDocument(dbName, collectionName, document, replaced = false) {
+    async createDocument(dbName, collectionName, document, partitionKey = null, replaced = false) {
         let date = (new Date()).toUTCString();
         let _token = getAuthorizationTokenUsingMasterKey('post',
             'docs', `dbs/${dbName}/colls/${collectionName}`, date, this.masterKey);
@@ -488,6 +491,9 @@ class CosmosDbApiClient {
             'x-ms-version': '2017-02-22',
             'x-ms-date': date
         };
+        if (partitionKey) {
+            headers['x-ms-documentdb-partitionkey'] = `["${document[partitionKey]}"]`;
+        }
         if (replaced) {
             headers['x-ms-documentdb-is-upsert'] = true;
         }

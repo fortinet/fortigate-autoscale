@@ -276,7 +276,6 @@
         },
         "imageReference": "[variables('osType')]",
         "imageReference2": "[variables('osType2')]",
-        "storageAccountName": "[concat(parameters('ScalingGroupNamePrefix'),'storage') ]",
         "LicenseEndPoints": "[concat(parameters('EndpointURL'), '/api/byol-license')]",
         "PAYGEndPoints": "[concat(parameters('EndpointURL'), '/api/fgt-asg-handler')]",
         "BYOLEndPoints": "[concat(parameters('EndpointURL'), '/api/fgt-asg-handler')]",
@@ -287,16 +286,6 @@
         "insightsApiVersion": "2015-04-01"
     },
     "resources": [{
-            "type": "Microsoft.Storage/storageAccounts",
-            "name": "[variables('storageAccountName')]",
-            "apiVersion": "2016-12-01",
-            "location": "[resourceGroup().location]",
-            "kind": "Storage",
-            "sku": {
-                "name": "Standard_LRS"
-            }
-        },
-        {
             "type": "Microsoft.Network/routeTables",
             "name": "[variables('routeTableName')]",
             "apiVersion": "2017-09-01",

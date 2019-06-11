@@ -37,10 +37,7 @@ const
     SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
     DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
     moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
-    settingItems = AutoScaleCore.settingItems,
-    // time in ms allowed to offset the network latency
-    HEART_BEAT_DELAY_ALLOWANCE = process.env.HEART_BEAT_DELAY_ALLOWANCE || 2000,
-    HEART_BEAT_LOSS_COUNT = process.env.HEART_BEAT_LOSS_COUNT || 3; // heartbeat loss count
+    settingItems = AutoScaleCore.settingItems;
 let logger = new AutoScaleCore.DefaultLogger(console);
 
 /**
@@ -66,6 +63,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         if (Array.isArray(errors) && errors.length > 0) {
             throw new Error(errors.pop());
         }
+        this._initialized = true; // mark this platform class instance is initialized.
+        logger.info('called init. [platform initialization]');
         return done;
     }
 
@@ -376,6 +375,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 healthy,
                 heartBeatLossCount,
                 heartBeatDelays,
+                heartBeatDelayAllowance =
+                    parseInt(this._settings['heartbeat-delay-allowance']) * 1000,
                 inevitableFailToSyncTime,
                 interval,
                 data = await docClient.get(params).promise();
@@ -389,8 +390,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 // based on the test results, network delay brought more significant side effects
                 // to the heart beat monitoring checking than we thought. we have to expand the
                 // checking time to reasonably offset the delay.
-                // HEART_BEAT_DELAY_ALLOWANCE is used for this purpose
-                if (heartBeatDelays < HEART_BEAT_DELAY_ALLOWANCE) {
+                // heartBeatDelayAllowance is used for this purpose
+                if (heartBeatDelays < heartBeatDelayAllowance) {
                     // reset hb loss count if instance sends hb within its interval
                     healthy = true;
                     heartBeatLossCount = 0;
@@ -410,13 +411,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     // inevitable-fail-to-sync time. This means the instance can never catch up
                     // with a heartbeat sync that makes it possile to deem health again.
                     inevitableFailToSyncTime = data.Item.nextHeartBeatTime +
-                        (HEART_BEAT_LOSS_COUNT - data.Item.heartBeatLossCount - 1) *
-                        (interval * 1000 + HEART_BEAT_DELAY_ALLOWANCE);
+                        (parseInt(this._settings['heartbeat-loss-count']) -
+                            data.Item.heartBeatLossCount - 1) *
+                            (interval * 1000 + heartBeatDelayAllowance);
                     healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
                     logger.info('hb sync is late again.\n' +
                         `hb loss count becomes: ${heartBeatLossCount},\n` +
-                        `hb sync delay allowance: ${HEART_BEAT_DELAY_ALLOWANCE} ms\n` +
+                        `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
                         'expected hb arrived time: ' +
                         `${data.Item.nextHeartBeatTime} ms in unix timestamp\n` +
                         'current hb sync check time: ' +
@@ -425,15 +427,15 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     // log the math why this instance is deemed unhealthy
                     if (!healthy) {
                         logger.info('Instance is deemed unhealthy. reasons:\n' +
-                        `previous hb loss count: ${data.Item.heartBeatLossCount},\n` +
-                        `hb sync delay allowance: ${HEART_BEAT_DELAY_ALLOWANCE} ms\n` +
-                        'expected hb arrived time: ' +
-                        `${data.Item.nextHeartBeatTime} ms in unix timestamp\n` +
-                        'current hb sync check time: ' +
-                        `${scriptExecutionStartTime} ms in unix timestamp\n` +
-                        `this hb sync delays: ${heartBeatDelays} ms\n` +
-                        'the inevitable-fail-to-sync time: ' +
-                        `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
+                            `previous hb loss count: ${data.Item.heartBeatLossCount},\n` +
+                            `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
+                            'expected hb arrived time: ' +
+                            `${data.Item.nextHeartBeatTime} ms in unix timestamp\n` +
+                            'current hb sync check time: ' +
+                            `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                            `this hb sync delays: ${heartBeatDelays} ms\n` +
+                            'the inevitable-fail-to-sync time: ' +
+                            `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
                     }
                 }
                 logger.info('called getInstanceHealthCheck. (timestamp: ' +
@@ -921,7 +923,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     try {
                         item.settingValue = JSON.parse(item.settingValue);
                     } catch (error) {
-                        logger.warning(`getSettingItems error: ${item.settingKey} has ` +
+                        logger.warn(`getSettingItems error: ${item.settingKey} has ` +
                             `jsonEncoded (${item.jsonEncoded}) value but unable to apply ` +
                             `JSON.parse(). settingValue is: ${item.settingValue}`);
                     }
@@ -931,7 +933,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             this._settings = result;
             return result;
         } catch (error) {
-            logger.warning(`getSettingItem > error: ${JSON.stringify(error)}`);
+            logger.warn(`getSettingItems > error: ${JSON.stringify(error)}`);
             return [];
         }
     }

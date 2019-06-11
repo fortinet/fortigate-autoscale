@@ -10,9 +10,17 @@ Author: Fortinet
 module.exports = class CloudPlatform {
     constructor() {
         this._settings = null;
+        this._initialized = false;
     }
     throwNotImplementedException() {
         throw new Error('Not Implemented');
+    }
+
+    /**
+     * @returns {Boolean} whether the CloudPlatform is initialzied or not
+     */
+    get initialized() {
+        return this._initialized;
     }
     /* eslint-disable no-unused-vars */
     /**

@@ -59,22 +59,60 @@ async function saveSettings(settings) {
 
 async function restart() {
     await init();
-    // autoscaleHandler = autoscaleHandler || new ftgtAutoscaleAws.autoscaleHandler();
-    await autoscaleHandler.updateCapacity(
-        autoscaleHandler._settings['payg-auto-scaling-group-name'], 0, 0, null);
+    let tasks = [];
+    if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true') {
+        tasks.push(autoscaleHandler.updateCapacity(
+            autoscaleHandler._settings['byol-scaling-group-name'], 0, 0, null));
+    }
+
+    tasks.push(autoscaleHandler.updateCapacity(
+        autoscaleHandler._settings['payg-scaling-group-name'], 0, 0, null));
+
+    await Promise.all(tasks);
+
     // delete master election result
     await autoscaleHandler.resetMasterElection();
     // set desired capacity & min size from saved setting to start auto scaling again
     let settings = await autoscaleHandler.loadAutoScalingSettings();
     // FIXME: if bug 0560197 is fixed, the delay added here needs to remove
     // and update the capacity to settings.desiredCapacity
+
+    // if the desired capacity is >= 1, bring up the 1st instance in the master scaling group
+    // where the master scaling group is the BYOL scaling group if hybrid-licensing enabled,
+    // or the PAYG scaling group if not.
+    let masterScalingGroupName, disiredCapacity = 0, minSize = 0, maxSize = 0;
+    if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true') {
+        masterScalingGroupName = autoscaleHandler._settings['byol-scaling-group-name'];
+        disiredCapacity =
+            parseInt(autoscaleHandler._settings['byol-scaling-group-desired-capacity']);
+        minSize = parseInt(autoscaleHandler._settings['byol-scaling-group-min-size']);
+        maxSize = parseInt(autoscaleHandler._settings['byol-scaling-group-max-size']);
+    } else {
+        masterScalingGroupName = autoscaleHandler._settings['payg-scaling-group-name'];
+        disiredCapacity =
+            parseInt(autoscaleHandler._settings['payg-scaling-group-desired-capacity']);
+        minSize = parseInt(autoscaleHandler._settings['payg-scaling-group-min-size']);
+        maxSize = parseInt(autoscaleHandler._settings['payg-scaling-group-max-size']);
+    }
+
+    // update only when the disired capacity > 0 and the size constraint:
+    // desired min <= desired <= max is met
+    // bring up the 1st instance which will become the master
+    if (disiredCapacity > 0 && minSize <= disiredCapacity && disiredCapacity <= maxSize) {
+        await autoscaleHandler.updateCapacity(masterScalingGroupName, 1, minSize, maxSize);
+    }
+    // delay 1 min to bring up the 2nd instance
+    await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
+    // bring up the rest instances which will become the slave(s)
     await autoscaleHandler.updateCapacity(
         autoscaleHandler._settings['payg-auto-scaling-group-name'], 1, 1, settings.maxSize);
     if (settings.desiredCapacity > 1) {
         await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
         await autoscaleHandler.updateCapacity(
-            autoscaleHandler._settings['payg-auto-scaling-group-name'], settings.desiredCapacity,
-            settings.minSize, settings.maxSize);
+            autoscaleHandler._settings['payg-scaling-group-name'],
+            parseInt(autoscaleHandler._settings['payg-scaling-group-desired-capacity']),
+            parseInt(autoscaleHandler._settings['payg-scaling-group-min-size']),
+            parseInt(autoscaleHandler._settings['payg-scaling-group-max-size']));
     }
 }
 
@@ -82,10 +120,10 @@ async function stop() {
     await init();
     if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true') {
         await autoscaleHandler.updateCapacity(
-            autoscaleHandler._settings['byol-auto-scaling-group-name'], 0, 0, null);
+            autoscaleHandler._settings['byol-scaling-group-name'], 0, 0, null);
     }
     await autoscaleHandler.updateCapacity(
-        autoscaleHandler._settings['payg-auto-scaling-group-name'], 0, 0, null);
+        autoscaleHandler._settings['payg-scaling-group-name'], 0, 0, null);
     // delete master election result
     await autoscaleHandler.resetMasterElection();
 }

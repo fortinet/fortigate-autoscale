@@ -386,18 +386,20 @@ const DB = {
 
 };
 
-exports.getTables = (custom_id, unique_id) => {
+exports.getTables = (custom_id, unique_id, excludedKeys = null) => {
     let tables = {},
         prefix = () => { return custom_id ? `${custom_id}-` : '' },
         suffix = () => { return unique_id ? `-${unique_id}` : '' };
     Object.keys(DB).forEach(itemName => {
-        let table = {};
-        table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
-        table.KeySchema = DB[itemName].KeySchema;
-        table.ProvisionedThroughput = DB[itemName].ProvisionedThroughput;
-        table.TableName = prefix() + DB[itemName].TableName + suffix();
-        table.AdditionalAttributeDefinitions = DB[itemName].AdditionalAttributeDefinitions;
-        tables[itemName] = table;
+        if (!excludedKeys || Array.isArray(excludedKeys) && !excludedKeys.includes(itemName)) {
+            let table = {};
+            table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
+            table.KeySchema = DB[itemName].KeySchema;
+            table.ProvisionedThroughput = DB[itemName].ProvisionedThroughput;
+            table.TableName = prefix() + DB[itemName].TableName + suffix();
+            table.AdditionalAttributeDefinitions = DB[itemName].AdditionalAttributeDefinitions;
+            tables[itemName] = table;
+        }
     });
     return tables;
 };
