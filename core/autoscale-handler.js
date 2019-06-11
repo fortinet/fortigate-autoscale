@@ -20,12 +20,14 @@ Author: Fortinet
 * needed for the FortiGate config's callback-url parameter.
 */
 
+const path = require('path');
 const Logger = require('./logger');
 const CoreFunctions = require('./core-functions');
 const
     AUTOSCALE_SECTION_EXPR =
     /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/;
 const NO_HEART_BEAT_INTERVAL_SPECIFIED = -1;
+const DEFAULT_HEART_BEAT_INTERVAL = 30;
 
 module.exports = class AutoscaleHandler {
 
@@ -37,10 +39,24 @@ module.exports = class AutoscaleHandler {
         this._masterRecord = null;
         this._masterInfo = null;
         this._requestInfo = {};
+        this.scalingGroupName = null;
+        this.masterScalingGroupName = null;
     }
 
     static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
         return NO_HEART_BEAT_INTERVAL_SPECIFIED;
+    }
+
+    static get DEFAULT_HEART_BEAT_INTERVAL() {
+        return DEFAULT_HEART_BEAT_INTERVAL;
+    }
+
+    /**
+     * Get the read-only settings object from the platform. To modify the settings object,
+     * do it via the platform instance but not here.
+     */
+    get _settings() {
+        return this.platform && this.platform._settings;
     }
 
     /**
@@ -55,21 +71,112 @@ module.exports = class AutoscaleHandler {
         throw new Error('Not Implemented');
     }
 
-    async handle() {
-        await this.throwNotImplementedException();
+    /**
+     *
+     * @param {CloudPlatform.RequestEvent} event Event from the platform
+     * @param {CloudPlatform.RequestContext} context the runtime context of this function
+     * call from the platform
+     * @param {CloudPlatform.RequestCallback} callback the callback function the platorm
+     * uses to end a request
+     */
+    async handle(event, context, callback) { // eslint-disable-line unused-vars
+        this._step = 'initializing';
+        let proxyMethod = 'httpMethod' in event && event.httpMethod ||
+            'method' in event && event.method,
+            result;
+        try {
+            const platformInitSuccess = await this.init();
+            // return 500 error if script cannot finish the initialization.
+            if (!platformInitSuccess) {
+                result = 'fatal error, cannot initialize.';
+                this.logger.error(result);
+                callback(null, this.proxyResponse(500, result));
+            } else if (event.source === 'aws.autoscaling') {
+                this._step = 'aws.autoscaling';
+                result = await this.handleAutoScalingEvent(event);
+                callback(null, this.proxyResponse(200, result));
+            } else {
+                // authenticate the calling instance
+                this.parseRequestInfo(event);
+                if (!this._requestInfo.instanceId) {
+                    result = 'Instance id not provided.';
+                    this.logger.error(result);
+                    callback(null, this.proxyResponse(403, result));
+                    return;
+                }
+                await this.parseInstanceInfo(this._requestInfo.instanceId);
+
+                await this.checkInstanceAuthorization(this._selfInstance);
+                if (proxyMethod === 'GET') {
+                    this._step = 'fortigate:getConfig';
+                    result = await this.handleGetConfig();
+                    callback(null, this.proxyResponse(200, result));
+                } else if (proxyMethod === 'POST') {
+                    // handle status messages
+                    if (this._requestInfo.status) {
+                        this._step = 'fortigate:handleStatusMessage';
+                        result = await this.handleStatusMessage(event);
+                    } else {
+                        this._step = 'fortigate:handleSyncedCallback';
+                        result = await this.handleSyncedCallback();
+                    }
+                    callback(null, this.proxyResponse(200, result));
+                } else {
+                    this._step = '¯\\_(ツ)_/¯';
+                    this.logger.log(`${this._step} unexpected event!`, event);
+                    // probably a test call from the lambda console?
+                    // should do nothing in response
+                }
+            }
+        } catch (ex) {
+            if (ex.message) {
+                ex.message = `${this._step}: ${ex.message}`;
+            }
+            this.logger.error(ex);
+            callback(null, this.proxyResponse(500, ex));
+        }
     }
 
     async init() {
-        const success = await this.platform.init();
-        // retrieve base config from a blob storage
-        this._baseConfig = await this.getBaseConfig();
+        this.logger.info('calling init [Autoscale handler ininitialization]');
+        // do the cloud platform initialization
+        const success = this.platform.initialized || await this.platform.init();
+        // ensure that the settings are saved properly.
+        // check settings availability
+
+        // if there's limitation for a platform that it cannot save settings to db during
+        // deployment. the deployment template must create a service function that takes all
+        // deployment settings as its environment variables. The CloudPlatform class must
+        // invoke this service function to store all settings to db. and also create a flag
+        // setting item 'deployment-settings-saved' with value set to 'true'.
+        // from then on, it can load item from db.
+        // if this process cannot be done during the deployment, it must be done once here in the
+        // init function of the platform-specific autoscale-handler.
+        // by doing so, catch the error 'Deployment settings not saved.' and handle it.
+        this.logger.info('checking deployment setting items');
+        await this.loadSettings();
+        if (!this._settings || this._settings &&
+            this._settings['deployment-settings-saved'] !== 'true') {
+            // in the init function of each platform autoscale-handler, this error must be caught
+            // and provide addtional handling code to save the settings
+            throw new Error('Deployment settings not saved.');
+        }
+
+        // set scaling group names for master and self
+        this.setScalingGroup(
+            this._settings['master-scaling-group-name'],
+            this._settings['master-scaling-group-name']
+        );
         return success;
     }
 
     async getConfigSet(configName) {
         try {
+            let keyPrefix = this._settings['asset-storage-key-prefix'] ?
+                path.join(this._settings['asset-storage-key-prefix'], 'configset') : 'configset';
             const parameters = {
-                path: 'configset',
+                storageName: this._settings['asset-storage-name'],
+                keyPrefix: keyPrefix,
                 fileName: configName
             };
             let blob = await this.platform.getBlobFromStorage(parameters);
@@ -94,14 +201,18 @@ module.exports = class AutoscaleHandler {
 
     async getBaseConfig() {
         let baseConfig = await this.getConfigSet('baseconfig');
-        let psksecret = process.env.FORTIGATE_PSKSECRET,
+        let psksecret = this._settings['fortigate-psk-secret'],
             fazConfig = '',
             fazIp;
         if (baseConfig) {
             // check if other config set are required
-            let requiredConfigSet = process.env.REQUIRED_CONFIG_SET ?
-                process.env.REQUIRED_CONFIG_SET.split(',') : [];
+            let requiredConfigSet = this._settings['required-configset'] || [];
             let configContent = '';
+            // check if second nic is enabled, config for the second nic must be prepended to
+            // base config
+            if (this._settings['enable-second-nic'] === 'true') {
+                baseConfig = await this.getConfigSet('port2config') + baseConfig;
+            }
             for (let configset of requiredConfigSet) {
                 let [name, selected] = configset.trim().split('-');
                 if (selected && selected.toLowerCase() === 'yes') {
@@ -133,24 +244,199 @@ module.exports = class AutoscaleHandler {
 
             baseConfig = baseConfig
                 .replace(new RegExp('{SYNC_INTERFACE}', 'gm'),
-                    process.env.FORTIGATE_SYNC_INTERFACE ?
-                        process.env.FORTIGATE_SYNC_INTERFACE : 'port1')
+                    this._settings['fortigate-sync-interface'] || 'port1')
                 .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')
                 .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
                 .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
                 .replace(new RegExp('{TRAFFIC_PORT}', 'gm'),
-                    process.env.FORTIGATE_TRAFFIC_PORT ? process.env.FORTIGATE_TRAFFIC_PORT : 443)
+                    this._settings['fortigate-traffic-port'] || 443)
                 .replace(new RegExp('{ADMIN_PORT}', 'gm'),
-                    process.env.FORTIGATE_ADMIN_PORT ? process.env.FORTIGATE_ADMIN_PORT : 8443)
+                    this._settings['fortigate-admin-port'] || 8443)
+                .replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'),
+                    this._settings['heartbeat-interval'] || 30)
                 .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
-                    process.env.FORTIGATE_INTERNAL_ELB_DNS ?
-                        process.env.FORTIGATE_INTERNAL_ELB_DNS : '');
+                    this._settings['fortigate-protected-internal-elb-dns'] || '');
         }
         return baseConfig;
     }
 
     parseRequestInfo(event) {
         this._requestInfo = this.platform.extractRequestInfo(event);
+    }
+
+    async parseInstanceInfo(instanceId) {
+        // look for this vm in both byol and payg scaling group
+        // check if hybrid licensing feature is on or off to determine whether apply instance
+        // scaling group restriction or not
+        const hybridLicensingEnabled = this._settings['enable-hybrid-licensing'] === 'true';
+        // look from byol first
+        let params = {
+            instanceId: instanceId
+        };
+        if (hybridLicensingEnabled && this._settings['byol-scaling-group-name']) {
+            params.scalingGroupName = this._settings['byol-scaling-group-name'];
+        }
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance(params);
+        // not found in byol scaling group, look from payg
+        if (!this._selfInstance && this._settings['payg-scaling-group-name']) {
+            params.scalingGroupName = this._settings['payg-scaling-group-name'];
+            this._selfInstance = this._selfInstance || await this.platform.describeInstance(params);
+        }
+        if (this._selfInstance) {
+            this.setScalingGroup(
+                this._settings['master-scaling-group-name'],
+                this._selfInstance.scalingGroupName
+            );
+            this.logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
+                `scaling group self: ${this.scalingGroupName}, ` +
+                `master: ${this.masterScalingGroupName})`);
+        } else {
+            this.logger.warn(`cannot identify instance: vmid:(${instanceId})`);
+        }
+    }
+
+    async checkInstanceAuthorization(instance) {
+        await this.throwNotImplementedException();
+        return instance && false;
+    }
+
+    async handleGetLicense(event, context, callback) {
+        let result;
+        this.logger.info('calling handleGetLicense');
+        try {
+            const platformInitSuccess = await this.init();
+            // return 500 error if script cannot finish the initialization.
+            if (!platformInitSuccess) {
+                result = 'fatal error, cannot initialize.';
+                this.logger.error(result);
+                callback(null, this.proxyResponse(500, result));
+                return;
+            }
+
+            // authenticate the calling instance
+            this.parseRequestInfo(event);
+            if (!this._requestInfo.instanceId) {
+                callback(null, this.proxyResponse(403, 'Instance id not provided.'));
+                return;
+            }
+            await this.parseInstanceInfo(this._requestInfo.instanceId);
+
+            await this.checkInstanceAuthorization(this._selfInstance);
+
+            let [licenseFiles, stockRecords, usageRecords] = await Promise.all([
+                this.platform.listLicenseFiles(), // expect it to return a map
+                this.platform.listLicenseStock(), // expect it to return a map
+                this.platform.listLicenseUsage() // expect it to return a map
+            ]);
+
+            // update the license stock records on db if any change in file storage
+            // this returns the newest stockRecords on the db
+            stockRecords = await this.updateLicenseStockRecord(licenseFiles, stockRecords);
+
+            // start to pick a valid license here.
+            let availStockItem, availStockRecord;
+
+            let itemKey, itemValue;
+
+            let promiseEmitter = async () => {
+                let updateUsage = true, replaceUsageRecord = false;
+                // TODO: remove the workaround if mantis item: #0534971 is resolved
+                // a workaround for double get call:
+                // check if a license is already assigned to one fgt, if it makes a second get call
+                // for license, returns the tracked usage record.
+
+                for ([itemKey, itemValue] of usageRecords.entries()) {
+                    if (itemValue.scalingGroupName === this.scalingGroupName &&
+                    itemValue.instanceId === this._selfInstance.instanceId) {
+                        availStockRecord = itemValue;
+                        availStockItem = licenseFiles.get(itemValue.blobKey);
+                        updateUsage = false;
+                        break;
+                    }
+                }
+
+                // this is a greedy approach
+                // try to find one available license and use it.
+                // if none availabe, try to check if any used one could be recycled.
+                // if none recyclable, throw an error.
+
+                // NOTE: need to handle concurrent license requests.
+                // if two device request license at the same time, race condition will occur.
+                // insert licenseUsage record (neither replace nor update), if insert fail,
+                // start it over in 2 seconds.
+
+                if (!availStockItem) {
+                    for ([itemKey, itemValue] of stockRecords.entries()) {
+                        if (itemKey && !usageRecords.has(itemKey)) {
+                            availStockRecord = itemValue;
+                            availStockItem = licenseFiles.get(itemValue.blobKey);
+                            break;
+                        }
+                    }
+
+                    // if not found available license file
+                    if (!availStockItem) {
+                        [availStockRecord] = await this.findRecyclableLicense(stockRecords,
+                        usageRecords, 1);
+                        availStockItem = availStockRecord && licenseFiles &&
+                            licenseFiles.get(availStockRecord.blobKey);
+                        replaceUsageRecord = !!availStockItem;
+                    }
+                }
+
+                // if the selected licenseItem does not contain a content, fetch it from storage
+                // this will also update the checksum and algorithm which will be saved in the
+                // usage record too.
+                if (!availStockItem.content) {
+                    availStockItem.content = await this.platform.getLicenseFileContent(
+                    availStockItem.fileName
+                    );
+                }
+
+                // license file found
+                // update usage records
+                if (availStockItem && updateUsage) {
+                    try {
+                        availStockRecord.updateUsage(this._selfInstance.instanceId,
+                            this._selfInstance.scalingGroupName);
+                        await this.platform.updateLicenseUsage(availStockRecord,
+                                replaceUsageRecord);
+                    } catch (error) {
+                        if (error && error.code &&
+                            error.code === 'ConditionalCheckFailedException') {
+                            // duplicate key caught
+                            // reset availStockItem if cannot update
+                            availStockItem = null;
+                            // fetch the latest usage record from db again.
+                            usageRecords = await this.platform.listLicenseUsage();
+                        } else {
+                            throw error;
+                        }
+                    }
+                }
+                return availStockItem;
+            };
+
+            let validator = stockItem => {
+                return !!stockItem;
+            };
+
+            await CoreFunctions.waitFor(promiseEmitter, validator, 5000, 3);
+
+            if (!availStockItem) {
+                throw new Error('No license available.');
+            }
+
+            this.logger.info(`called handleGetLicense, license: ${availStockItem.fileName} is ` +
+            `assigned to instance (id: ${this._selfInstance.instanceId}).`);
+
+            callback(null, this.proxyResponse(200, availStockItem.content));
+
+
+        } catch (ex) {
+            this.logger.error('called handleGetLicense > error: ', ex);
+            callback(ex);
+        }
     }
 
     /**
@@ -172,11 +458,6 @@ module.exports = class AutoscaleHandler {
         // get selfinstance
         this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
 
-        if (!this._selfInstance) {
-            // not trusted
-            throw new Error(`Unauthorized calling instance (vmid: ${instanceId}). ` +
-                'Instance not found in scale set.');
-        }
         // handle hb monitor
         // get self health check
         this._selfHealthCheck = this._selfHealthCheck ||
@@ -329,10 +610,9 @@ module.exports = class AutoscaleHandler {
             // so in this case, should keep track of the update of default password.
             if (this._selfInstance.instanceId === this._masterInfo.instanceId &&
                     this.scalingGroupName === this.masterScalingGroupName) {
-                await this.platform.setSettingItem('fortigate-default-password', {
-                    value: this._selfInstance.instanceId,
-                    description: 'default password comes from the new elected master.'
-                });
+                await this.platform.setSettingItem('fortigate-default-password',
+                    this._selfInstance.instanceId,
+                    'default password comes from the new elected master.', false, false);
             }
             return '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
@@ -390,12 +670,46 @@ module.exports = class AutoscaleHandler {
         return '';
     }
 
-    async getMasterConfig(callbackUrl) {
-        // no dollar sign in place holders
-        return await this._baseConfig.replace(/\{CALLBACK_URL}/, callbackUrl);
+    /**
+     * Parse a configset with given data sources. This function should be implemented in
+     * a platform-specific one if needed.
+     * @param {String} configSet a config string with placeholders. The placeholder looks like:
+     * {@device.networkInterfaces#0.PrivateIpAddress}, where @ + device incidates the data source,
+     * networkInterfaces + # + number incidates the nth item of networkInterfaces, so on and so
+     * forth. The # index starts from 0. For referencing the 0th item, it can get rid of
+     * the # + number, e.g. {@device.networkInterfaces#0.PrivateIpAddress} can be written as
+     * {@device.networkInterfaces.PrivateIpAddress}
+     * @param {Object} dataSources a json object of multiple key/value pairs with data
+     * to relace some placeholders in the configSet parameter. Each key must start with an
+     * asperand (@ symbol) to form a category of data such as: @vpc, @device, @vpn_connection, etc.
+     * The value of each key must be an object {}. Each property of this object could be
+     * a primitive, a nested object, or an array of the same type of primitives or nested object.
+     * The leaf property of a nested object must be a primitive.
+     * @returns {String} a pasred config string
+     */
+    async parseConfigSet(configSet, dataSources) { // eslint-disable-line no-unused-vars
+        return await configSet;
     }
 
-    async getSlaveConfig(masterIp, callbackUrl) {
+    async getMasterConfig(parameters) {
+        // no dollar sign in place holders
+        let config = '';
+        this._baseConfig = await this.getBaseConfig();
+        // parse TGW VPN
+        if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
+            // append vpnConfig to base config
+            config = await this.getConfigSet(parameters.vpnConfigSetName);
+            config = await this.parseConfigSet(config,
+                {'@vpn_connection': parameters.vpnConfiguration});
+            this._baseConfig += config;
+        }
+        config = this._baseConfig.replace(/\{CALLBACK_URL}/,parameters.callbackUrl ?
+            parameters.callbackUrl : '');
+        return config;
+    }
+
+    async getSlaveConfig(parameters) {
+        this._baseConfig = await this.getBaseConfig();
         const
             autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
@@ -404,29 +718,37 @@ module.exports = class AutoscaleHandler {
                 /set\s+psksecret\s+(.+)/.exec(autoScaleSection)
             ];
         const [syncInterface, pskSecret] = matches.map(m => m && m[1]),
-            apiEndpoint = callbackUrl;
-        let errorMessage;
+            apiEndpoint = parameters.callbackUrl;
+        let config = '', errorMessage;
         if (!apiEndpoint) {
             errorMessage = 'Api endpoint is missing';
         }
-        if (!masterIp) {
+        if (!parameters.masterIp) {
             errorMessage = 'Master ip is missing';
         }
         if (!pskSecret) {
             errorMessage = 'psksecret is missing';
         }
-        if (!pskSecret || !apiEndpoint || !masterIp) {
+        if (!pskSecret || !apiEndpoint || !parameters.masterIp) {
             throw new Error(`Base config is invalid (${errorMessage}): ${
                 JSON.stringify({
-                    syncInterface,
-                    apiEndpoint,
-                    masterIp,
+                    syncInterface: syncInterface,
+                    apiEndpoint: apiEndpoint,
+                    masterIp: parameters.masterIp,
                     pskSecret: pskSecret && typeof pskSecret
                 })}`);
         }
+        // parse TGW VPN
+        if (parameters.vpnConfigSetName && parameters.vpnConfiguration) {
+            // append vpnConfig to base config
+            config = await this.getConfigSet(parameters.vpnConfigSetName);
+            config = await this.parseConfigSet(config,
+                {'@vpn_connection': parameters.vpnConfiguration});
+            this._baseConfig += config;
+        }
         return await this._baseConfig.replace(new RegExp('set role master', 'gm'),
-                `set role slave\n    set master-ip ${masterIp}`)
-            .replace(new RegExp('{CALLBACK_URL}', 'gm'), callbackUrl);
+                `set role slave\n    set master-ip ${parameters.masterIp}`)
+            .replace(new RegExp('{CALLBACK_URL}', 'gm'), parameters.callbackUrl);
     }
 
     async checkMasterElection() {
@@ -584,20 +906,323 @@ module.exports = class AutoscaleHandler {
     }
 
     async saveSubnetPairs(subnetPairs) {
-        return await this.platform.setSettingItem('subnets-pairs', subnetPairs);
+        return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true, false);
+    }
+
+    async loadAutoScalingSettings() {
+        let [desiredCapacity, minSize, maxSize, groupSetting] = await Promise.all([
+            this.platform.getSettingItem('scaling-group-desired-capacity'),
+            this.platform.getSettingItem('scaling-group-min-size'),
+            this.platform.getSettingItem('scaling-group-max-size'),
+            this.platform.getSettingItem('auto-scaling-group')
+        ]);
+
+        if (!(desiredCapacity && minSize && maxSize) && groupSetting) {
+            return groupSetting;
+        }
+        return {desiredCapacity: desiredCapacity, minSize: minSize, maxSize: maxSize};
     }
 
     async loadSettings() {
-        return await this.platform.getSettingItem('auto-scaling-group');
+        if (!this._settings) {
+            await this.platform.getSettingItems();// initialize the platform settings
+        }
     }
 
-    async saveSettings(desiredCapacity, minSize, maxSize) {
-        let settingValues = {
-            desiredCapacity: desiredCapacity,
-            minSize: minSize,
-            maxSize: maxSize
-        };
-        return await this.platform.setSettingItem('auto-scaling-group', settingValues);
+    /**
+     * Save settings to DB. This function doesn't do value validation. The caller should be
+     * responsible for it.
+     * @param {Object} settings settings to save
+     */
+    async saveSettings(settings) {
+        let tasks = [], errorTasks = [];
+        for (let [key, value] of Object.entries(settings)) {
+            let keyName = null, description = null, jsonEncoded = false, editable = false;
+            switch (key.toLowerCase()) {
+                case 'servicetype':
+                    // ignore service type
+                    break;
+                case 'deploymentsettingssaved':
+                    keyName = 'deployment-settings-saved';
+                    description = 'A flag setting item that indicates all deployment ' +
+                        'settings have been saved.';
+                    editable = false;
+                    break;
+                case 'byolscalinggroupdesiredcapacity':
+                    keyName = 'byol-scaling-group-desired-capacity';
+                    description = 'BYOL Scaling group desired capacity.';
+                    editable = true;
+                    break;
+                case 'byolscalinggroupminsize':
+                    keyName = 'byol-scaling-group-min-size';
+                    description = 'BYOL Scaling group min size.';
+                    editable = true;
+                    break;
+                case 'byolscalinggroupmaxsize':
+                    keyName = 'byol-scaling-group-max-size';
+                    description = 'BYOL Scaling group max size.';
+                    editable = true;
+                    break;
+                case 'scalinggroupdesiredcapacity':
+                    keyName = 'scaling-group-desired-capacity';
+                    description = 'PAYG Scaling group desired capacity.';
+                    editable = true;
+                    break;
+                case 'scalinggroupminsize':
+                    keyName = 'scaling-group-min-size';
+                    description = 'PAYG Scaling group min size.';
+                    editable = true;
+                    break;
+                case 'scalinggroupmaxsize':
+                    keyName = 'scaling-group-max-size';
+                    description = 'PAYG Scaling group max size.';
+                    editable = true;
+                    break;
+                case 'resourcetagprefix':
+                    keyName = 'resource-tag-prefix';
+                    description = 'Resource tag prefix.';
+                    editable = false;
+                    break;
+                case 'customidentifier':
+                    keyName = 'custom-id';
+                    description = 'Custom Identifier.';
+                    editable = false;
+                    break;
+                case 'uniqueid':
+                    keyName = 'unique-id';
+                    description = 'Unique ID.';
+                    editable = false;
+                    break;
+                case 'assetstoragename':
+                    keyName = 'asset-storage-name';
+                    description = 'Asset storage name.';
+                    editable = false;
+                    break;
+                case 'assetstoragekeyprefix':
+                    keyName = 'asset-storage-key-prefix';
+                    description = 'Asset storage key prefix.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscalevpcid':
+                    keyName = 'fortigate-autoscale-vpc-id';
+                    description = 'VPC ID of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscalesubnet1':
+                    keyName = 'fortigate-autoscale-subnet-1';
+                    description = 'The ID of the subnet 1 (in the first selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscalesubnet2':
+                    keyName = 'fortigate-autoscale-subnet-2';
+                    description = 'The ID of the subnet 2 (in the second selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscaleprotectedsubnet1':
+                    keyName = 'fortigate-autoscale-protected-subnet1';
+                    description = 'The ID of the protected subnet 1 (in the first selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = true;
+                    break;
+                case 'fortigateautoscaleprotectedsubnet2':
+                    keyName = 'fortigate-autoscale-protected-subnet2';
+                    description = 'The ID of the protected subnet 2 (in the second selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = true;
+                    break;
+                case 'fortigatepsksecret':
+                    keyName = 'fortigate-psk-secret';
+                    description = 'The PSK for FortiGate Autoscale Synchronization.';
+                    break;
+                case 'fortigateadminport':
+                    keyName = 'fortigate-admin-port';
+                    description = 'The port number for administrative login to FortiGate.';
+                    break;
+                case 'fortigatetrafficport':
+                    keyName = 'fortigate-traffic-port';
+                    description = 'The port number for load balancer to route traffic through ' +
+                        'FortiGate to the protected services behind the load balancer.';
+                    break;
+                case 'fortigatesyncinterface':
+                    keyName = 'fortigate-sync-interface';
+                    description = 'The interface the FortiGate uses for configuration ' +
+                        'synchronization.';
+                    editable = true;
+                    break;
+                case 'lifecyclehooktimeout':
+                    keyName = 'lifecycle-hook-timeout';
+                    description = 'The auto scaling group lifecycle hook timeout time in second.';
+                    editable = true;
+                    break;
+                case 'heartbeatinterval':
+                    keyName = 'heartbeat-interval';
+                    description = 'The FortiGate sync heartbeat interval in second.';
+                    editable = true;
+                    break;
+                case 'masterelectiontimeout':
+                    keyName = 'master-election-timeout';
+                    description = 'The FortiGate master election timtout time in second.';
+                    editable = true;
+                    break;
+                case 'heartbeatlosscount':
+                    keyName = 'heartbeat-loss-count';
+                    description = 'The FortiGate sync heartbeat loss count.';
+                    editable = true;
+                    break;
+                case 'heartbeatdelayallowance':
+                    keyName = 'heartbeat-delay-allowance';
+                    description = 'The FortiGate sync heartbeat delay allowance time in second.';
+                    editable = true;
+                    break;
+                case 'autoscalehandlerurl':
+                    keyName = 'autoscale-handler-url';
+                    description = 'The FortiGate Autoscale handler URL.';
+                    editable = false;
+                    break;
+                case 'masterscalinggroupname':
+                    keyName = 'master-scaling-group-name';
+                    description = 'The name of the master scaling group.';
+                    editable = false;
+                    break;
+                case 'paygscalinggroupname':
+                    keyName = 'payg-scaling-group-name';
+                    description = 'The name of the PAYG scaling group.';
+                    editable = false;
+                    break;
+                case 'byolscalinggroupname':
+                    keyName = 'byol-scaling-group-name';
+                    description = 'The name of the BYOL scaling group.';
+                    editable = false;
+                    break;
+                case 'requiredconfigset':
+                    keyName = 'required-configset';
+                    description = 'A comma-delimited list of required configsets.';
+                    editable = false;
+                    break;
+                case 'transitgatewayid':
+                    keyName = 'transit-gateway-id';
+                    description = 'The ID of the Transit Gateway the FortiGate Autoscale is ' +
+                    'attached to.';
+                    editable = false;
+                    break;
+                case 'enabletransitgatewayvpn':
+                    keyName = 'enable-transit-gateway-vpn';
+                    value = value && value !== 'false' ? 'true' : 'false';
+                    description = 'Toggle ON / OFF the Transit Gateway VPN creation on each ' +
+                    'FortiGate instance';
+                    editable = false;
+                    break;
+                case 'enablesecondnic':
+                    keyName = 'enable-second-nic';
+                    value = value && value !== 'false' ? 'true' : 'false';
+                    description = 'Toggle ON / OFF the secondary eni creation on each ' +
+                    'FortiGate instance';
+                    editable = false;
+                    break;
+                case 'bgpasn':
+                    keyName = 'bgp-asn';
+                    description = 'The BGP Autonomous System Number of the Customer Gateway ' +
+                    'of each FortiGate instance in the Auto Scaling Group.';
+                    editable = true;
+                    break;
+                case 'transitgatewayvpnhandlername':
+                    keyName = 'transit-gateway-vpn-handler-name';
+                    description = 'The Transit Gateway VPN handler function name.';
+                    editable = false;
+                    break;
+                case 'transitgatewayroutetableinbound':
+                    keyName = 'transit-gateway-route-table-inbound';
+                    description = 'The Id of the Transit Gateway inbound route table.';
+                    editable = true;
+                    break;
+                case 'transitgatewayroutetableoutbound':
+                    keyName = 'transit-gateway-route-table-outbound';
+                    description = 'The Id of the Transit Gateway outbound route table.';
+                    break;
+                case 'enablehybridlicensing':
+                    keyName = 'enable-hybrid-licensing';
+                    description = 'Toggle ON / OFF the hybrid licensing feature.';
+                    editable = false;
+                    break;
+                case 'enablefortigateelb':
+                    keyName = 'enable-fortigate-elb';
+                    description = 'Toggle ON / OFF the elastic load balancing for the FortiGate ' +
+                    'scaling groups.';
+                    editable = false;
+                    break;
+                case 'enableinternalelb':
+                    keyName = 'enable-internal-elb';
+                    description = 'Toggle ON / OFF the internal elastic load balancing for ' +
+                    'the protected services by FortiGate.';
+                    editable = true;
+                    break;
+                case 'fortigateautoscaleelbdns':
+                    keyName = 'fortigate-autoscale-elb-dns';
+                    description = 'The DNS name of the elastic load balancer for the FortiGate ' +
+                    'scaling groups.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscaletargetgrouparn':
+                    keyName = 'fortigate-autoscale-target-group-arn';
+                    description = 'The ARN of the target group for FortiGate to receive ' +
+                    'load balanced traffic.';
+                    editable = false;
+                    break;
+                case 'fortigateprotectedinternalelbdns':
+                    keyName = 'fortigate-protected-internal-elb-dns';
+                    description = 'The DNS name of the elastic load balancer for the scaling ' +
+                    'groups of services protected by FortiGate';
+                    editable = true;
+                    break;
+                case 'enabledynamicnatgateway':
+                    keyName = 'enable-dynamic-nat-gateway';
+                    description = 'Toggle ON / OFF the dynamic NAT gateway feature.';
+                    editable = true;
+                    break;
+                case 'dynamicnatgatewayroutetables':
+                    keyName = 'dynamic-nat-gateway-route-tables';
+                    description = 'The dynamic NAT gateway managed route tables.';
+                    editable = true;
+                    break;
+                case 'enablevminfocache':
+                    keyName = 'enable-vm-info-cache';
+                    description = 'Toggle ON / OFF the vm info cache feature. It caches the ' +
+                    'vm info in db to reduce API calls to query a vm from the platform.';
+                    editable = true;
+                    break;
+                case 'vminfocachetime':
+                    keyName = 'vm-info-cache-time';
+                    description = 'The vm info cache time in seconds.';
+                    editable = true;
+                    break;
+                case 'fortigatelicensestoragekeyprefix':
+                    keyName = 'fortigate-license-storage-key-prefix';
+                    description = 'The key prefix for FortiGate licenses in the access storage.';
+                    editable = true;
+                    break;
+                case 'getlicensegraceperiod':
+                    keyName = 'get-license-grace-period';
+                    description = 'The period (time in seconds) for preventing a newly assigned ' +
+                    ' license to be recycled.';
+                    editable = true;
+                    break;
+                default:
+                    break;
+            }
+            if (keyName) {
+                tasks.push(this.platform
+                    .setSettingItem(keyName, value, description, jsonEncoded, editable)
+                    .catch(error => {
+                        this.logger.error(`failed to save setting for key: ${keyName}. ` +
+                            `Error: ${JSON.stringify(error)}`);
+                        errorTasks.push({key: keyName, value: value});
+                    }));
+            }
+        }
+        await Promise.all(tasks);
+        return errorTasks.length === 0;
     }
 
     async updateCapacity(desiredCapacity, minSize, maxSize) {
@@ -612,6 +1237,7 @@ module.exports = class AutoscaleHandler {
     async resetMasterElection() {
         this.logger.info('calling resetMasterElection');
         try {
+            this.setScalingGroup(this._settings['master-scaling-group-name']);
             await this.platform.removeMasterRecord();
             this.logger.info('called resetMasterElection. done.');
             return true;
@@ -694,9 +1320,75 @@ module.exports = class AutoscaleHandler {
     }
 
     setScalingGroup(master, self) {
-        this.masterScalingGroupName = master;
-        this.platform.setMasterScalingGroup(master);
-        this.scalingGroupName = self;
-        this.platform.setScalingGroup(self);
+        if (master) {
+            this.masterScalingGroupName = master;
+            this.platform.setMasterScalingGroup(master);
+        }
+        if (self) {
+            this.scalingGroupName = self;
+            this.platform.setScalingGroup(self);
+        }
+    }
+
+    /**
+     * Check and update the route to the NAT gateway instance (which is one healthy ForitGate
+     * from the scaling groups)
+     */
+    async updateNatGatewayRoute() {
+        return await this.throwNotImplementedException();
+    }
+
+    /**
+     *
+     * @param {Map<String, LicenseItem>} licenseFiles a map of LicenseItem based on
+     * the license files in the blob storage. Each map key is the 'blobKey' of the LicenseItem.
+     * @param {Map<String, LicenseRecord>} existingRecords a map of LicenseRecord based on
+     * the existing license record in the db. Each map key is the 'checksum' of the LicenseItem.
+     */
+    async updateLicenseStockRecord(licenseFiles, existingRecords) {
+        if (licenseFiles instanceof Map && existingRecords instanceof Map) {
+            let untrackedFiles = new Map(licenseFiles.entries()); // copy the map
+            try {
+                if (existingRecords.size > 0) {
+                    // filter out tracked license files
+                    existingRecords.forEach(licenseRecord => {
+                        if (licenseFiles.has(licenseRecord.blobKey)) {
+                            untrackedFiles.delete(licenseRecord.blobKey);
+                        }
+                    }, this);
+                }
+                let platform = this.platform;
+                // fetch the content for each untrack license file
+                let updateTasks = [];
+                untrackedFiles.forEach(licenseItem => {
+                    updateTasks.push((async () => {
+                        const content = await platform.getLicenseFileContent(licenseItem.fileName);
+                        licenseItem.content = content;
+                        return licenseItem;
+                    })());
+                });
+
+                untrackedFiles = await Promise.all(updateTasks);
+                updateTasks = [];
+
+                untrackedFiles.forEach(licenseItem => {
+                    if (existingRecords.has(licenseItem.checksum)) {
+                        this.logger.warn('updateLicenseStockRecord > warning: duplicate' +
+                            ` license found: filename: ${licenseItem.fileName}`);
+                    } else {
+                        updateTasks.push(platform.updateLicenseStock(licenseItem, false)
+                        .catch(error => {
+                            this.logger.error(error);
+                        }));
+                    }
+                });
+                await Promise.all(updateTasks);
+                return updateTasks.length > 0 ? this.platform.listLicenseStock() : existingRecords;
+            } catch (error) {
+                this.logger.error(error);
+            }
+        } else {
+            return existingRecords;
+        }
     }
 };

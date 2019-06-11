@@ -8,6 +8,7 @@ exports = module.exports;
 const path = require('path');
 const AWS = require('aws-sdk');
 const AutoScaleCore = require('fortigate-autoscale-core');
+const Xml2js = require('xml2js');
 
 // lock the API versions
 AWS.config.apiVersions = {
@@ -16,26 +17,31 @@ AWS.config.apiVersions = {
     lambda: '2015-03-31',
     dynamodb: '2012-08-10',
     apiGateway: '2015-07-09',
-    s3: '2006-03-01'
+    s3: '2006-03-01',
+    elbv2: '2015-12-01'
 };
 
 const
     EXPIRE_LIFECYCLE_ENTRY = (process.env.EXPIRE_LIFECYCLE_ENTRY || 60 * 60) * 1000,
+    ENABLE_SECOND_NIC = process.env.ENABLE_SECOND_NIC &&
+        process.env.ENABLE_SECOND_NIC.trim().toLowerCase() === 'true',
+    ENABLE_TGW_VPN = process.env.ENABLE_TGW_VPN &&
+        process.env.ENABLE_TGW_VPN.trim().toLowerCase() === 'true',
     autoScaling = new AWS.AutoScaling(),
     dynamodb = new AWS.DynamoDB(),
     docClient = new AWS.DynamoDB.DocumentClient(),
     ec2 = new AWS.EC2(),
-    apiGateway = new AWS.APIGateway(),
+    lambda = new AWS.Lambda(),
     s3 = new AWS.S3(),
-    UNIQUE_ID = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '',
-    CUSTOM_ID = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '',
+    elbv2 = new AWS.ELBv2(),
+    RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '',
+    DEFAULT_MASTER_ELECTION_TIMEOUT = 300,
     SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
-    DB = AutoScaleCore.dbDefinitions.getTables(CUSTOM_ID, UNIQUE_ID),
-    moduleId = AutoScaleCore.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
-    settingItems = AutoScaleCore.settingItems,
-    HEART_BEAT_DELAY_ALLOWANCE = 2000; // time in ms allowed to offset the network latency
-
+    DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
+    moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
+    settingItems = AutoScaleCore.settingItems;
 let logger = new AutoScaleCore.DefaultLogger(console);
+
 /**
  * Implements the CloudPlatform abstraction for the AWS api.
  */
@@ -44,11 +50,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         let attempts = 0, maxAttempts = 3, done = false, errors;
         while (attempts < maxAttempts) {
             errors = [];
-            attempts ++;
-            await Promise.all([
-                DB.AUTOSCALE, DB.ELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
-                DB.NICATTACHMENT, DB.CUSTOMLOG]
-                .map(table => this.tableExists(table).catch(err => errors.push(err)))
+            attempts++;
+            await Promise.all(Object.values(DB).map(
+                table => this.tableExists(table).catch(err => errors.push(err)))
             );
             errors.forEach(err => logger.error(err));
             if (errors.length === 0) {
@@ -59,6 +63,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         if (Array.isArray(errors) && errors.length > 0) {
             throw new Error(errors.pop());
         }
+        this._initialized = true; // mark this platform class instance is initialized.
+        logger.info('called init. [platform initialization]');
         return done;
     }
 
@@ -106,32 +112,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         );
         errors.forEach(err => logger.error(err));
         return errors.length === 0;
-    }
-
-    /** @override */
-    async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
-        let position,
-            page;
-        const
-            gwName = process.env.API_GATEWAY_NAME,
-            region = process.env.AWS_REGION,
-            stage = process.env.API_GATEWAY_STAGE_NAME,
-            resource = process.env.API_GATEWAY_RESOURCE_NAME;
-        do {
-
-            this._step = 'handler:getApiGatewayUrl:getRestApis';
-            page = await apiGateway.getRestApis({
-                position
-            }).promise();
-            position = page.position;
-            const
-                gw = page.items.find(i => i.name === gwName);
-            if (gw) {
-                return `https://${gw.id}.execute-api.${region}.amazonaws.com/` +
-                    `${stage}/${resource}`;
-            }
-        } while (page.items.length);
-        throw new Error(`Api Gateway not found looking for ${gwName}`);
     }
 
     /**
@@ -228,7 +208,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         return false;
     }
 
-    async completeLifecycleAction(lifecycleItem, success) {
+    async completeLifecycleAction(lifecycleItem, success, deleteItem = true) {
         logger.info('calling completeLifecycleAction');
         try {
             await this.updateLifecycleItem(lifecycleItem);
@@ -242,8 +222,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             if (!process.env.DEBUG_MODE) {
                 await autoScaling.completeLifecycleAction(params).promise();
             }
-            // TODO: remove lifecycle Item here
-            await this.removeLifecycleItem(lifecycleItem);
+            if (deleteItem) {
+                await this.removeLifecycleItem(lifecycleItem);
+            }
+
             logger.info(
                 `[${params.LifecycleActionResult}] applied to hook[${params.LifecycleHookName}] with
             token[${params.LifecycleActionToken}] in auto scaling group
@@ -310,14 +292,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         const params = {
             TableName: DB.ELECTION.TableName,
             Key: {
-                asgName: this.scalingGroupName
+                asgName: this.masterScalingGroupName
             },
             ConditionExpression: '#AsgName = :asgName',
             ExpressionAttributeNames: {
                 '#AsgName': 'asgName'
             },
             ExpressionAttributeValues: {
-                ':asgName': this.scalingGroupName
+                ':asgName': this.masterScalingGroupName
             }
         };
         return await docClient.delete(params).promise();
@@ -360,38 +342,75 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             TableName: DB.AUTOSCALE.TableName
         };
         try {
-            let compensatedScriptTime,
+            let scriptExecutionStartTime,
                 healthy,
                 heartBeatLossCount,
+                heartBeatDelays,
+                heartBeatDelayAllowance =
+                    parseInt(this._settings['heartbeat-delay-allowance']) * 1000,
+                inevitableFailToSyncTime,
                 interval,
                 data = await docClient.get(params).promise();
             if (data.Item) {
                 // to get a more accurate heart beat elapsed time, the script execution time so far
                 // is compensated.
-                compensatedScriptTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
+                scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
                 interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
                     heartBeatInterval : data.Item.heartBeatInterval;
+                heartBeatDelays = scriptExecutionStartTime - data.Item.nextHeartBeatTime;
                 // based on the test results, network delay brought more significant side effects
                 // to the heart beat monitoring checking than we thought. we have to expand the
                 // checking time to reasonably offset the delay.
-                // HEART_BEAT_DELAY_ALLOWANCE is used for this purpose
-                if (compensatedScriptTime <
-                    data.Item.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE) {
+                // heartBeatDelayAllowance is used for this purpose
+                if (heartBeatDelays < heartBeatDelayAllowance) {
                     // reset hb loss count if instance sends hb within its interval
                     healthy = true;
                     heartBeatLossCount = 0;
                 } else {
                     // if the current sync heartbeat is late, the instance is still considered
-                    // healthy unless 3 times of heartBeatInterval amount of time has passed.
-                    // in other words, the instance totally lost the time of 3 hb syncing
-                    // network delay allowance also applies to the case here.
-                    healthy = data.Item.heartBeatLossCount < 3 &&
-                        Date.now() < data.Item.nextHeartBeatTime + HEART_BEAT_DELAY_ALLOWANCE +
-                        interval * 1000 * (2 - data.Item.heartBeatLossCount);
+                    // healthy unless the the inevitable-fail-to-sync time has passed.
+                    // The the inevitable-fail-to-sync time is defined as:
+                    // the maximum amount of time for an instance to be able to sync without being
+                    // deemed unhealth. For example:
+                    // the instance has x (x < hb loss count allowance) loss count recorded.
+                    // the hb loss count allowance is X.
+                    // the hb interval is set to i second.
+                    // its hb sync time delay allowance is I ms.
+                    // its current hb sync time is t.
+                    // its expected next hb sync time is T.
+                    // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
+                    // inevitable-fail-to-sync time. This means the instance can never catch up
+                    // with a heartbeat sync that makes it possile to deem health again.
+                    inevitableFailToSyncTime = data.Item.nextHeartBeatTime +
+                        (parseInt(this._settings['heartbeat-loss-count']) -
+                            data.Item.heartBeatLossCount - 1) *
+                            (interval * 1000 + heartBeatDelayAllowance);
+                    healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
+                    logger.info('hb sync is late again.\n' +
+                        `hb loss count becomes: ${heartBeatLossCount},\n` +
+                        `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
+                        'expected hb arrived time: ' +
+                        `${data.Item.nextHeartBeatTime} ms in unix timestamp\n` +
+                        'current hb sync check time: ' +
+                        `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                        `this hb sync delay is: ${heartBeatDelays} ms`);
+                    // log the math why this instance is deemed unhealthy
+                    if (!healthy) {
+                        logger.info('Instance is deemed unhealthy. reasons:\n' +
+                            `previous hb loss count: ${data.Item.heartBeatLossCount},\n` +
+                            `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
+                            'expected hb arrived time: ' +
+                            `${data.Item.nextHeartBeatTime} ms in unix timestamp\n` +
+                            'current hb sync check time: ' +
+                            `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                            `this hb sync delays: ${heartBeatDelays} ms\n` +
+                            'the inevitable-fail-to-sync time: ' +
+                            `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
+                    }
                 }
                 logger.info('called getInstanceHealthCheck. (timestamp: ' +
-                `${compensatedScriptTime},  interval:${heartBeatInterval}) healthcheck record:`,
+                `${scriptExecutionStartTime},  interval:${heartBeatInterval}) healthcheck record:`,
                 JSON.stringify(data.Item));
                 return {
                     instanceId: instance.instanceId,
@@ -480,10 +499,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             };
             let data = await autoScaling.describeAutoScalingGroups(params).promise();
             if (data && data.AutoScalingGroups && data.AutoScalingGroups.length > 0) {
-                logger.info('called describeAutoScalingGroups. group found.');
                 let groups = data.AutoScalingGroups.filter(group => {
+                    logger.info(`group: ${groupName} found.`);
                     return group.AutoScalingGroupName === groupName;
                 });
+                logger.info(`total: ${groups && groups.length} groups found.`);
                 return groups && groups.length && groups[0];
             }
         } catch (error) {
@@ -501,59 +521,90 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      * @param {Object} parameters parameters accepts: instanceId, privateIp, publicIp
      */
     /* eslint-enable max-len */
+    /* eslint-disable max-len */
+    /**
+     * Get information about an instance by the given parameters.
+     * @see https://docs.aws.amazon.com/opsworks/latest/APIReference/API_DescribeInstances.html
+     * @see https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeAutoScalingInstances.html
+     * @param {Object} parameters parameters accepts: instanceId, privateIp, publicIp
+     */
+    /* eslint-enable max-len */
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
-        let params = {
-                Filters: []
-            },
-            instanceId;
-        // check if instance is in scaling group
-        if (parameters.scalingGroupName) {
-            // describe the instance in auto scaling group
-            let scalingGroup = await autoScaling.describeAutoScalingGroups({
-                AutoScalingGroupNames: [
-                    parameters.scalingGroupName
-                ]
-            }).promise();
-            if (scalingGroup && Array.isArray(scalingGroup.AutoScalingGroups) &&
-                scalingGroup.AutoScalingGroups[0] &&
-                scalingGroup.AutoScalingGroups[0].AutoScalingGroupName ===
-                parameters.scalingGroupName) {
-                const instances = scalingGroup.AutoScalingGroups[0].Instances.filter(instance => {
-                    return instance.InstanceId === parameters.instanceId;
-                });
-                if (instances && instances.length === 1) {
-                    instanceId = instances[0].InstanceId;
+        let readCache = this._settings['enable-vm-info-cache'] === 'true';
+        let virtualMachine, hitCache = '';
+
+        if (readCache) {
+            virtualMachine = await this.getVmInfoCache(parameters.scalingGroupName,
+                parameters.instanceId, null);
+            hitCache = virtualMachine && '(hit cache)';
+        }
+
+        // if not hit the cache
+        if (!virtualMachine) {
+            let params = {
+                    Filters: []
+                },
+                instanceId;
+            // check if instance is in scaling group
+            if (parameters.scalingGroupName) {
+                // describe the instance in auto scaling group
+                let scalingGroup = await autoScaling.describeAutoScalingGroups({
+                    AutoScalingGroupNames: [
+                        parameters.scalingGroupName
+                    ]
+                }).promise();
+                if (scalingGroup && Array.isArray(scalingGroup.AutoScalingGroups) &&
+                    scalingGroup.AutoScalingGroups[0] &&
+                    scalingGroup.AutoScalingGroups[0].AutoScalingGroupName ===
+                    parameters.scalingGroupName) {
+                    const instances =
+                        scalingGroup.AutoScalingGroups[0].Instances.filter(instance => {
+                            return instance.InstanceId === parameters.instanceId;
+                        });
+                    if (instances && instances.length === 1) {
+                        instanceId = instances[0].InstanceId;
+                    }
                 }
+            } else if (parameters.instanceId) {
+                instanceId = parameters.instanceId;
             }
-        } else if (parameters.instanceId) {
-            instanceId = parameters.instanceId;
+            // describe the instance
+            if (instanceId) {
+                params.Filters.push({
+                    Name: 'instance-id',
+                    Values: [parameters.instanceId]
+                });
+            }
+            if (parameters.publicIp) {
+                params.Filters.push({
+                    Name: 'ip-address',
+                    Values: [parameters.publicIp]
+                });
+            }
+            if (parameters.privateIp) {
+                params.Filters.push({
+                    Name: 'private-ip-address',
+                    Values: [parameters.privateIp]
+                });
+            }
+            const result = instanceId && await ec2.describeInstances(params).promise();
+            // parse to virtual machine instance
+            virtualMachine = result && result.Reservations[0] &&
+                result.Reservations[0].Instances[0];
+            hitCache = virtualMachine && hitCache || '';
+            // cache the vm info
+            if (virtualMachine && readCache) {
+                let cacheTime = this._settings['vm-info-cache-time'];
+                cacheTime = isNaN(cacheTime) ? 3600 : parseInt(cacheTime);
+                await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine, cacheTime);
+            }
         }
-        // describe the instance
-        if (instanceId) {
-            params.Filters.push({
-                Name: 'instance-id',
-                Values: [parameters.instanceId]
-            });
-        }
-        if (parameters.publicIp) {
-            params.Filters.push({
-                Name: 'ip-address',
-                Values: [parameters.publicIp]
-            });
-        }
-        if (parameters.privateIp) {
-            params.Filters.push({
-                Name: 'private-ip-address',
-                Values: [parameters.privateIp]
-            });
-        }
-        const result = instanceId && await ec2.describeInstances(params).promise();
-        logger.info(`called describeInstance, result: ${result ? JSON.stringify(result) : 'null'}`);
-        return result && result.Reservations[0] && result.Reservations[0].Instances[0] &&
-            AutoScaleCore.VirtualMachine.fromAwsEc2(
-                result.Reservations[0] && result.Reservations[0].Instances[0],
-                parameters.scalingGroupName || null);
+        // if mv is found
+        virtualMachine = virtualMachine && AutoScaleCore.VirtualMachine.fromAwsEc2(virtualMachine,
+            parameters.scalingGroupName || null);
+        logger.info(`called describeInstance${hitCache}, virtualMachine: ${virtualMachine}`);
+        return virtualMachine;
     }
 
     /**
@@ -595,7 +646,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     async createNetworkInterface(parameters) {
         try {
-            logger.info('called createNetworkInterface');
+            logger.info('calling createNetworkInterface');
             let result = await ec2.createNetworkInterface(parameters).promise();
             // create a tag
             if (result && result.NetworkInterface) {
@@ -604,8 +655,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         result.NetworkInterface.NetworkInterfaceId
                     ],
                     Tags: [{
-                        Key: 'FortiGateAutoScaleNicAttachment',
-                        Value: `${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`
+                        Key: 'FortiGateAutoscaleNicAttachment',
+                        Value: RESOURCE_TAG_PREFIX
+                    },{
+                        Key: 'Name',
+                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-instance-nic2`
+                    },{
+                        Key: 'ResourceGroup',
+                        Value: RESOURCE_TAG_PREFIX
                     }]
                 };
                 await ec2.createTags(params).promise();
@@ -677,53 +734,67 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         result.NetworkInterfaces[0].Attachment &&
                         result.NetworkInterfaces[0].Attachment.Status === 'attached';
                 };
-            let result = await AutoScaleCore.waitFor(promiseEmitter, validator);
+            let result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
             logger.info('called attachNetworkInterface. ' +
                 `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`);
             return result.NetworkInterfaces[0].Attachment.AttachmentId;
         } catch (error) {
-            await this.deleteNicAttachmentRecord(instance.instanceId, 'pending_attach');
+            await this.deleteNicAttachmentRecord(instance.instanceId);
             logger.warn(`called attachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
             return false;
         }
     }
 
-    async detachNetworkInterface(instance, nic) {
+    async detachNetworkInterface(instance, eni) {
         logger.info('calling detachNetworkInterface');
         if (!instance || !instance.networkInterfaces) {
             logger.warn(`invalid instance: ${JSON.stringify(instance)}`);
             return false;
-        } else if (!nic) {
-            logger.warn(`invalid network interface controller: ${JSON.stringify(nic)}`);
+        } else if (!eni) {
+            logger.warn('invalid network interface controller.');
             return false;
         }
-        let attachedNic = instance.networkInterfaces.some(item => {
-            return item.NetworkInterfaceId === nic.NetworkInterfaceId;
-        });
-        if (!attachedNic) {
-            logger.warn(`nic(id: ${nic.NetworkInterfaceId}) is not attached to ` +
-                `instance(id: ${instance.instanceId})`);
+
+        let attachment = eni.Attachment;
+        if (!attachment) {
+            logger.warn(`eni (id: ${eni.NetworkInterfaceId}) is not attached to any instance.`);
+            return true;
+        }
+        if (attachment.InstanceId && attachment.InstanceId !== instance.instanceId) {
+            logger.warn(`cannot detach a nic(id: ${eni.NetworkInterfaceId}, ` +
+                    `attached instance: ${attachment.InstanceId}) from the ` +
+                    `instance(id: ${instance.instanceId}) it's not attached to.`);
             return false;
         }
+
         try {
+            let result, interfaceId = eni.NetworkInterfaceId;
             let params = {
-                AttachmentId: nic.Attachment.AttachmentId
+                AttachmentId: attachment.AttachmentId
             };
-            await ec2.detachNetworkInterface(params).promise();
             let promiseEmitter = () => {
                     return ec2.describeNetworkInterfaces({
-                        NetworkInterfaceIds: [nic.NetworkInterfaceId]
+                        NetworkInterfaceIds: [interfaceId]
                     }).promise();
                 },
-                validator = result => {
-                    return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
-                        result.NetworkInterfaces[0] &&
-                        result.NetworkInterfaces[0].Status === 'available';
+                validator = check => {
+                    return check && check.NetworkInterfaces && check.NetworkInterfaces[0] &&
+                        check.NetworkInterfaces[0].Status === 'available';
                 };
-            let result = await AutoScaleCore.waitFor(promiseEmitter, validator);
-            logger.info('called detachNetworkInterface. ' +
-                `done.(nic status: ${result.NetworkInterfaces[0].Status})`);
-            return result.NetworkInterfaces[0].Status === 'available';
+
+            if (eni.Status !== 'available') {
+                // detach it if it's still attached to the target instance
+                if (attachment && attachment.Status === 'attached') {
+                    await ec2.detachNetworkInterface(params).promise();
+                }
+                // if the eni is not available, wait for it to become available
+                result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
+                eni = result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
+                result.NetworkInterfaces[0];
+            }
+
+            logger.info(`called detachNetworkInterface. done.(nic status: ${eni && eni.Status})`);
+            return eni && eni.Status === 'available';
         } catch (error) {
             logger.warn(`called detachNetworkInterface. failed.(error: ${JSON.stringify(error)})`);
             return false;
@@ -810,43 +881,97 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    async getSettingItem(key) {
-        let params = {
-            TableName: DB.SETTINGS.TableName,
-            Key: {
-                settingKey: key
-            }
-        };
+    /** @override */
+    async getSettingItems(keyFilter = null, valueOnly = true) {
         try {
-            let result = await docClient.get(params).promise();
-            if (result && result.Item) {
-                return JSON.parse(result.Item.settingValue);
-            }
+            const data = await docClient.scan({
+                TableName: DB.SETTINGS.TableName
+            }).promise();
+            let items = Array.isArray(data.Items) && data.Items;
+            let formattedItems = {};
+            let filteredItems = null, hasFilter = Array.isArray(keyFilter);
+
+            items.forEach(item => {
+                if (item.jsonEncoded === 'true') {
+                    try {
+                        item.settingValue = JSON.parse(item.settingValue);
+                    } catch (error) {
+                        logger.warn(`getSettingItems error: ${item.settingKey} has ` +
+                            `jsonEncoded (${item.jsonEncoded}) value but unable to apply ` +
+                            `JSON.parse(). settingValue is: ${item.settingValue}`);
+                    }
+                }
+                formattedItems[item.settingKey] = valueOnly ? item.settingValue : item;
+                if (hasFilter && keyFilter.includes(item.settingKey)) {
+                    filteredItems = filteredItems || {};
+                    filteredItems[item.settingKey] = formattedItems[item.settingKey];
+                }
+            });
+            this._settings = formattedItems;
+            return keyFilter && filteredItems || formattedItems;
         } catch (error) {
-            return null;
+            logger.warn(`getSettingItems > error: ${JSON.stringify(error)}`);
+            return [];
         }
     }
 
-    async setSettingItem(key, jsonValue) {
-        var params = {
-            Item: {
-                settingKey: key,
-                settingValue: JSON.stringify(jsonValue)
+    /**
+     * add or update a setting item with given key. If description is null, it will be kept
+     * unchanged when updating an existing item, or converted to an empty string when adding new.
+     * @param {String} key the Key
+     * @param {any} value the value
+     * @param {String} description the description
+     * @param {Boolean} jsonEncoded set to true if value needs to store as json encoded
+     * @param {Boolean} editable set to true if this setting is allowed to change
+     */
+    async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
+        let params = {
+            TableName: DB.SETTINGS.TableName,
+            Key: { settingKey: key},
+            ExpressionAttributeNames: {
+                '#settingValue': 'settingValue',
+                '#jsonEncoded': 'jsonEncoded',
+                '#editable': 'editable'
             },
-            TableName: DB.SETTINGS.TableName
+            ExpressionAttributeValues: {
+                ':settingValue': jsonEncoded ? JSON.stringify(value) : value,
+                ':jsonEncoded': jsonEncoded ? 'true' : 'false',
+                ':editable': editable ? 'true' : 'false'
+            },
+            UpdateExpression: 'SET #settingValue = :settingValue, #jsonEncoded = :jsonEncoded' +
+            ', #editable = :editable'
         };
-        return !!await docClient.put(params).promise();
+        if (!value) {
+            params.ExpressionAttributeValues[':settingValue'] = 'N/A';
+            params.ExpressionAttributeValues[':jsonEncoded'] = false;
+        }
+        if (description !== null) {
+            params.ExpressionAttributeNames['#description'] = 'description';
+            params.ExpressionAttributeValues[':description'] = description ? description : '';
+            params.UpdateExpression += ', #description = :description';
+        }
+        return !!await docClient.update(params).promise();
     }
 
     /** @override */
     async getBlobFromStorage(parameters) {
+        let content = '';
+        // DEBUG:
+        // for local debugging use, the next lines get files from local file system instead
+        if (process.env.DEBUG_MODE === 'true') {
+            const fs = require('fs');
+            content = fs.readFileSync(path.resolve(process.cwd(),
+            'aws_cloudformation', 'assets', 'configset', parameters.fileName));
+            return {
+                content: content.toString()
+            };
+        }
         let data = await s3.getObject({
-            Bucket: process.env.STACK_ASSETS_S3_BUCKET_NAME,
-            Key: path.join(process.env.STACK_ASSETS_S3_KEY_PREFIX, parameters.path,
-                parameters.fileName)
+            Bucket: parameters.storageName,
+            Key: path.join(parameters.keyPrefix, parameters.fileName)
         }).promise();
 
-        let content = data && data.Body && data.Body.toString('utf8');
+        content = data && data.Body && data.Body.toString('utf8');
         return {
             content: content
         };
@@ -871,7 +996,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async saveLogToDb(log) {
         let timestamp = Date.now(),
             document = {
-                id: `${CUSTOM_ID}-LOG-${UNIQUE_ID}`,
+                id: `${RESOURCE_TAG_PREFIX}-LOG-${timestamp}`,
                 logContent: typeof log === 'string' ? log : JSON.stringify(log),
                 timestamp: timestamp
             };
@@ -889,6 +1014,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     // eslint-disable-next-line no-unused-vars
     async listLogFromDb(timeFrom, timeTo = null) {
+        // TODO: Don't need this level of logging for AWS for now
+        // will complete as needed.
         try {
             let query = {
                 TableName: DB.CUSTOMLOG.TableName,
@@ -964,6 +1091,647 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
+    async createCustomerGateway(parameters) {
+        try {
+            logger.info('calling createCustomerGateway');
+            let params = {
+                    BgpAsn: parameters.bgpAsn,
+                    PublicIp: parameters.publicIp,
+                    Type: parameters.type ? parameters.type : 'ipsec.1'
+                },
+                result = await ec2.createCustomerGateway(params).promise();
+            if (result && result.CustomerGateway) {
+                params = {
+                    Resources: [
+                        result.CustomerGateway.CustomerGatewayId
+                    ],
+                    Tags: [{
+                        Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                        Value: RESOURCE_TAG_PREFIX
+                    },{
+                        Key: 'Name',
+                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                        `cgw-${parameters.publicIp}`
+                    },{
+                        Key: 'ResourceGroup',
+                        Value: RESOURCE_TAG_PREFIX
+                    }]
+                };
+                await ec2.createTags(params).promise();
+            }
+            logger.info('called createCustomerGateway');
+            return result && result.CustomerGateway;
+        } catch (error) {
+            logger.warn(`called createCustomerGateway. failed.(error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async deleteCustomerGateway(parameters) {
+        try {
+            logger.info('calling deleteCustomerGateway');
+            let params;
+            params = {
+                CustomerGatewayId: parameters.customerGatewayId
+            };
+            await ec2.deleteCustomerGateway(params).promise();
+            logger.info('called deleteCustomerGateway');
+            return true;
+        } catch (error) {
+            logger.warn(`called deleteCustomerGateway. failed > error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async createVpnConnection(parameters) {
+        let params, tgwAttachment, vpnConnection, vpnCreationTime, data;
+        try {
+            logger.info('calling createVpnConnection');
+            params = {
+                CustomerGatewayId: parameters.customerGatewayId,
+                Type: parameters.type,
+                Options: {
+                    StaticRoutesOnly: false
+                }
+            };
+            if (parameters.transitGatewayId) {
+                params.TransitGatewayId = parameters.transitGatewayId;
+            }
+            data = await ec2.createVpnConnection(params).promise();
+            if (data && data.VpnConnection) {
+                vpnConnection = data.VpnConnection;
+                // tag the vpnconnection
+                params = {
+                    Resources: [
+                        vpnConnection.VpnConnectionId
+                    ],
+                    Tags: [{
+                        Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                        Value: RESOURCE_TAG_PREFIX
+                    },{
+                        Key: 'Name',
+                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                        `vpn-${parameters.publicIp}`
+                    },{
+                        Key: 'ResourceGroup',
+                        Value: RESOURCE_TAG_PREFIX
+                    }]
+                };
+                logger.info('creating tags on the vpnconnection. tags: ', JSON.stringify(params));
+                await ec2.createTags(params).promise();
+                // if this vpn is created for a transit gateway, tag the tgw attachment
+                // describe the tgw attachment
+                // NOTE: it might not be accessible immediately after the vpn connection is created
+                // wait for it
+
+                if (parameters.transitGatewayId) {
+                    let vpnConnectionId = vpnConnection.VpnConnectionId;
+                    logger.info('describing transit gateway attachment' +
+                        `(vpn connection: ${vpnConnectionId}).`);
+                    params = {
+                        Filters: [
+                            {
+                                Name: 'resource-id',
+                                Values: [
+                                    vpnConnectionId
+                                ]
+                            },
+                            {
+                                Name: 'transit-gateway-id',
+                                Values: [
+                                    parameters.transitGatewayId
+                                ]
+                            }
+                        ]
+                    };
+                    let promiseEmitter = () => {
+                        return ec2.describeTransitGatewayAttachments(params).promise()
+                        .catch(error => {
+                            logger.warn('error in describeTransitGatewayAttachments ' +
+                                `>${JSON.stringify(error)}`);
+                        });
+                    };
+                    let validator = result => {
+                        logger.debug(`TransitGatewayAttachments: ${JSON.stringify(result)}`);
+                        if (result && result.TransitGatewayAttachments &&
+                            result.TransitGatewayAttachments.length > 0) {
+                            // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
+                            // ec2.describeTransitGatewayAttachments cannot properly filter resource
+                            // by resource-id. instead, it always return all resources so we must
+                            // do the filtering in the function here.
+                            // eslint-disable-next-line max-len
+                            // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
+                            let attachmentFound = null;
+                            attachmentFound = result.TransitGatewayAttachments.find(attachment => {
+                                return attachment.ResourceId === vpnConnectionId &&
+                                attachment.TransitGatewayId === parameters.transitGatewayId;
+                            });
+                            logger.debug(`attachmentFound: ${JSON.stringify(attachmentFound)}, ` +
+                            `state: ${attachmentFound && attachmentFound.State}`);
+                            return attachmentFound;
+                        }
+                        return false;
+                    };
+
+                    try {
+                        vpnCreationTime = Date.now();
+                        data = await AutoScaleCore.Functions.waitFor(
+                            promiseEmitter, validator, 5000, 10);
+                        logger.info('transit gateway attachment created. time used: ' +
+                        `${(Date.now() - vpnCreationTime) / 1000} seconds.`);
+                    } catch (error) {
+                        data = null;
+                        logger.error(JSON.stringify(error));
+                        logger.error('failed to wait for the transit gateway attachment for vpn' +
+                        `connetion (id: ${vpnConnectionId}) to become accessible.`);
+                    }
+                    logger.info('transit gateway attachment info: ', JSON.stringify(data));
+                    if (data) {
+                        // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
+                        // ec2.describeTransitGatewayAttachments cannot properly filter resource
+                        // by resource-id. instead, it always return all resources so we must
+                        // do the filtering in the function here.
+                        // eslint-disable-next-line max-len
+                        // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
+                        tgwAttachment = data.TransitGatewayAttachments.find(attachment => {
+                            return attachment.ResourceId === vpnConnectionId &&
+                                attachment.TransitGatewayId === parameters.transitGatewayId;
+                        });
+                        if (tgwAttachment) {
+                            params = {
+                                Resources: [
+                                    tgwAttachment.TransitGatewayAttachmentId
+                                ],
+                                Tags: [{
+                                    Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                                    Value: RESOURCE_TAG_PREFIX
+                                },{
+                                    Key: 'Name',
+                                    Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                                    `tgw-attachment-vpn-${parameters.publicIp}`
+                                },{
+                                    Key: 'ResourceGroup',
+                                    Value: RESOURCE_TAG_PREFIX
+                                }]
+                            };
+                            logger.info('creating tags on attachment. tags: ',
+                                JSON.stringify(params));
+                            await ec2.createTags(params).promise();
+                        }
+                    }
+                }
+            }
+            logger.info('called createVpnConnection');
+            return {attachmentId: tgwAttachment && tgwAttachment.TransitGatewayAttachmentId,
+                vpnConnection: vpnConnection};
+        } catch (error) {
+            logger.warn(`called createVpnConnection. failed.(error: ${JSON.stringify(error)})`);
+            return {attachmentId: tgwAttachment && tgwAttachment.TransitGatewayAttachmentId,
+                vpnConnection: vpnConnection};
+        }
+    }
+
+    async deleteVpnConnection(parameters) {
+        try {
+            logger.info('calling deleteVpnConnection');
+            let params;
+            params = {
+                VpnConnectionId: parameters.vpnConnectionId
+            };
+            await ec2.deleteVpnConnection(params).promise();
+            logger.info('called deleteVpnConnection');
+            return true;
+        } catch (error) {
+            logger.warn(`called deleteVpnConnection. failed > error: ${JSON.stringify(error)})`);
+            return false;
+        }
+    }
+
+    async getTgwVpnAttachmentRecord(instance) {
+        let params = {
+            TableName: DB.VPNATTACHMENT.TableName,
+            Key: {
+                instanceId: instance.instanceId
+            }
+        };
+        try {
+            let result = await docClient.get(params).promise();
+            if (result && result.Item) {
+                // convert CustomerGatewayConfiguration raw data (JSON string) into object
+                if (result.Item.customerGatewayConfiguration) {
+                    result.Item.customerGatewayConfiguration =
+                    JSON.parse(result.Item.customerGatewayConfiguration);
+                }
+            }
+            return result && result.Item;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async updateTgwVpnAttachmentRecord(instance, vpnConnection) {
+        logger.info('calling updateTgwVpnAttachmentRecord');
+        let params = {
+            Key: {
+                instanceId: instance.instanceId
+            },
+            TableName: DB.VPNATTACHMENT.TableName
+        };
+
+        let xmlToJson = configuration => {
+            return new Promise((resolve, reject) => {
+                let xmlParser = new Xml2js.Parser({trim: true});
+                xmlParser.parseString(configuration, (err, result) => {
+                    if (err) {
+                        reject(err);
+                    }
+                    resolve(result);
+                });
+            });
+        };
+        let configuration = await xmlToJson(vpnConnection.CustomerGatewayConfiguration);
+        params.Item = {
+            instanceId: instance.instanceId,
+            publicIp: instance.primaryPublicIpAddress,
+            transitGatewayId: vpnConnection.TransitGatewayId,
+            customerGatewayId: vpnConnection.CustomerGatewayId,
+            vpnConnectionId: vpnConnection.VpnConnectionId,
+            customerGatewayConfiguration: JSON.stringify(configuration)
+        };
+        params.ConditionExpression = 'attribute_not_exists(instanceId)';
+        let result = await docClient.put(params).promise();
+        logger.info('called updateTgwVpnAttachmentRecord');
+        return result;
+    }
+
+    async deleteTgwVpnAttachmentRecord(instance) {
+        logger.info('calling deleteTgwVpnAttachmentRecord');
+        let params = {
+            TableName: DB.VPNATTACHMENT.TableName,
+            Key: {
+                instanceId: instance.instanceId
+            }
+        };
+        try {
+            let result = await docClient.delete(params).promise();
+            logger.info('called deleteTgwVpnAttachmentRecord');
+            return result;
+        } catch (error) {
+            logger.error(`called deleteTgwVpnAttachmentRecord > error: ${JSON.stringify(error)}`);
+            return error;
+        }
+    }
+
+    async listTgwVpnAttachments() {
+        logger.info('calling listTgwVpnAttachments');
+        let items = [];
+        try {
+            const result = await docClient.scan({
+                TableName: DB.VPNATTACHMENT.TableName
+            }).promise();
+            if (Array.isArray(result.Items) && result.Items.length > 0) {
+                items = result.Items;
+            }
+            logger.info('called listTgwVpnAttachments');
+            // await deleteTable(dbTables.NICATTACHMENT);
+        } catch (error) {
+            logger.warn(`called listTgwVpnAttachments. error >: ${JSON.stringify(error)}`);
+        }
+        return items;
+    }
+
+    /** @override */
+    async updateTgwRouteTablePropagation(attachmentId, routeTableId) {
+        logger.info('calling updateTgwRouteTablePropagation');
+        const params = {
+            TransitGatewayAttachmentId: attachmentId,
+            TransitGatewayRouteTableId: routeTableId
+        };
+        try {
+            const result = await ec2.enableTransitGatewayRouteTablePropagation(params).promise();
+            if (result && result.Propagation) {
+                logger.info('called updateTgwRouteTablePropagation');
+                logger.debug('result:', JSON.stringify(result));
+                return result.Propagation.State;
+            } else {
+                throw new Error(`Unexpected result:${JSON.stringify(result)}`);
+            }
+        } catch (error) {
+            if (error.code === 'TransitGatewayRouteTablePropagation.Duplicate') {
+                logger.warn('called updateTgwRouteTablePropagation. Already propagated.');
+                return 'alread-propagated';
+            }
+            logger.error('called updateTgwRouteTablePropagation,  error > ', JSON.stringify(error));
+            throw error;
+        }
+    }
+
+    /** @override */
+    async updateTgwRouteTableAssociation(attachmentId, routeTableId) {
+        logger.info('calling updateTgwRouteTableAssociation');
+        const params = {
+            TransitGatewayAttachmentId: attachmentId,
+            TransitGatewayRouteTableId: routeTableId
+        };
+        try {
+            const result = await ec2.associateTransitGatewayRouteTable(params).promise();
+            if (result && result.Association) {
+                logger.info('called updateTgwRouteTableAssociation');
+                logger.debug('result:', JSON.stringify(result));
+                return result.Association.State;
+            } else {
+                throw new Error(`Unexpected result:${JSON.stringify(result)}`);
+            }
+        } catch (error) {
+            if (error.code === 'Resource.AlreadyAssociated') {
+                logger.warn('called updateTgwRouteTableAssociation. Already associated.');
+                return 'alread-associated';
+            }
+            logger.error('called updateTgwRouteTableAssociation,  error > ', JSON.stringify(error));
+            throw error;
+        }
+    }
+
+    /* eslint-disable max-len */
+    /**
+     * Get information about a VPC by the given parameters.
+     * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeVpcs-property
+     * @param {Object} parameters parameters accepts: vpcId
+     */
+    /* eslint-enable max-len */
+    async describeVpc(parameters) {
+        logger.info('calling describeVpc');
+        if (parameters && parameters.vpcId) {
+            let params = {
+                VpcIds: [parameters.vpcId]
+            };
+            const result = await ec2.describeVpcs(params).promise();
+            if (result && result.Vpcs && result.Vpcs.length > 0) {
+                logger.info('called describeVpc, result: ' +
+                    `${result ? JSON.stringify(result) : 'null'}`);
+                return result.Vpcs[0];
+            }
+        }
+        logger.warn(`called describeVpc, vpc (id: ${parameters.vpcId}) not found.`);
+    }
+
+    /* eslint-disable max-len */
+    /**
+     * Get information about a Subnet by the given parameters.
+     * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeSubnets-property
+     * @param {Object} parameters parameters accepts: vpcId,
+     * subnetId (a single subnet id),subnetIds(an array of subnetId)
+     */
+    /* eslint-enable max-len */
+    async describeSubnet(parameters) {
+        logger.info('calling describeSubnet');
+        let params = {};
+        if (parameters && parameters.vpcId) {
+            params.Filters = [{
+                Name: 'vpc-id',
+                Values: [parameters.vpcId]
+            }];
+        }
+        if (parameters && parameters.subnetIds && Array.isArray(parameters.subnetIds)) {
+            params.SubnetIds = parameters.subnetIds;
+        }
+        if (parameters && parameters.subnetId) {
+            if (!Array.isArray(params.SubnetIds)) {
+                params.SubnetIds = [];
+            }
+            if (!params.SubnetIds.includes(params.subnetId)) {
+                params.SubnetIds.push(parameters.subnetId);
+            }
+        }
+        const result = await ec2.describeSubnets(params).promise();
+        if (result && result.Subnets && result.Subnets.length > 0) {
+            logger.info('called describeSubnet, result: ' +
+                `${result ? JSON.stringify(result) : 'null'}`);
+            return parameters.subnetId ? result.Subnets[0] : result.Subnets;
+        } else {
+            logger.warn('called describeSubnet, subnet not found. ' +
+            `params: ${JSON.stringify(parameters)}`);
+        }
+    }
+
+    /** @override */
+    // eslint-disable-next-line no-unused-vars
+    async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
+        logger.info('calling getVmInfoCache.');
+        try {
+            let data, params = {
+                Key: {
+                    id: vmId || instanceId
+                },
+                TableName: DB.VMINFOCACHE.TableName
+            };
+
+            data = await docClient.get(params).promise();
+            if (data && data.Item && data.Item.expireTime < Date.now()) {
+                logger.info('called getVmInfoCache > cached expired.');
+                return null;
+            }
+            return data.Item && JSON.parse(data.Item.info);
+        } catch (error) {
+            logger.warn(`called getVmInfoCache (id: ${instanceId}) > error: `, error);
+            return null;
+        }
+    }
+
+    /** @override */
+    async setVmInfoCache(scaleSetName, info, cacheTime = 3600) {
+        logger.info('calling setVmInfoCache');
+        try {
+            let now = Date.now();
+            let params = {
+                TableName: DB.VMINFOCACHE.TableName,
+                Item: {
+                    id: info.InstanceId,
+                    instanceId: info.InstanceId,
+                    vmId: info.InstanceId,
+                    asgName: scaleSetName,
+                    info: typeof info === 'string' ? info : JSON.stringify(info),
+                    cacheTime: now,
+                    expireTime: now + cacheTime * 1000
+                }
+            };
+            let result = await docClient.put(params).promise();
+            logger.info('called setVmInfoCache');
+            return !!result;
+        } catch (error) {
+            logger.info('called setVmInfoCache with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    /** @override */
+    async getLicenseFileContent(fileName) {
+        const blob = await this.getBlobFromStorage({
+            storageName: this._settings['asset-storage-name'],
+            keyPrefix: path.join(
+                this._settings['asset-storage-key-prefix'],
+                this._settings['fortigate-license-storage-key-prefix']
+            ),
+            fileName: fileName
+        });
+        return blob.content;
+    }
+
+    /** @override */
+    async listLicenseFiles() {
+        // NOTE: as the autoscale seems less likely to scale out to more than 100 instances that
+        // require a license, the list license function will set a limit to maximum 100 licenses
+        // file being returned. Also, there is a hard limit of 1000 per request by the api.
+        // eslint-disable-next-line max-len
+        // see reference: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#listObjectsV2-property
+        let prefix = path.join(this._settings['asset-storage-key-prefix'],
+            this._settings['fortigate-license-storage-key-prefix']);
+        let prefixLen = prefix && prefix.length;
+        let iterable;
+        let data = await s3.listObjectsV2({
+            Bucket: this._settings['asset-storage-name'],
+            Prefix: prefix,
+            StartAfter: prefix
+        }).promise();
+
+        if (data && Array.isArray(data.Contents) && data.Contents.length > 0 && data.Contents) {
+            iterable = data.Contents.map(item => {
+                let licenseItem = new AutoScaleCore.LicenseItem(
+                    item.Key.substr(prefixLen), item.ETag);
+                return [licenseItem.blobKey, licenseItem];
+            });
+            return new Map(iterable);
+        } else {
+            return new Map();
+        }
+    }
+
+    /** @override */
+    async listLicenseUsage() {
+        logger.info('calling listLicenseUsage');
+        try {
+            const
+                response = await docClient.scan({
+                    TableName: DB.LICENSEUSAGE.TableName
+                }).promise();
+            let recordCount = 0,
+                records = [];
+            if (response && response.Items) {
+                recordCount = response.Items.length;
+                records = response.Items;
+            }
+            let iterable = records.map(item => {
+                const licenseRecord = AutoScaleCore.LicenseRecord.fromDb(item);
+                return [licenseRecord.checksum, licenseRecord];
+            });
+            logger.info(`called listLicenseUsage: (${recordCount}) licenses in use.`);
+            return new Map(iterable);
+        } catch (error) {
+            logger.warn('called listLicenseUsage: error:', error);
+            return new Map();
+        }
+    }
+
+
+    /** @override */
+    async updateLicenseUsage(licenseRecord, replace = false) {
+        logger.info('calling updateLicenseUsage');
+
+        try {
+            let params = {
+                TableName: DB.LICENSEUSAGE.TableName,
+                Item: {
+                    id: licenseRecord.id,
+                    blobKey: licenseRecord.blobKey,
+                    checksum: licenseRecord.checksum,
+                    fileName: licenseRecord.fileName,
+                    algorithm: licenseRecord.algorithm,
+                    instanceId: licenseRecord.instanceId,
+                    scalingGroupName: licenseRecord.scalingGroupName,
+                    assignedTime: licenseRecord.assignedTime
+                }
+            };
+            if (!replace) {
+                params.ConditionExpression = 'attribute_not_exists(id)'; // prevent replacing
+            }
+            let result = await docClient.put(params).promise();
+            logger.info('called updateLicenseUsage');
+            return !!result;
+        } catch (error) {
+            logger.info('called updateLicenseUsage with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    /** @override */
+    async listLicenseStock() {
+        logger.info('calling listLicenseStock');
+        try {
+            const
+                response = await docClient.scan({
+                    TableName: DB.LICENSESTOCK.TableName
+                }).promise();
+            let recordCount = 0,
+                records = [];
+            if (response && response.Items) {
+                recordCount = response.Items.length;
+                records = response.Items;
+            }
+            let iterable = records.map(item => {
+                const licenseRecord = AutoScaleCore.LicenseRecord.fromDb(item);
+                return [licenseRecord.checksum, licenseRecord];
+            });
+            logger.info(`called listLicenseStock: (${recordCount}) licenses in stock.`);
+            return new Map(iterable);
+        } catch (error) {
+            logger.warn('called listLicenseStock: error:', error);
+            return new Map();
+        }
+    }
+
+    /** @override */
+    async updateLicenseStock(licenseItem, replace = true) { // eslint-disable-line no-unused-vars
+        logger.info('calling updateLicenseStock');
+        try {
+            let params = {
+                TableName: DB.LICENSESTOCK.TableName,
+                Item: {
+                    id: licenseItem.id,
+                    blobKey: licenseItem.blobKey,
+                    checksum: licenseItem.checksum,
+                    fileName: licenseItem.fileName,
+                    algorithm: licenseItem.algorithm
+                }
+            };
+            let result = await docClient.put(params).promise();
+            logger.info('called updateLicenseStock');
+            return !!result;
+        } catch (error) {
+            logger.info('called updateLicenseStock with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            return Promise.reject(error);
+        }
+    }
+
+    async attacheInstanceToLoadBalancer(instanceArray, targetGroupArn) {
+        logger.info('calling attacheInstanceToLoadBalancer');
+        const params = {
+            TargetGroupArn: targetGroupArn,
+            Targets: instanceArray.map(instance => {
+                return {Id: instance.instanceId};
+            })
+        };
+        try {
+            let result = await elbv2.registerTargets(params).promise();
+            logger.info('called attacheInstanceToLoadBalancer.');
+            return result;
+        } catch (error) {
+            logger.info('called attacheInstanceToLoadBalancer. Error:', JSON.stringify(error));
+            throw error;
+        }
+    }
     // end of awsPlatform class
 }
 
@@ -971,16 +1739,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     constructor() {
         super(new AwsPlatform(), '');
         this._step = '';
-        this._selfInstance = null;
-        this._masterRecord = null;
-        this.setScalingGroup(process.env.AUTO_SCALING_GROUP_NAME,
-            process.env.AUTO_SCALING_GROUP_NAME);
+        this.setScalingGroup(null, null);
     }
 
     async init() {
-        const success = await this.platform.init();
-        // retrieve base config from an S3 bucket
-        this._baseConfig = await this.getBaseConfig();
+        let success;
+        try {
+            // call parent's init to enforce some general init checkings.
+            success = await super.init();
+        } catch (error) {
+            throw error;
+        }
+        // load settings
+        this._settings = this._settings || await this.platform.getSettingItems();
         return success;
     }
 
@@ -1012,77 +1783,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-disable max-len */
     /**
      *
-     * @param {AWS.ProxyIntegrationEvent} event Event from the api-gateway.
-     * @param {*} context the runtime context of this function call from AWS Lambda service
-     * @param {*} callback the callback url from AWS Lambda service
+     * @param {AWSPlatform.RequestEvent} event Event from the api-gateway.
+     * @param {AWSPlatform.RequestContext} context the runtime context of this function
+     * call from the platform
+     * @param {AWSPlatform.RequestCallback} callback the callback function the platorm
+     * uses to end a request
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      */
     /* eslint-enable max-len */
-    async handle(event, context, callback) {
-        this._step = 'initializing';
-        let proxyMethod = 'httpMethod' in event && event.httpMethod,
-            result;
-        try {
-            const platformInitSuccess = await this.init();
-            // return 500 error if script cannot finish the initialization.
-            if (!platformInitSuccess) {
-                result = 'fatal error, cannot initialize.';
-                logger.error(result);
-                callback(null, this.proxyResponse(500, result));
-            } else if (event.source === 'aws.autoscaling') {
-                this._step = 'aws.autoscaling';
-                result = await this.handleAutoScalingEvent(event);
-                callback(null, this.proxyResponse(200, result));
-            } else {
-                // authenticate the calling instance
-                this.parseRequestInfo(event);
-                if (!this._requestInfo.instanceId) {
-                    callback(null, this.proxyResponse(403, 'Instance id not provided.'));
-                    return;
-                }
-                await this.parseInstanceInfo(this._requestInfo.instanceId);
-                if (proxyMethod === 'POST') {
-                    this._step = 'fortigate:handleSyncedCallback';
-                    // handle status messages
-                    if (this._requestInfo.status) {
-                        result = await this.handleStatusMessage(event);
-                    } else {
-                        result = await this.handleSyncedCallback();
-                    }
-                    callback(null, this.proxyResponse(200, result));
-                } else if (proxyMethod === 'GET') {
-                    this._step = 'fortigate:getConfig';
-                    result = await this.handleGetConfig();
-                    callback(null, this.proxyResponse(200, result));
-                } else {
-                    this._step = '¯\\_(ツ)_/¯';
-
-                    logger.log(`${this._step} unexpected event!`, event);
-                    // probably a test call from the lambda console?
-                    // should do nothing in response
-                }
-            }
-
-        } catch (ex) {
-            if (ex.message) {
-                ex.message = `${this._step}: ${ex.message}`;
-            }
-            try {
-                console.error('ERROR while ', this._step, proxyMethod, ex);
-            } catch (ex2) {
-                console.error('ERROR while ', this._step, proxyMethod, ex.message, ex, ex2);
-            }
-            if (proxyMethod) {
-                callback(null,
-                    this.proxyResponse(500, {
-                        message: ex.message,
-                        stack: ex.stack
-                    }));
-            } else {
-                callback(ex);
-            }
-        }
+    async handle(event, context, callback) { // eslint-disable-line unused-vars
+        // TODO: may need to change when using TS
+        await super.handle(event, context, callback);
     }
+
     async getFazIp() {
         try {
             let keyValue = settingItems.FortiAnalyzerSettingItem.SETTING_KEY;
@@ -1120,7 +1833,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-enable max-len */
     async handleAutoScalingEvent(event) {
         logger.info(`calling handleAutoScalingEvent: ${event['detail-type']}`);
-        let result;
+        let result, errorTasks = [], tasks = [];
         switch (event['detail-type']) {
             case 'EC2 Instance-launch Lifecycle Action':
                 if (event.detail.LifecycleTransition === 'autoscaling:EC2_INSTANCE_LAUNCHING') {
@@ -1133,18 +1846,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
                     await this.platform.cleanUpDbLifeCycleActions();
                     result = await this.handleTerminatingInstanceHook(event);
-
                 }
                 break;
             case 'EC2 Instance Launch Successful':
-                // attach nic2
-                this._selfInstance = this._selfInstance ||
-                    await this.platform.describeInstance({
-                        instanceId: event.detail.EC2InstanceId
-                    });
-                this.setScalingGroup(process.env.MASTER_SCALING_GROUP_NAME,
-                    event.detail.AutoScalingGroupName);
-                result = await this.handleNicAttachment(event);
+                result = true;
                 break;
             case 'EC2 Instance Terminate Successful':
                 // remove master record if this instance is the elected master
@@ -1157,13 +1862,20 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     this._masterRecord.instanceId === event.detail.EC2InstanceId) {
                     await this.platform.removeMasterRecord();
                 }
-                // attach nic2
-                result = await this.handleNicDetachment(event);
+                // detach nic2
+                if (this._selfInstance && ENABLE_SECOND_NIC) {
+                    tasks.push(this.handleNicDetachment(event).catch(() => {
+                        errorTasks.push('handleNicDetachment');
+                    }));
+                }
+                await Promise.all(tasks);
+                result = errorTasks.length === 0 && !!this._selfInstance;
                 // remove monitor record
                 await this.removeInstanceFromMonitor(event.detail.EC2InstanceId);
                 break;
             default:
                 logger.warn(`Ignore autoscaling event type: ${event['detail-type']}`);
+                result = true;
                 break;
         }
         return result;
@@ -1187,35 +1899,92 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async handleLaunchingInstanceHook(event) {
         logger.info('calling handleLaunchingInstanceHook');
-        let result;
-        // add an additional nic to instance
-        result = await this.handleNicAttachment(event);
-        if (result) {
-            const instanceId = event.detail.EC2InstanceId,
-                item = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                    AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
-            result = await this.platform.updateLifecycleItem(item);
-            logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
-                `lifecyclehook(${event.detail.LifecycleActionToken})`);
+        const instanceId = event.detail.EC2InstanceId;
+        let lifecycleItem, result, errorTasks = [], tasks = [];
+        this._selfInstance = this._selfInstance ||
+            await this.platform.describeInstance({
+                instanceId: event.detail.EC2InstanceId
+            });
+        this.setScalingGroup(this._settings['master-auto-scaling-group-name'],
+                    event.detail.AutoScalingGroupName);
+        // attach nic2
+        if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
+            tasks.push(this.handleNicAttachment(event).catch(() => {
+                errorTasks.push('handleNicAttachment');
+            }));
         }
-        return result;
+        // handle TGW VPN attachment
+        if (this._selfInstance && this._settings['enable-transit-gateway-vpn'] === 'true') {
+            tasks.push(this.handleTgwVpnAttachment(event).catch(() => {
+                errorTasks.push('handleTgwVpnAttachment');
+            }));
+        }
+        // handle Hybrid licensing load balancer attachment
+        if (this._selfInstance && this._settings['enable-hybrid-licensing'] === 'true') {
+            tasks.push(this.handleLoadBalancerAttachment(this._selfInstance).catch(() => {
+                errorTasks.push('handleLoadBalancerAttachment');
+            }));
+        }
+        await Promise.all(tasks);
+        result = errorTasks.length === 0 && !!this._selfInstance;
+        if (result) {
+            // TODO: if any additional process here failed, should turn this lifecycle hook into
+            // the abandon state then proceed to clean this instance and related components
+
+            await Promise.all(tasks);
+            result = errorTasks.length === 0 && !!this._selfInstance;
+            if (result) {
+                // create a pending lifecycle item for this instance
+                lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
+                result = await this.platform.updateLifecycleItem(lifecycleItem);
+                logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
+                `lifecyclehook(${event.detail.LifecycleActionToken})`);
+                return result;
+            } else {
+                throw new Error(`The following tasks failed: ${JSON.stringify(errorTasks)}.`);
+            }
+        } catch (error) {
+            lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, true);
+            result = await this.platform.completeLifecycleAction(lifecycleItem, false, false);
+            logger.info(`called handleLaunchingInstanceHook. Error: ${JSON.stringify(error)}. ` +
+            `Abandon Launching Lifecycle Hook for instance (id:${instanceId}), done: ${result}`);
+            throw error;
+        }
     }
 
     async handleTerminatingInstanceHook(event) {
         logger.info('calling handleTerminatingInstanceHook');
-        let result, instanceId = event.detail.EC2InstanceId;
-        // detach addtional nic
-        result = await this.handleNicDetachment(event);
-        if (result) {
+        let result, errorTasks = [], tasks = [], instanceId = event.detail.EC2InstanceId;
+        this._selfInstance = this._selfInstance ||
+            await this.platform.describeInstance({
+                instanceId: event.detail.EC2InstanceId
+            });
+        await this.parseInstanceInfo(instanceId);
+
+        await this.checkInstanceAuthorization(this._selfInstance);
+
+        // detach nic2
+        if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
+            tasks.push(this.handleNicDetachment(event).catch(() => {
+                errorTasks.push('handleNicDetachment');
+            }));
+        }
+        // handle TGW VPN attachment
+        if (this._selfInstance && this._settings['enable-transit-gateway-vpn'] === 'true') {
+            tasks.push(this.handleTgwVpnDetachment(event).catch(() => {
+                errorTasks.push('handleTgwVpnDetachment');
+            }));
+        }
+        await Promise.all(tasks);
+        result = errorTasks.length === 0 && !!this._selfInstance;
+        if (this._selfInstance && result) {
             // force updating this instance sync state to 'out-of-sync' so the script can treat
             // it as an unhealthy instance
-            let instance = this._selfInstance ||
-                await this.platform.describeInstance({
-                    instanceId: event.detail.EC2InstanceId
-                });
             this._selfHealthCheck = this._selfHealthCheck ||
                 await this.platform.getInstanceHealthCheck({
-                    instanceId: instance.instanceId
+                    instanceId: this._selfInstance.instanceId
                 }, 0);
             if (this._selfHealthCheck && this._selfHealthCheck.inSync) {
                 await this.platform.updateInstanceHealthCheck(this._selfHealthCheck,
@@ -1225,7 +1994,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // check if master
             let masterInfo = await this.getMasterInfo();
             logger.log(`masterInfo: ${JSON.stringify(masterInfo)}`);
-            if (masterInfo && masterInfo.instanceId === instance.instanceId) {
+            if (masterInfo && masterInfo.instanceId === this._selfInstance.instanceId) {
                 // remove master record so it will trigger a new master election
                 let masterRecord = await this.platform.getMasterRecord();
                 if (masterRecord) {
@@ -1282,19 +2051,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         let
             config,
             masterInfo,
-            instanceId = this._requestInfo.instanceId;
-
-        // get instance object from platform
-        this._selfInstance = this._selfInstance ||
-            await this.platform.describeInstance({
-                instanceId: instanceId,
-                scalingGroupName: this.scalingGroupName
-            });
-        if (!this._selfInstance || this._selfInstance.virtualNetworkId !== process.env.VPC_ID) {
-            // not trusted
-            throw new Error(`Unauthorized calling instance (instanceId: ${instanceId}).` +
-                'Instance not found in VPC.');
-        }
+            params = {};
 
         let promiseEmitter = this.checkMasterElection.bind(this),
             validator = result => {
@@ -1321,7 +2078,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             };
 
         try {
-            masterInfo = await AutoScaleCore.waitFor(promiseEmitter, validator, 5000, counter);
+            masterInfo = await AutoScaleCore.Functions.waitFor(
+                promiseEmitter, validator, 5000, counter);
         } catch (error) {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
@@ -1336,21 +2094,121 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 ' administrators.');
         }
 
+        // get TGW_VPN record
+        if (ENABLE_TGW_VPN) {
+            let vpnAttachmentRecord =
+                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            if (vpnAttachmentRecord) {
+                params.vpnConfigSetName = 'setuptgwvpn';
+                params.vpnConfiguration =
+                vpnAttachmentRecord.customerGatewayConfiguration.vpn_connection;
+                params.vpnConfiguration.id = params.vpnConfiguration.$.id;
+            }
+        }
+
         // the master ip same as mine? (diagram: master IP same as mine?)
         if (masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
-            config = await this.getMasterConfig(await this.platform.getCallbackEndpointUrl());
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl();
+            config = await this.getMasterConfig(params);
             logger.info('called handleGetConfig: returning master config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
         } else {
 
             this._step = 'handler:getConfig:getSlaveConfig';
-            config = await this.getSlaveConfig(masterInfo.primaryPrivateIpAddress,
-                await this.platform.getCallbackEndpointUrl());
+            params.callbackUrl = await this.platform.getCallbackEndpointUrl();
+            params.masterIp = masterInfo.primaryPrivateIpAddress;
+            config = await this.getSlaveConfig(params);
             logger.info('called handleGetConfig: returning slave config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
             return config;
+        }
+    }
+
+    async findRecyclableLicense(stockRecords, usageRecords, limit = -1) {
+        if (stockRecords instanceof Map && usageRecords instanceof Map) {
+            let gracePeriod = (parseInt(this._settings['get-license-grace-period']) || 600) * 1000;
+            // do health check on each item
+            let queries = [],
+                healthCheckResults, recyclableRecords = [],
+                count = 0,
+                maxCount,
+                interval = 3600000, // giving a big fake interval so healthcheck should never fail
+                // by this interval. unless the healthcheck state is
+                // 'out-of-sync'
+                platform = this.platform;
+            if (limit === 'all' || isNaN(limit) || parseInt(limit) <= 0) {
+                maxCount = -1; // set a negative max count to indicate no limit
+            } else {
+                maxCount = parseInt(limit); // set a positive maxcount
+            }
+            usageRecords.forEach(item => {
+                if (item.instanceId && item.scalingGroupName) {
+                    queries.push(async function(rec) {
+                        // get instance health check and instance info
+                        let tasks = [];
+                        tasks.push(
+                            platform.getInstanceHealthCheck({
+                                instanceId: rec.instanceId,
+                                asgName: rec.asgName
+                            }, interval).catch(() => null));
+                        tasks.push(
+                            platform.describeInstance({
+                                instanceId: item.instanceId,
+                                scalingGroupName: item.asgName,
+                                readCache: false
+                            }).catch(() => null));
+                        let [healthCheck, instance] = await Promise.all(tasks);
+                        return {
+                            checksum: rec.checksum,
+                            usageRecord: rec,
+                            healthCheck: healthCheck,
+                            instance: instance
+                        };
+                    }(item));
+                }
+            }, this);
+            healthCheckResults = await Promise.all(queries);
+            for (let result of healthCheckResults) {
+                // recycle this stock record if checksum (of a license file) exists and the
+                // corresponding instance which used this license doesn't exist or state isn't
+                // in-sync
+                // there's a situation when one fgt was assigned one license, the fgt need time
+                // to get config, boot up, become available, and start to send hb.
+                // until then the health check of that fgt won't be available. therefore, here
+                // the script sets a grace period to allow for the fgt to become fully available.
+                // if the fgt instance cannot come up and runniing by the grace period. it's
+                // license will be recycled.
+                // the health check here only verifies the in-sync state of any fgt instance but
+                // it doesn't trigger failover.
+                if (stockRecords.has(result.checksum)) {
+                    let recyclable = false;
+                    // if instance is gone? recycle the license
+                    if (!result.instance) {
+                        recyclable = true;
+                    } else if (result.instance && result.healthCheck &&
+                        !result.healthCheck.inSync) {
+                        // if instance exists but instance state isn't in-sync? recycle the license
+                        recyclable = true;
+                    } else if (result.instance && !result.healthCheck && result.usageRecord &&
+                        Date.now() > result.usageRecord.assignedTime + gracePeriod) {
+                        // if instance exists but no healthcheck and grace period has passed?
+                        recyclable = true;
+                    }
+                    // recycle the recyclable license
+                    if (recyclable) {
+                        count++;
+                        if (maxCount < 0 || count <= maxCount) {
+                            recyclableRecords.push(stockRecords.get(result.checksum));
+                            if (count === maxCount) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            return recyclableRecords;
         }
     }
 
@@ -1384,7 +2242,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 let subnetPair = subnetPairs.filter(element => {
                     return element.subnetId === subnetId;
                 });
-                if (subnetPair && subnetPair.length >= 0) {
+                if (subnetPair && subnetPair.length >= 0 && subnetPair[0].pairId) {
                     subnetId = subnetPair[0].pairId;
                 }
             }
@@ -1450,17 +2308,18 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     ]
                 });
                 // updete attachment record for in transition
-                await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
-                    attachmentRecord.nicId, 'pending_detach', 'attached');
+                // await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
+                // attachmentRecord.nicId, 'pending_detach', 'attached');
                 // detach nic
-                await this.platform.detachNetworkInterface(this._selfInstance, nic);
-                // delete nic
-                await this.platform.deleteNetworkInterface({
-                    NetworkInterfaceId: attachmentRecord.nicId
-                });
-                // delete attachment record
-                await this.platform.deleteNicAttachmentRecord(
-                    attachmentRecord.instanceId, 'pending_detach');
+                let detached = await this.platform.detachNetworkInterface(this._selfInstance, nic);
+                if (detached) {
+                    // delete nic
+                    await this.platform.deleteNetworkInterface({
+                        NetworkInterfaceId: attachmentRecord.nicId
+                    });
+                    // delete attachment record
+                    await this.platform.deleteNicAttachmentRecord(attachmentRecord.instanceId);
+                }
                 // reload the instance info
                 this._selfInstance =
                     await this.platform.describeInstance({
@@ -1496,10 +2355,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    async updateCapacity(desiredCapacity, minSize, maxSize) {
+    async updateCapacity(scalingGroupName, desiredCapacity, minSize, maxSize) {
         logger.info('calling updateCapacity');
         let params = {
-            AutoScalingGroupName: this.scalingGroupName
+            AutoScalingGroupName: scalingGroupName
         };
         if (desiredCapacity !== null && !isNaN(desiredCapacity)) {
             params.DesiredCapacity = parseInt(desiredCapacity);
@@ -1520,7 +2379,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    async checkAutoScalingGroupState() {
+    async checkAutoScalingGroupState(scalingGroupName) {
         try {
             logger.info('calling checkAutoScalingGroupState');
             let state = 'in-service',
@@ -1528,13 +2387,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 instanceInService = false,
                 instanceTerminated = false,
                 instanceStateInTransition = false,
-                noInstance = false,
-                noNic = false;
+                noInstance = false;
             let groupCheck = await this.platform.describeAutoScalingGroups(
-                this.scalingGroupName
+                scalingGroupName
             );
             if (!groupCheck) {
-                throw new Error(`auto scaling group (${this.scalingGroupName})` +
+                throw new Error(`auto scaling group (${scalingGroupName})` +
                     'does not exist.');
             }
             // check if capacity set to (desired:0, minSize: 0, maxSize: any number)
@@ -1564,9 +2422,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     instanceTerminated = true;
                 }
             });
-            // check if all additional nics are detached and removed
-            let nicAttachmentCheck = await this.platform.listNicAttachmentRecord();
-            noNic = !nicAttachmentCheck || nicAttachmentCheck.length === 0;
 
             // if any instance is in service, the group is in-service
             if (instanceInService) {
@@ -1581,7 +2436,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 state = 'stopped';
             }
             // this is the fully stopped case
-            if (noScale && !instanceInService && noInstance && noNic) {
+            if (noScale && !instanceInService && noInstance) {
                 state = 'stopped';
             }
             logger.info(`called checkAutoScalingGroupState: state: ${state} `);
@@ -1594,12 +2449,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async cleanUpAdditionalNics() {
         logger.info('calling cleanUpAdditionalNics');
-        // list all nics with tag: {key: 'FortiGateAutoScaleNicAttachment', value:
-        // `${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`}
+        // list all nics with tag: {key: 'FortiGateAutoscaleNicAttachment', value:
+        // RESOURCE_TAG_PREFIX
         let nics = await this.platform.listNetworkInterfaces({
             Filters: [{
-                Name: 'tag:FortiGateAutoScaleNicAttachment',
-                Values: [`${CUSTOM_ID}-NicAttachment-${UNIQUE_ID}`]
+                Name: 'tag:FortiGateAutoscaleNicAttachment',
+                Values: [RESOURCE_TAG_PREFIX]
             }]
         });
         let tasks = [];
@@ -1626,40 +2481,336 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         return await this.platform.terminateInstanceInAutoScalingGroup(instance);
     }
 
-    async parseInstanceInfo(instanceId) {
-        // look for this vm in both byol and payg vmss
-        // look from byol first
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance({
-            instanceId: instanceId,
-            scalingGroupName: process.env.SCALING_GROUP_NAME_BYOL
-        });
-        if (this._selfInstance) {
-            this.setScalingGroup(
-                process.env.MASTER_SCALING_GROUP_NAME,
-                process.env.SCALING_GROUP_NAME_BYOL
-            );
-        } else { // not found in byol vmss, look from payg
-            this._selfInstance = await this.platform.describeInstance({
-                instanceId: instanceId,
-                scalingGroupName: process.env.SCALING_GROUP_NAME_PAYG
-            });
-            if (this._selfInstance) {
-                this.setScalingGroup(
-                    process.env.MASTER_SCALING_GROUP_NAME,
-                    process.env.SCALING_GROUP_NAME_PAYG
-                );
-            }
+    /** @override */
+    async checkInstanceAuthorization(instance) {
+        // TODO: can we generalize this method to core?
+        if (!instance ||
+                instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
+            // not trusted
+            return await Promise.reject('Unauthorized calling instance (' +
+            `instanceId: ${instance.instanceId}). Instance not found in VPC.`);
         }
-        if (this._selfInstance) {
-            logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
-                `scaling group self: ${this.scalingGroupName}, ` +
-                `master: ${this.masterScalingGroupName})`);
-        } else {
-            logger.warn(`cannot identify instance: vmid:(${instanceId})`);
+        return await Promise.resolve(true);
+    }
+
+    async handleTgwVpnAttachment(event) {
+        logger.info('calling handleTgwVpnAttachment');
+        if (!event || !event.detail || !event.detail.EC2InstanceId) {
+            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(event)}`);
+            return null;
+        }
+        try {
+            this._selfInstance = this._selfInstance ||
+                await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
+            // create an ec2 vpn of "ipsec.1" type
+            // get the transit gateway id
+            let transitGatewayId = this._settings['transit-gateway-id'];
+            let attachmentRecord =
+                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            if (attachmentRecord) {
+                logger.warn('Transit Gateway VPN attachment for instance id: ' +
+                `(${this._selfInstance.instanceId}) already exisits.`);
+                return true;
+            }
+            // create a customer gateway with the public IP address of the FGT instance
+            // try to get a setting of customer gateway
+            let bgpAsn = this._settings['bgp-asn'];
+            // take 65000 by AWS' default
+            bgpAsn = bgpAsn && bgpAsn.value && !isNaN(bgpAsn.value) ? bgpAsn.value : 65000;
+            let customerGateway = await this.platform.createCustomerGateway({
+                bgpAsn: bgpAsn,
+                publicIp: this._selfInstance.primaryPublicIpAddress,
+                type: 'ipsec.1'
+            });
+            // create the vpn connection
+            let {attachmentId, vpnConnection} =
+                await this.platform.createVpnConnection({
+                    customerGatewayId: customerGateway.CustomerGatewayId,
+                    transitGatewayId: transitGatewayId,
+                    type: 'ipsec.1',
+                    publicIp: this._selfInstance.primaryPublicIpAddress
+                });
+            // save attachment record
+            if (!(attachmentId && vpnConnection)) {
+                throw new Error('create VPN connection unsuccessfully.');
+            }
+
+            // add transit gateway route propagation to the outbound route table so all attached
+            // VPC or VPN associated with the outbound route table could be able to route all
+            // traffic (0.0.0.0/0) to all FGT VPN using ECMP
+
+            // since it requires approximately 3 minutes for the transit gateway vpn and attachment
+            // to change their state to 'available'. Invoke a lambda function to update.
+            // the caller lambda function (this) needs an IAM policy to be able to invoke the
+            // callee lambda function.
+
+            // do not await the callee because it's a blocking method that take while to comeplete
+            // running
+            lambda.invoke({
+                FunctionName: this._settings['transit-gateway-vpn-handler-name'],
+                Payload: JSON.stringify({
+                    pskSecret: this._settings['fortigate-psk-secret'],
+                    invokeMethod: 'updateTgwRouteTable',
+                    attachmentId: attachmentId
+                })
+            }, function() {
+                // no need to do anything here in this callback function.
+            });
+
+            await this.platform.updateTgwVpnAttachmentRecord(this._selfInstance, vpnConnection);
+            logger.info('Transit Gateway VPN attachment (' +
+                `vpn id: ${vpnConnection.VpnConnectionId}, ` +
+                `attachment id: ${attachmentId}, ` +
+                `tgw id: ${vpnConnection.TransitGatewayId}) created.`);
+            return true;
+        } catch (error) {
+            logger.warn(`called handleTgwVpnAttachment with error: ${JSON.stringify(error)}`);
+            return null;
         }
     }
-    // end of AwsAutoscaleHandler class
 
+    async handleTgwVpnDetachment(event) {
+        logger.info('calling handleTgwVpnDetachment');
+        let attachmentRecord;
+        if (!event || !event.detail || !event.detail.EC2InstanceId) {
+            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(event)}`);
+            return null;
+        }
+        try {
+            this._selfInstance = this._selfInstance ||
+                await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
+            attachmentRecord =
+                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            if (attachmentRecord) {
+                // delete vpn
+                await this.platform.deleteVpnConnection({
+                    vpnConnectionId: attachmentRecord.vpnConnectionId
+                });
+                // delete customer gateway
+                await this.platform.deleteCustomerGateway({
+                    customerGatewayId: attachmentRecord.customerGatewayId
+                });
+                // delete attachment record
+                await this.platform.deleteTgwVpnAttachmentRecord(this._selfInstance);
+                logger.info('Transit Gateway VPN attachment (' +
+                `vpn id: ${attachmentRecord.vpnConnectionId}, ` +
+                `tgw id: ${attachmentRecord.transitGatewayId}) deleted.`);
+            } else {
+                logger.info('Transit Gateway VPN attachment for instance (' +
+                `id: ${this._selfInstance.instanceId}` +
+                `public ip: ${this._selfInstance.primaryPublicIpAddress}) not found.`);
+            }
+            return true;
+        } catch (error) {
+            logger.warn(`called handleTgwVpnDetachment with error: ${JSON.stringify(error)}`);
+            return null;
+        }
+    }
+
+    /** @override */
+    async parseConfigSet(configSet, dataSources) {
+        let resourceMap = {};
+        Object.assign(resourceMap, dataSources);
+        let nodePath, conf = configSet, match,
+            matches = typeof configSet === 'string' ? configSet.match(/({\S+})/gm) : [];
+        try {
+            for (nodePath of matches) {
+                let data = null, replaceBy = null,
+                    resRoot = typeof nodePath === 'string' ? nodePath.split('.')[0].substr(1) : '';
+                switch (resRoot) {
+                    case '@vpc':// reference the current vpc of this device
+                        if (!resourceMap[resRoot]) {
+                            data = await this.platform.describeVpc({
+                                vpcId: this._selfInstance.virtualNetworkId
+                            });
+                            resourceMap['@vpc'] = data;
+                            data = await this.platform.describeSubnet({
+                                vpcId: this._selfInstance.virtualNetworkId
+                            });
+                            if (data && Array.isArray(data)) {
+                                resourceMap['@vpc'].subnet = data;
+                            }
+                        }
+                        // slightly deferent from the default case.
+                        replaceBy =
+                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
+                        break;
+                    case '@device':// reference this device
+                        resourceMap['@device'] = this._selfInstance;
+                        replaceBy =
+                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
+                        break;
+                    case '@setting': // fetch from settings in the db
+                        // will fetch info from db that input by user when deploy the template
+                        match = /{@(.+)}/g.exec(nodePath);
+                        if (match && match[1] && !resourceMap[match[1]]) {
+                            match = match[1];
+                            data = await this.platform.getSettingItem(match.replace(/\./g, '-'));
+                            resourceMap[match] = data || null;
+                        }
+                        replaceBy = resourceMap[match];
+                        break;
+                    default:
+                        if (resourceMap[resRoot]) {
+                            replaceBy =
+                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
+                        }
+                        break;
+                }
+                if (replaceBy) {
+                    conf = conf.replace(new RegExp(nodePath, 'g'), replaceBy);
+                }
+            }
+        } catch (error) {
+            console.log(error);
+        }
+        return conf;
+    }
+    async cleanUpVpnAttachments(cleanUpNonExistInstanceOnly = false) {
+        logger.info('calling cleanUpVpnAttachments');
+
+        let attachments = await this.platform.listTgwVpnAttachments();
+        let tasks = [], errorTasks = [];
+
+        let cleanUpFunc = async attachment => {
+            // delete vpn
+            await this.platform.deleteVpnConnection({
+                vpnConnectionId: attachment.vpnConnectionId
+            });
+            // delete customer gateway
+            await this.platform.deleteCustomerGateway({
+                customerGatewayId: attachment.customerGatewayId
+            });
+            logger.info('Transit Gateway VPN attachment (' +
+            `vpn id: ${attachment.vpnConnectionId}, ` +
+            `tgw id: ${attachment.transitGatewayId}) deleted.`);
+            return true;
+        };
+
+        for (let attachmentRecord of attachments) {
+            let inatance, attachmentId = attachmentRecord.id;
+            // check instance existence
+            if (cleanUpNonExistInstanceOnly) {
+                inatance = this.platform.describeInstance({
+                    instanceId: attachmentRecord.instanceId
+                });
+            }
+
+            if (!cleanUpNonExistInstanceOnly || (cleanUpNonExistInstanceOnly && !inatance)) {
+                tasks.push(cleanUpFunc(attachmentRecord).catch(error => {
+                    logger.error(`cannot delete vpn attachemnt by id: ${attachmentId}. ` +
+                        `error: ${error}`);
+                    errorTasks.push(attachmentId);
+                }));
+            }
+        }
+
+        await Promise.all(tasks);
+        if (errorTasks.length > 0) {
+            logger.warn(`[${errorTasks.length}] rows of vpn attachemnt cannot be deleted.`);
+            return false;
+        } else {
+            logger.info(`[${tasks.length}] rows of vpn attachemnt have been deleted.`);
+            return true;
+        }
+    }
+
+    async updateTgwRouteTable(attachmentId) {
+        let params, waitTimeStart, data;
+        params = {
+            Filters: [
+                {
+                    Name: 'transit-gateway-attachment-id',
+                    Values: [
+                        attachmentId
+                    ]
+                }
+            ]
+        };
+        let promiseEmitter = () => {
+            return ec2.describeTransitGatewayAttachments(params).promise()
+            .catch(error => {
+                logger.warn('error in describeTransitGatewayAttachments ' +
+                                `>${JSON.stringify(error)}`);
+            });
+        };
+        let validator = result => {
+            logger.debug(`TransitGatewayAttachments: ${JSON.stringify(result)}`);
+            if (result && result.TransitGatewayAttachments &&
+                            result.TransitGatewayAttachments.length > 0) {
+                // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
+                // ec2.describeTransitGatewayAttachments cannot properly filter resource
+                // by resource-id. instead, it always return all resources so we must
+                // do the filtering in the function here.
+                // eslint-disable-next-line max-len
+                // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
+                let attachmentFound = null;
+                attachmentFound = result.TransitGatewayAttachments.find(attachment => {
+                    return attachment.TransitGatewayAttachmentId === attachmentId;
+                });
+                logger.debug(`attachmentFound: ${JSON.stringify(attachmentFound)}, ` +
+                            `state: ${attachmentFound && attachmentFound.State}`);
+                // need to wait for the attachment state become available
+                return attachmentFound && attachmentFound.State === 'available';
+            }
+            return false;
+        };
+
+        let counter = () => {
+            // force to end 30 seconds before script timeout.
+            if (Date.now() < process.env.SCRIPT_EXECUTION_EXPIRE_TIME - 30000) {
+                return false;
+            }
+            let waitTimeSec = (Date.now() - waitTimeStart) / 1000;
+            logger.error(`VPN attachment cannot become available within ${waitTimeSec}` +
+                        ' seconds. Update failed.');
+            return true;
+        };
+
+        try {
+            waitTimeStart = Date.now();
+            // wait until transit gateway attachment become available
+            data = await AutoScaleCore.Functions.waitFor(
+                            promiseEmitter, validator, 5000, counter);
+            // update
+            let outboutRouteTable =
+                await this.platform.getSettingItem('transit-gateway-route-table-outbound');
+
+            // add transit gateway route association to the inbound route table so all traffic
+            // going back to the TGW from any FGT will be routed to the right route (propagation)
+            // TODO: use the latest this._settings[] method
+            let inboutRouteTable =
+                await this.platform.getSettingItem('transit-gateway-route-table-inbound');
+
+            let [propagationState, associationState] = await Promise.all([
+                this.platform.updateTgwRouteTablePropagation(attachmentId, outboutRouteTable),
+                this.platform.updateTgwRouteTableAssociation(attachmentId, inboutRouteTable)
+            ]);
+
+            logger.info('transit gateway route table updated. ' +
+            'time used: ' + `${(Date.now() - waitTimeStart) / 1000} seconds.` +
+            `propagation state: ${propagationState}, ` +
+                `association state: ${associationState}.`);
+            return {attachmentId: attachmentId, propagationState: propagationState,
+                associationState: associationState};
+        } catch (error) {
+            data = null;
+            logger.error(JSON.stringify(error));
+            logger.error('failed to wait for the transit gateway attachment ' +
+            `(id: ${attachmentId}) to become available.`);
+        }
+        return data;
+    }
+
+    async handleLoadBalancerAttachment(instance) {
+        return await this.platform.attacheInstanceToLoadBalancer([instance],
+            this._settings['fortigate-autoscale-target-group-arn']);
+    }
+    // end of AwsAutoscaleHandler class
 }
 
 /**

@@ -77,6 +77,13 @@
                 "description": "Timeout value (in seconds) for the Azure function script. The default value is 230."
             }
         },
+        "LicenseGracePeriod": {
+            "type": "string",
+            "defaultValue": "600",
+            "metadata": {
+                "description": "The minimum time between a license is distributed and recycled to re-distribute. Unit is second."
+            }
+        },
         "ElectionWaitTime": {
             "type": "string",
             "defaultValue": "90",
@@ -185,7 +192,7 @@
                         },
                         {
                             "name": "FUNCTIONS_EXTENSION_VERSION",
-                            "value": "~2"
+                            "value": "beta"
                         },
                         {
                             "name": "WEBSITE_NODE_DEFAULT_VERSION",
@@ -217,11 +224,11 @@
                         },
                         {
                             "name": "SCALING_GROUP_NAME_BYOL",
-                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'payg')]"
+                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'byol')]"
                         },
                         {
                             "name": "MASTER_SCALING_GROUP_NAME",
-                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'payg')]"
+                            "value": "[concat(parameters('ScalingGroupNamePrefix'), 'byol')]"
                         },
                         {
                             "name": "TENANT_ID",
@@ -237,7 +244,7 @@
                         },
                         {
                             "name": "REQUIRED_CONFIG_SET",
-                            "value": ""
+                            "value": "extraports-yes, extrastaticroutes-yes"
                         },
                         {
                             "name": "UNIQUE_ID",
@@ -256,6 +263,10 @@
                             "value": "[parameters('ScriptTimeout')]"
                         },
                         {
+                            "name": "GET_LICENSE_GRACE_PERIOD",
+                            "value": "[parameters('LicenseGracePeriod')]"
+                        },
+                        {
                             "name": "ELECTION_WAIT_TIME",
                             "value": "[parameters('ElectionWaitTime')]"
                         },
@@ -270,6 +281,10 @@
                         {
                             "name": "SUBSCRIPTION_ID",
                             "value": "[parameters('SubscriptionID')]"
+                        },
+                        {
+                            "name": "VM_INFO_CACHE_ENABLED",
+                            "value": "true"
                         },
                         {
                             "name": "DEBUG_SAVE_CUSTOM_LOG",

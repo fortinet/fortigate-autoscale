@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-FortiGate Autoscale Azure Function (1.0.0)
+FortiGate Autoscale Azure Function (1.0.0-beta)
 Author: Fortinet
 */
 
@@ -17,7 +17,7 @@ ftgtAutoscaleAzure.initModule();
  * @param {Object} req request object specified by HTTP trigger Request parameter name
  */
 module.exports = async function(context, req) {
-    await ftgtAutoscaleAzure.handle(context, req);
+    await ftgtAutoscaleAzure.handleGetLicense(context, req);
     if (process.env.FUNCTIONS_EXTENSION_VERSION &&
         process.env.FUNCTIONS_EXTENSION_VERSION === '~1') {
         context.done();

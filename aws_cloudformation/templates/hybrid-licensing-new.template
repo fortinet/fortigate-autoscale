@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "FortiGate Autoscale Solution (with Transit Gateway integration). This template collects information for deployment then calls the actual deployment template. Please see the FortiGate Autoscale documentation for more details. **WARNING** You will be billed for the FortiGate On-Demand instances and related AWS resources if you create a stack from this template.",
+    "Description": "FortiGate Autoscale Solution (with Hybrid Licensing model) [in a new VPC]. This template creates a new VPC and deploys the FortiGate Autoscale and related components into it. Please see the FortiGate Autoscale documentation for more details. **WARNING** You will be billed for the FortiGate On-Demand instances and related AWS resources if you create a stack from this template.",
     "Parameters": {
         "ResourceTagPrefix": {
             "Type": "String",
@@ -54,6 +54,20 @@
             "ConstraintDescription": "must be a valid CIDR block format.",
             "Description": "The CIDR block for the subnet located in Availability Zone 2 where the FortiGate Autoscale instances will be deployed to."
         },
+        "PrivateSubnet1Cidr": {
+            "Type": "String",
+            "Default": "192.168.2.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
+            "ConstraintDescription": "must be a valid CIDR block format.",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 1 where it is protected by the FortiGates in public subnet in the same AZ."
+        },
+        "PrivateSubnet2Cidr": {
+            "Type": "String",
+            "Default": "192.168.3.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
+            "ConstraintDescription": "must be a valid CIDR block format.",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 1 where it is protected by the FortiGates in public subnet in the same AZ."
+        },
         "FortiGateInstanceType": {
             "Type": "String",
             "Default": "c5.large",
@@ -66,16 +80,14 @@
                 "c5.9xlarge"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type.",
-            "Description": "Instance type to launch as FortiGate On-Demand instances. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
+            "Description": "Instance type to launch as FortiGate instances of PAYG and BYOL licensing models. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
         },
         "FortiOSVersion": {
             "Type": "String",
-            "Default": "Latest (6.2.0)",
+            "Default": "Latest (6.0.5)",
             "AllowedValues": [
-                "Latest (6.2.0)",
-                "FortiOS 6.0.3",
-                "FortiOS 6.0.4",
-                "FortiOS 6.2.0"
+                "Latest (6.0.5)",
+                "FortiOS 6.0.5"
             ],
             "ConstraintDescription": "must be a valid FortiOS version from the selection.",
             "Description": "Supported FortiOS versions."
@@ -96,26 +108,47 @@
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
             "Description": "Auto Scaling group waits for the cooldown period (in seconds) to complete before resuming scaling activities. Minimum is 60. Maximum is 3600."
         },
-        "FgtAsgDesiredCapacity": {
+        "FgtAsgDesiredCapacityByol": {
             "Type": "Number",
             "Default": 2,
             "MinValue": 2,
             "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "The number of FortiGate instances the group should have at any time, also called desired capacity. Must keep at least 2 FortiGates in the group for High Availability. Minimum is 2."
+            "Description": "The number of FortiGate instances the BYOL auto-scaling should have at any time, also called desired capacity. Must keep at least 2 FortiGates in the group for High Availability. Minimum is 2."
         },
-        "FgtAsgMinSize": {
+        "FgtAsgMinSizeByol": {
             "Type": "Number",
             "Default": 2,
             "MinValue": 2,
             "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "Minimum number of FortiGate instances in the Auto Scaling Group. Minimum is 2."
+            "Description": "Minimum number of FortiGate instances in the BYOL auto-scaling. Minimum is 2."
         },
-        "FgtAsgMaxSize": {
+        "FgtAsgMaxSizeByol": {
             "Type": "Number",
-            "Default": 4,
+            "Default": 2,
             "MinValue": 2,
             "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "Maximum number of FortiGate instances in the Auto Scaling Group. Minimum is 2."
+            "Description": "Maximum number of FortiGate instances in the BYOL auto-scaling. Minimum is 2."
+        },
+        "FgtAsgDesiredCapacityPayg": {
+            "Type": "Number",
+            "Default": 0,
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 0.",
+            "Description": "The number of FortiGate instances the PAYG auto-scaling should have at any time, also called desired capacity."
+        },
+        "FgtAsgMinSizePayg": {
+            "Type": "Number",
+            "Default": 0,
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 0.",
+            "Description": "Minimum number of FortiGate instances in the PAYG auto-scaling."
+        },
+        "FgtAsgMaxSizePayg": {
+            "Type": "Number",
+            "Default": 0,
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 0.",
+            "Description": "Maximum number of FortiGate instances in the PAYG auto-scaling."
         },
         "FgtAsgHealthCheckGracePeriod": {
             "Type": "Number",
@@ -181,27 +214,75 @@
             "ConstraintDescription": "must be a valid number between 1 and 65535.",
             "Description": "Number of consecutively lost heartbeats. When the Heartbeat Loss Count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
         },
-        "TransitGatewaySupportOptions": {
+        "HeartBeatDelayAllowance": {
             "Type": "String",
-            "Default": "create one",
+            "Default": 2,
+            "MinValue": 0,
+            "Description": "The maximum amount of time (in seconds) for network latency acceptable in FortiGate heartbeat arriving at the Autoscale handler. Minimum is 0."
+        },
+        "LoadBalancingTrafficProtocol": {
+            "Type": "String",
+            "Default": "HTTPS",
             "AllowedValues": [
-                "create one",
-                "use an existing one"
+                "HTTP",
+                "HTTPS",
+                "TCP"
+            ],
+            "ConstraintDescription": "value must be chosen from the provided options.",
+            "Description": "Use this protocol to load balance traffic."
+        },
+        "LoadBalancingTrafficPort": {
+            "Type": "Number",
+            "Default": 443,
+            "MinValue": 1,
+            "MaxValue": 65535,
+            "ConstraintDescription": "must be a valid port number between 1 and 65535.",
+            "Description": "Balance web service traffic over this port if the internal web-service load balancer is enabled. Minimum is 1. Maximum is 65535."
+        },
+        "LoadBalancingHealthCheckThreshold": {
+            "Type": "Number",
+            "Default": 3,
+            "MinValue": 3,
+            "ConstraintDescription": "must be a valid number not less than 3.",
+            "Description": "The number of consecutive health check failures required before considering a FortiGate instance unhealthy. Minimum is 3."
+        },
+        "InternalLoadBalancingOptions": {
+            "Type": "String",
+            "Default": "add a new internal load balancer",
+            "AllowedValues": [
+                "add a new internal load balancer",
+                "use a load balancer specified below",
+                "do not need one"
             ],
             "ConstraintDescription": "must choose from the provided options.",
-            "Description": "Options for add an optional pre-defined load balancer to route traffic to web service in the private subnets. You can optionally use your own one or decide to not need one."
+            "Description": "Add an optional pre-defined load balancer to route traffic to web service in the private subnets. You can optionally use your own one or decide to not need one."
         },
-        "TransitGatewayId": {
+        "InternalTargetGroupHealthCheckPath": {
             "Type": "String",
-            "Default": "",
-            "Description": "If you use an existing Transit Gateway, specify the ID of the Transit Gateway that the FortiGate Autoscale VPC is attached to."
+            "Default": "/",
+            "AllowedPattern": "^/[0-9a-zA-Z-/]*$",
+            "MaxLength": 1024,
+            "ConstraintDescription": "This path must begin with a '/' character, and can be at most 1024 characters in length.",
+            "Description": "Optional. The destination path for health checks. This path must begin with a '/' character, and can be at most 1024 characters in length."
         },
-        "BgpAsn": {
+        "InternalLoadBalancerDnsName": {
+            "Type": "String",
+            "Description": "(Optional) DNS Name of the Elastic Load Balancer which is used in the private subnets. Specify if only you use your own one."
+        },
+        "GetLicenseGracePeriod": {
             "Type": "Number",
-            "MinValue": 64512,
-            "Default": 65000,
-            "MaxValue": 65534,
-            "Description": "The Border Gateway Protocol (BGP) Autonomous System Number of the Customer Gateway of each FortiGate instance in the Auto Scaling Group. This value rangess from 64512 to 65534."
+            "Default": 600,
+            "MinValue": 300,
+            "ConstraintDescription": "must be a valid number not less than 60.",
+            "Description": "The minimum time (in seconds) between a license is distributed and recycled to re-distribute. Minimum is 300."
+        },
+        "MasterElectionTimeout": {
+            "Type": "Number",
+            "Default": 300,
+            "MinValue": 90,
+            "MaxValue": 600,
+            "ConstraintDescription": "must be a valid number between 90 and 600.",
+            "Description": "The amount of time (in seconds) for FortiGate master election to timeout. Minimum is 30. Maximum is 90."
         }
     },
     "Conditions": {
@@ -221,26 +302,143 @@
                 ]
             }]
         },
-        "CreateTransitGateway": {
-            "Fn::Equals": [{
-                    "Ref": "TransitGatewaySupportOptions"
-                },
-                "create one"
-            ]
-        },
         "UseLatestFortiOSVersion": {
             "Fn::Equals": [{
                     "Ref": "FortiOSVersion"
                 },
-                "Latest (6.2.0)"
+                "Latest (6.0.5)"
+            ]
+        },
+        "UseLatestFortiOSVersion2": {
+            "Fn::Equals": [
+                "Latest (6.0.5)",
+                "Latest (6.0.5)"
             ]
         }
     },
     "Resources": {
+        "StackCreateNewVPC": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "Parameters": {
+                    "AvailabilityZones": {
+                        "Fn::Join": [
+                            ",",
+                            {
+                                "Ref": "AvailabilityZones"
+                            }
+                        ]
+                    },
+                    "VpcCidr": {
+                        "Ref": "VpcCidr"
+                    },
+                    "PublicSubnet1Cidr": {
+                        "Ref": "PublicSubnet1Cidr"
+                    },
+                    "PublicSubnet2Cidr": {
+                        "Ref": "PublicSubnet2Cidr"
+                    },
+                    "PrivateSubnet1Cidr": {
+                        "Ref": "PrivateSubnet1Cidr"
+                    },
+                    "PrivateSubnet2Cidr": {
+                        "Ref": "PrivateSubnet2Cidr"
+                    },
+                    "PairWithPrivateSubnet": "yes",
+                    "ResourceTagPrefix": {
+                        "Fn::If": [
+                            "HasResourceTagPrefix",
+                            {
+                                "Fn::Join": [
+                                    "-",
+                                    [{
+                                            "Ref": "ResourceTagPrefix"
+                                        },
+                                        {
+                                            "Fn::Select": [
+                                                0,
+                                                {
+                                                    "Fn::Split": [
+                                                        "-",
+                                                        {
+                                                            "Fn::Select": [
+                                                                2,
+                                                                {
+                                                                    "Fn::Split": [
+                                                                        "/",
+                                                                        {
+                                                                            "Ref": "AWS::StackId"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/create-new-vpc.template",
+                        {
+                            "S3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            },
+                            "S3BucketName": {
+                                "Ref": "S3BucketName"
+                            },
+                            "S3KeyPrefix": {
+                                "Ref": "S3KeyPrefix"
+                            }
+                        }
+                    ]
+                },
+                "TimeoutInMinutes": "5"
+            }
+        },
         "StackMainWorkload": {
             "Type": "AWS::CloudFormation::Stack",
             "Properties": {
                 "Parameters": {
+                    "S3BucketName": {
+                        "Ref": "S3BucketName"
+                    },
+                    "S3KeyPrefix": {
+                        "Ref": "S3KeyPrefix"
+                    },
                     "ResourceTagPrefix": {
                         "Fn::If": [
                             "HasResourceTagPrefix",
@@ -327,28 +525,47 @@
                             }
                         ]
                     },
-                    "S3BucketName": {
-                        "Ref": "S3BucketName"
-                    },
-                    "S3KeyPrefix": {
-                        "Ref": "S3KeyPrefix"
-                    },
-                    "AvailabilityZones": {
-                        "Fn::Join": [
-                            ",",
-                            {
-                                "Ref": "AvailabilityZones"
-                            }
+                    "VpcCidr": {
+                        "Fn::GetAtt": [
+                            "StackCreateNewVPC",
+                            "Outputs.VpcCidr"
                         ]
                     },
-                    "VpcCidr": {
-                        "Ref": "VpcCidr"
+                    "VpcId": {
+                        "Fn::GetAtt": [
+                            "StackCreateNewVPC",
+                            "Outputs.VpcId"
+                        ]
                     },
-                    "PublicSubnet1Cidr": {
-                        "Ref": "PublicSubnet1Cidr"
+                    "PublicSubnet1": {
+                        "Fn::GetAtt": [
+                            "StackCreateNewVPC",
+                            "Outputs.PublicSubnet1Id"
+                        ]
                     },
-                    "PublicSubnet2Cidr": {
-                        "Ref": "PublicSubnet2Cidr"
+                    "PublicSubnet2": {
+                        "Fn::GetAtt": [
+                            "StackCreateNewVPC",
+                            "Outputs.PublicSubnet2Id"
+                        ]
+                    },
+                    "PrivateSubnet1": {
+                        "Fn::GetAtt": [
+                            "StackCreateNewVPC",
+                            "Outputs.PrivateSubnet1Id"
+                        ]
+                    },
+                    "PrivateSubnet2": {
+                        "Fn::GetAtt": [
+                            "StackCreateNewVPC",
+                            "Outputs.PrivateSubnet2Id"
+                        ]
+                    },
+                    "PrivateSubnetRouteTable": {
+                        "Fn::GetAtt": [
+                            "StackCreateNewVPC",
+                            "Outputs.PrivateSubnetRouteTableId"
+                        ]
                     },
                     "FortiGateInstanceType": {
                         "Ref": "FortiGateInstanceType"
@@ -358,10 +575,10 @@
                             "UseLatestFortiOSVersion",
                             "LATEST",
                             {
-                                "Fn::Join":[
+                                "Fn::Join": [
                                     "",
                                     {
-                                        "Fn::Split":[
+                                        "Fn::Split": [
                                             ".",
                                             {
                                                 "Fn::Select": [
@@ -388,14 +605,23 @@
                     "FgtAsgCooldown": {
                         "Ref": "FgtAsgCooldown"
                     },
-                    "FgtAsgDesiredCapacity": {
-                        "Ref": "FgtAsgDesiredCapacity"
+                    "FgtAsgDesiredCapacityByol": {
+                        "Ref": "FgtAsgDesiredCapacityByol"
                     },
-                    "FgtAsgMinSize": {
-                        "Ref": "FgtAsgMinSize"
+                    "FgtAsgMinSizeByol": {
+                        "Ref": "FgtAsgMinSizeByol"
                     },
-                    "FgtAsgMaxSize": {
-                        "Ref": "FgtAsgMaxSize"
+                    "FgtAsgMaxSizeByol": {
+                        "Ref": "FgtAsgMaxSizeByol"
+                    },
+                    "FgtAsgDesiredCapacityPayg": {
+                        "Ref": "FgtAsgDesiredCapacityByol"
+                    },
+                    "FgtAsgMinSizePayg": {
+                        "Ref": "FgtAsgMinSizeByol"
+                    },
+                    "FgtAsgMaxSizePayg": {
+                        "Ref": "FgtAsgMaxSizeByol"
                     },
                     "FgtAsgHealthCheckGracePeriod": {
                         "Ref": "FgtAsgHealthCheckGracePeriod"
@@ -418,25 +644,41 @@
                     "KeyPairName": {
                         "Ref": "KeyPairName"
                     },
+                    "MasterElectionTimeout": 300,
                     "HeartBeatInterval": {
                         "Ref": "HeartBeatInterval"
                     },
                     "HeartBeatLossCount": {
                         "Ref": "HeartBeatLossCount"
                     },
-                    "TransitGatewaySupportOptions": {
-                        "Ref": "TransitGatewaySupportOptions"
+                    "HeartBeatDelayAllowance": {
+                        "Ref": "HeartBeatDelayAllowance"
                     },
-                    "TransitGatewayId": {
-                        "Ref": "TransitGatewayId"
+                    "LoadBalancingTrafficProtocol": {
+                        "Ref": "LoadBalancingTrafficProtocol"
                     },
-                    "BgpAsn": {
-                        "Ref": "BgpAsn"
+                    "LoadBalancingTrafficPort": {
+                        "Ref": "LoadBalancingTrafficPort"
+                    },
+                    "LoadBalancingHealthCheckThreshold": {
+                        "Ref": "LoadBalancingHealthCheckThreshold"
+                    },
+                    "InternalLoadBalancingOptions": {
+                        "Ref": "InternalLoadBalancingOptions"
+                    },
+                    "InternalTargetGroupHealthCheckPath": {
+                        "Ref": "InternalTargetGroupHealthCheckPath"
+                    },
+                    "InternalLoadBalancerDnsName": {
+                        "Ref": "InternalLoadBalancerDnsName"
+                    },
+                    "GetLicenseGracePeriod": {
+                        "Ref": "GetLicenseGracePeriod"
                     }
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
-                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/workload.template",
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/hybrid-licensing-main.template",
                         {
                             "S3Region": {
                                 "Fn::If": [
@@ -471,7 +713,9 @@
                         "AvailabilityZones",
                         "VpcCidr",
                         "PublicSubnet1Cidr",
-                        "PublicSubnet2Cidr"
+                        "PublicSubnet2Cidr",
+                        "PrivateSubnet1Cidr",
+                        "PrivateSubnet2Cidr"
                     ]
                 },
                 {
@@ -484,8 +728,7 @@
                         "FortiGatePskSecret",
                         "FortiGateAdminPort",
                         "FortiGateAdminCidr",
-                        "KeyPairName",
-                        "BgpAsn"
+                        "KeyPairName"
                     ]
                 },
                 {
@@ -493,23 +736,32 @@
                         "default": "FortiGate auto scaling group configuration"
                     },
                     "Parameters": [
-                        "LifecycleHookTimeout",
-                        "FgtAsgDesiredCapacity",
-                        "FgtAsgMinSize",
-                        "FgtAsgMaxSize",
+                        "FgtAsgDesiredCapacityByol",
+                        "FgtAsgMinSizeByol",
+                        "FgtAsgMaxSizeByol",
+                        "FgtAsgDesiredCapacityPayg",
+                        "FgtAsgMinSizePayg",
+                        "FgtAsgMaxSizePayg",
+                        "FgtAsgScaleOutThreshold",
+                        "FgtAsgScaleInThreshold",
+                        "MasterElectionTimeout",
+                        "GetLicenseGracePeriod",
                         "FgtAsgHealthCheckGracePeriod",
                         "FgtAsgCooldown",
-                        "FgtAsgScaleOutThreshold",
-                        "FgtAsgScaleInThreshold"
+                        "LifecycleHookTimeout"
                     ]
                 },
                 {
                     "Label": {
-                        "default": "Transit Gateway configuration"
+                        "default": "Load balancing configuration"
                     },
                     "Parameters": [
-                        "TransitGatewaySupportOptions",
-                        "TransitGatewayId"
+                        "LoadBalancingTrafficProtocol",
+                        "LoadBalancingTrafficPort",
+                        "LoadBalancingHealthCheckThreshold",
+                        "InternalLoadBalancingOptions",
+                        "InternalTargetGroupHealthCheckPath",
+                        "InternalLoadBalancerDnsName"
                     ]
                 },
                 {
@@ -517,8 +769,9 @@
                         "default": "Failover management configuration"
                     },
                     "Parameters": [
+                        "HeartBeatInterval",
                         "HeartBeatLossCount",
-                        "HeartBeatInterval"
+                        "HeartBeatDelayAllowance"
                     ]
                 },
                 {
@@ -532,6 +785,9 @@
                 }
             ],
             "ParameterLabels": {
+                "ResourceTagPrefix": {
+                    "default": "Resource tag prefix"
+                },
                 "CustomIdentifier": {
                     "default": "Resource name prefix"
                 },
@@ -546,6 +802,12 @@
                 },
                 "PublicSubnet2Cidr": {
                     "default": "Autoscale subnet 2 CIDR"
+                },
+                "PrivateSubnet1Cidr": {
+                    "default": "Protected subnet 1 CIDR"
+                },
+                "PrivateSubnet2Cidr": {
+                    "default": "Protected subnet 2 CIDR"
                 },
                 "FortiGateInstanceType": {
                     "default": "Instance type"
@@ -565,14 +827,23 @@
                 "FgtAsgCooldown": {
                     "default": "Scaling cooldown period"
                 },
-                "FgtAsgDesiredCapacity": {
-                    "default": "Desired capacity"
+                "FgtAsgDesiredCapacityByol": {
+                    "default": "Desired capacity (BYOL)"
                 },
-                "FgtAsgMinSize": {
-                    "default": "Minimum group size"
+                "FgtAsgMinSizeByol": {
+                    "default": "Minimum group size (BYOL)"
                 },
-                "FgtAsgMaxSize": {
-                    "default": "Maximum group size"
+                "FgtAsgMaxSizeByol": {
+                    "default": "Maximum group size (BYOL)"
+                },
+                "FgtAsgDesiredCapacityPayg": {
+                    "default": "Desired capacity (PAYG)"
+                },
+                "FgtAsgMinSizePayg": {
+                    "default": "Minimum group size (PAYG)"
+                },
+                "FgtAsgMaxSizePayg": {
+                    "default": "Maximum group size (PAYG)"
                 },
                 "FgtAsgHealthCheckGracePeriod": {
                     "default": "Health check grace period"
@@ -601,17 +872,32 @@
                 "HeartBeatLossCount": {
                     "default": "Heart beat loss count"
                 },
-                "TransitGatewaySupportOptions": {
-                    "default": "Transit Gateway support"
+                "HeartBeatDelayAllowance": {
+                    "default": "Heart beat delay allowance"
                 },
-                "TransitGatewayId": {
-                    "default": "Transit Gateway ID"
+                "LoadBalancingTrafficProtocol": {
+                    "default": "Traffic protocol"
                 },
-                "ResourceTagPrefix": {
-                    "default": "Resource tag prefix"
+                "LoadBalancingTrafficPort": {
+                    "default": "Traffic port"
                 },
-                "BgpAsn": {
-                    "default": "BGP ASN"
+                "LoadBalancingHealthCheckThreshold": {
+                    "default": "Health Check Threshold"
+                },
+                "InternalLoadBalancingOptions": {
+                    "default": "Internal ELB options"
+                },
+                "InternalTargetGroupHealthCheckPath": {
+                    "default": "Health check path"
+                },
+                "InternalLoadBalancerDnsName": {
+                    "default": "Internal ELB DNS name"
+                },
+                "GetLicenseGracePeriod": {
+                    "default": "Get license grace period"
+                },
+                "MasterElectionTimeout": {
+                    "default": "Master election timeout"
                 }
             }
         }
@@ -686,8 +972,56 @@
                 "Ref": "CustomIdentifier"
             }
         },
+        "UseLatestFortiOSVersion": {
+            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
+            "Value": {
+                "Fn::If": [
+                    "UseLatestFortiOSVersion",
+                "yes Latest (6.0.5)",
+                "no Latest (6.0.5)"
+                ]
+            }
+        },
+        "FortiOSVersion": {
+            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
+            "Value": {
+                "Ref": "FortiOSVersion"
+            }
+        },
+        "FortiOSVersion2": {
+            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
+            "Value": {
+                "Fn::If": [
+                    "UseLatestFortiOSVersion",
+                    "LATEST",
+                    {
+                        "Fn::Join": [
+                            "",
+                            {
+                                "Fn::Split": [
+                                    ".",
+                                    {
+                                        "Fn::Select": [
+                                            1,
+                                            {
+                                                "Fn::Split": [
+                                                    " ",
+                                                    {
+                                                        "Ref": "FortiOSVersion"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
         "UniqueID": {
-            "Description": "A globally unique ID for all resources in this deployment stack and nested stacks.",
+            "Description": "A random string as a unique ID for all resources in this deployment stack and nested stacks.",
             "Value": {
                 "Fn::Select": [
                     0,

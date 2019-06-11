@@ -6,10 +6,16 @@ Author: Fortinet
 * @abstract
 * Class used to define the capabilities required from cloud platform.
 */
+
 module.exports = class CloudPlatform {
+    constructor() {
+        this._settings = null;
+        this._initialized = false;
+    }
     throwNotImplementedException() {
         throw new Error('Not Implemented');
     }
+
     /* eslint-disable no-unused-vars */
     /**
      * Initialize (and wait for) any required resources such as database tables etc.
@@ -104,11 +110,14 @@ module.exports = class CloudPlatform {
     }
     /**
      * Get the url for the callback-url portion of the config.
-     * Abstract class method.
      * @param {Object} fromContext a context object to get the url, if needed.
      */
-    async getCallbackEndpointUrl(fromContext = null) {
-        await this.throwNotImplementedException();
+    async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
+        if (this._settings['autoscale-handler-url']) {
+            return await Promise.resolve(this._settings['autoscale-handler-url']);
+        } else {
+            throw new Error('Autoscale callback URL setting: autoscale-handler-url, not found.');
+        }
     }
 
     /**
@@ -246,38 +255,72 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
-    async getSettingItem(key) {
+    async getSettingItem(key, valueOnly = true) {
+        // check _setting first
+        if (this._settings && this._settings.hasOwnProperty(key)) {
+            // if get full item object
+            if (!valueOnly && this._settings[key] && this._settings[key].settingKey) {
+                return this._settings[key];
+            }
+            // if not get full item object
+            // _settings is not an object of item objects
+            if (valueOnly && this._settings[key]) {
+                return this._settings[key].settingKey || this._settings[key];
+            }
+        }
+        await this.getSettingItems(key, valueOnly);
+        return this._settings[key];
+    }
+
+    /**
+     * get multiple saved settings from DB
+     * @param {Array} keyFilter An array of setting key to filter (return)
+     * @param {Boolean} valueOnly return setting value only or full detail
+     * @returns {Object} Json object
+     */
+    async getSettingItems(keyFilter = null, valueOnly = true) {
         await this.throwNotImplementedException();
     }
 
-    async setSettingItem(key, jsonValue) {
+    async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
         await this.throwNotImplementedException();
     }
 
+    /**
+     * get the blob from storage
+     * @param {Object} parameters parameter object
+     * @returns {Object} the object must have the property 'content' containing the blob content
+     */
     async getBlobFromStorage(parameters) {
-        await this.throwNotImplementedException();
+        return await this.throwNotImplementedException();
     }
 
     async listBlobFromStorage(parameters) {
         await this.throwNotImplementedException();
     }
 
+    async getLicenseFileContent(fileName) {
+        return await this.throwNotImplementedException();
+    }
+
     /**
      * List license files in storage
      * @param {Object} parameters parameter require to list and filter licenses
-     * @returns {Map} must return a Map Key: checksum, Value: the file info (must include content)
+     * @returns {Map<LicenseItem>} must return a Map of LicenseItem with blobKey as key,
+     * and LicenseItem as value
      */
     async listLicenseFiles(parameters) {
         await this.throwNotImplementedException();
     }
 
-    async updateLicenseUsage(parameters) {
+    async updateLicenseUsage(licenseRecord, replace = false) {
         await this.throwNotImplementedException();
     }
     /**
      * List license usage records
      * @param {Object} parameters parameter require to list and filter license usage records
-     * @returns {Map} must return a Map Key: checksum, Value: the record
+     * @returns {Map<licenseRecord>} must return a Map of licenseRecord with checksum as key,
+     * and LicenseItem as value
      */
     async listLicenseUsage(parameters) {
         await this.throwNotImplementedException();
@@ -287,8 +330,80 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    /**
+     *  @returns {Map<licenseRecord>} must return a Map of LicenseItem with blochecksumbKey as key,
+     * and LicenseItem as value
+     */
+    async listLicenseStock() {
+        await this.throwNotImplementedException();
+    }
+
+    /**
+     * Find a recyclable license from those been previously used by a device but now the device
+     * has become unavailable. Hence, the licens it was assigned can be recycled.
+     * @param {Map<licenseRecord>} stockRecords the stock records to compare with
+     * @param {Map<licenseRecord>} usageRecords the usage records to compare with
+     * @param {Number} limit find how many items? set to a negative number for no limit
+     * @returns {Array<licenseRecord>} must return an Array of licenseRecord with checksum as key,
+     * and LicenseItem as value
+     */
+    async findRecyclableLicense(stockRecords, usageRecords, limit = -1) {
+        await this.throwNotImplementedException();
+    }
+
+    /**
+     * Update the given license item to db
+     * @param {LicenseItem} licenseItem the license item to update
+     * @param {Boolean} replace update method: replace existing or not. Default true
+     */
+    async updateLicenseStock(licenseItem, replace = true) {
+        await this.throwNotImplementedException();
+    }
+
     async terminateInstanceInAutoScalingGroup(instance) {
         await this.throwNotImplementedException();
+    }
+
+    /**
+     * Retrieve the cached vm info from database
+     * @param {String} scaleSetName scaling group name the vm belongs to
+     * @param {String} instanceId the instanceId of the vm if instanceId is the unique ID
+     * @param {String} vmId another unique ID to identify the vm if instanceId is not the unique ID
+     */
+    async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
+        return await this.throwNotImplementedException() || scaleSetName && instanceId && vmId;
+    }
+
+    /**
+     *
+     * @param {String} scaleSetName scaling group name the vm belongs to
+     * @param {Object} info the json object of the info to cache in database
+     * @param {Integer} cacheTime the maximum time in seconds to keep the cache in database
+     */
+    async setVmInfoCache(scaleSetName, info, cacheTime = 3600) {
+        return await this.throwNotImplementedException() || scaleSetName && info && cacheTime;
+    }
+
+    /**
+     * Update to enable the Transit Gateway attachment propagation on a given Transit Gateway
+     * route table
+     * @param {String} attachmentId id of the transit gateway to update
+     * @param {String} routeTableId id of the transit gateway route table to update
+     * @returns {Boolean} A boolean value for whether the update is success or not.
+     */
+    async updateTgwRouteTablePropagation(attachmentId, routeTableId) {
+        return await this.throwNotImplementedException() || attachmentId && routeTableId;
+    }
+
+    /**
+     * Update to enable the Transit Gateway attachment association on a given Transit Gateway
+     * route table
+     * @param {String} attachmentId id of the transit gateway to update
+     * @param {String} routeTableId id of the transit gateway route table to update
+     * @returns {Boolean} A boolean value for whether the update is success or not.
+     */
+    async updateTgwRouteTableAssociation(attachmentId, routeTableId) {
+        return await this.throwNotImplementedException() || attachmentId && routeTableId;
     }
 
     /**

@@ -182,6 +182,18 @@ const DB = {
             {
                 AttributeName: 'settingValue',
                 AttributeType: 'S'
+            },
+            {
+                AttributeName: 'description',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'jsonEncoded',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'editable',
+                AttributeType: 'S'
             }
         ]
     },
@@ -214,19 +226,23 @@ const DB = {
     VMINFOCACHE: {
         AttributeDefinitions: [
             {
-                AttributeName: 'instanceId',
+                AttributeName: 'id',
                 AttributeType: 'S'
             }
         ],
         KeySchema: [
             {
-                AttributeName: 'instanceId',
+                AttributeName: 'id',
                 KeyType: 'HASH'
             }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'VmInfoCache',
         AdditionalAttributeDefinitions: [
+            {
+                AttributeName: 'instanceId',
+                AttributeType: 'S'
+            },
             {
                 AttributeName: 'vmId',
                 AttributeType: 'S'
@@ -238,6 +254,14 @@ const DB = {
             {
                 AttributeName: 'info',
                 AttributeType: 'S'
+            },
+            {
+                AttributeName: 'timestamp',
+                AttributeType: 'N'
+            },
+            {
+                AttributeName: 'expireTime',
+                AttributeType: 'N'
             }
         ]
     },
@@ -288,7 +312,7 @@ const DB = {
                 AttributeType: 'S'
             },
             {
-                AttributeName: 'sha1-checksum',
+                AttributeName: 'checksum',
                 AttributeType: 'S'
             },
             {
@@ -300,7 +324,7 @@ const DB = {
                 AttributeType: 'S'
             },
             {
-                AttributeName: 'asgName',
+                AttributeName: 'scalingGroupName',
                 AttributeType: 'S'
             },
             {
@@ -310,6 +334,10 @@ const DB = {
             {
                 AttributeName: 'assignedTime',
                 AttributeType: 'N'
+            },
+            {
+                AttributeName: 'blobKey',
+                AttributeType: 'S'
             }
         ]
     },
@@ -340,22 +368,62 @@ const DB = {
                 AttributeType: 'S'
             }
         ]
+    },
+    VPNATTACHMENT: {
+        AttributeDefinitions: [
+            {
+                AttributeName: 'instanceId',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'publicIp',
+                AttributeType: 'S'
+            }
+        ],
+        KeySchema: [
+            {
+                AttributeName: 'instanceId',
+                KeyType: 'HASH'
+            },
+            {
+                AttributeName: 'publicIp',
+                KeyType: 'RANGE'
+            }
+        ],
+        ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
+        TableName: 'VpnAttachment',
+        AdditionalAttributeDefinitions: [
+            {
+                AttributeName: 'customerGatewayId',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'vpnConnectionId',
+                AttributeType: 'S'
+            },
+            {
+                AttributeName: 'configuration',
+                AttributeType: 'S'
+            }
+        ]
     }
 
 };
 
-exports.getTables = (custom_id, unique_id) => {
+exports.getTables = (custom_id, unique_id, excludedKeys = null) => {
     let tables = {},
         prefix = () => { return custom_id ? `${custom_id}-` : '' },
         suffix = () => { return unique_id ? `-${unique_id}` : '' };
     Object.keys(DB).forEach(itemName => {
-        let table = {};
-        table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
-        table.KeySchema = DB[itemName].KeySchema;
-        table.ProvisionedThroughput = DB[itemName].ProvisionedThroughput;
-        table.TableName = prefix() + DB[itemName].TableName + suffix();
-        table.AdditionalAttributeDefinitions = DB[itemName].AdditionalAttributeDefinitions;
-        tables[itemName] = table;
+        if (!excludedKeys || Array.isArray(excludedKeys) && !excludedKeys.includes(itemName)) {
+            let table = {};
+            table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
+            table.KeySchema = DB[itemName].KeySchema;
+            table.ProvisionedThroughput = DB[itemName].ProvisionedThroughput;
+            table.TableName = prefix() + DB[itemName].TableName + suffix();
+            table.AdditionalAttributeDefinitions = DB[itemName].AdditionalAttributeDefinitions;
+            tables[itemName] = table;
+        }
     });
     return tables;
 };

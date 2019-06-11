@@ -20,6 +20,7 @@ class VirtualMachine {
         this._sourcePlatform = platform; // platform name in lower case
         this._sourceVmData = vmData; // the original vm data retrieved from the platform
         this._primaryPrivateIp = null;
+        this._primaryPublicIp = null;
         this._scalingGroupName = null;
         this._securityGroups = [];
         this._networkInterfaces = [];
@@ -31,6 +32,10 @@ class VirtualMachine {
 
     get primaryPrivateIpAddress() {
         return this._primaryPrivateIp;
+    }
+
+    get primaryPublicIpAddress() {
+        return this._primaryPublicIp;
     }
 
     get virtualNetworkId() {
@@ -56,6 +61,7 @@ class VirtualMachine {
     static fromAwsEc2(instance, scalingGroupName = '') {
         let virtualMachine = new VirtualMachine(instance.InstanceId, 'aws', instance);
         virtualMachine._primaryPrivateIp = instance.PrivateIpAddress;
+        virtualMachine._primaryPublicIp = instance.PublicIpAddress;
         virtualMachine._virtualNetworkId = instance.VpcId;
         virtualMachine._subnetId = instance.SubnetId;
         virtualMachine._scalingGroupName = scalingGroupName;
@@ -95,7 +101,7 @@ class VirtualMachine {
             virtualMachine._subnetId = subnetId;
             virtualMachine._primaryPrivateIp = ipv4;
         }
-        this._scalingGroupName = scalingGroupName;
+        virtualMachine._scalingGroupName = scalingGroupName;
         return virtualMachine;
     }
 }

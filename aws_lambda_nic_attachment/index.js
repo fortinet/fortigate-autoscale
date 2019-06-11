@@ -27,9 +27,8 @@ AWS.config.update({
 const
     dynamodb = new AWS.DynamoDB(),
     docClient = new AWS.DynamoDB.DocumentClient(),
-    unique_id = process.env.UNIQUE_ID ? process.env.UNIQUE_ID.replace(/.*\//, '') : '',
-    custom_id = process.env.CUSTOM_ID ? process.env.CUSTOM_ID.replace(/.*\//, '') : '',
-    dbTables = ftgtAutoscaleAws.AutoScaleCore.dbDefinitions.getTables(custom_id, unique_id);
+    RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '',
+    dbTables = ftgtAutoscaleAws.AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
 
 ftgtAutoscaleAws.initModule();
 
@@ -51,8 +50,8 @@ async function createTable(schema) {
             validator = result => {
                 return !!result;
             };
-        await ftgtAutoscaleAws.AutoScaleCore.sleep(3000);
-        await ftgtAutoscaleAws.AutoScaleCore.waitFor(promiseEmitter, validator);
+        await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(3000);
+        await ftgtAutoscaleAws.AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
         logger.info(`table (${schema.TableName}) created.`);
         return true;
     } catch (error) {

@@ -1,0 +1,644 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This template creates a FortiGate auto scaling group and related components.",
+    "Parameters": {
+        "S3BucketName": {
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
+            "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
+            "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+        },
+        "S3KeyPrefix": {
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z-/]*$",
+            "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Description": "S3 key prefix for the deployment package. Key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
+        },
+        "ResourceTagPrefix": {
+            "Type": "String",
+            "AllowedPattern": "[0-9a-zA-Z@.#-]+",
+            "MaxLength": 64,
+            "ConstraintDescription": "Resource tag prefix can include numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64.",
+            "Description": "A prefix for tag key ResourceGroup on all resources. It's also used as the name prefix of all applicable resources. Can only contain numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64."
+        },
+        "UniqueId": {
+            "Type": "String",
+            "MaxLength": "8",
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "ConstraintDescription": "must only contain uppercase and lowercase letters and digits",
+            "Description": "A random text suffix for the DynamoDB table name which can help ensure the DB table name is unique per region. Can only contain uppercase, lowercase letters, and digits. Max length is 8."
+        },
+        "AsgSubnet1Id": {
+            "Type": "AWS::EC2::Subnet::Id",
+            "Description": "FortiGate subnet 1, which is located in Availability Zone 1."
+        },
+        "AsgSubnet2Id": {
+            "Type": "AWS::EC2::Subnet::Id",
+            "Description": "FortiGate subnet 2, which is located in Availability Zone 2."
+        },
+        "ELBV2TargetGroupARNs": {
+            "Type": "String",
+            "Description": "The ARN of each Elastic Load Balancer V2 target group to associate with the FortiGate auto scaling group. Can leave it empty if no ELB target group needed."
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "c5.large",
+            "AllowedValues": [
+                "t2.small",
+                "c5.large",
+                "c5.xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "c5.9xlarge"
+            ],
+            "ConstraintDescription": "must be a valid EC2 instance type.",
+            "Description": "Instance type to launch as FortiGate On-Demand instances. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
+        },
+        "InstanceProfileArn": {
+            "Type": "String",
+            "Description": "The ARN of the instance profile provided for FortiGate instance in the FortiGate Auto Scaling group. Leave this blank in order to automatically create a new profile for use during this stack deployment."
+        },
+        "KeyPairName": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Description": "Amazon EC2 Key Pair for admin access."
+        },
+        "SecurityGroupId": {
+            "Type": "String",
+            "Description": "The ID of the security group for each instance in the auto scaling group."
+        },
+        "APIGatewayId": {
+            "Type": "String",
+            "Description": "The ID of the API Gateway for FortiGate to communicate with the Autoscale handling Lambda functions."
+        },
+        "AsgHandlerFunctionName": {
+            "Type": "String",
+            "Description": "The Autoscale handler Lambda function name."
+        },
+        "AsgHandlerFunctionArn": {
+            "Type": "String",
+            "Description": "The ARN of the Autoscale handler Lambda function."
+        },
+        "AsgHealthCheckGracePeriod": {
+            "Type": "Number",
+            "Default": 300,
+            "MinValue": 60,
+            "ConstraintDescription": "must be a valid number not less than 60.",
+            "Description": "The length of time (in seconds) that Auto-Scaling waits before checking an instance's health status. Minimum is 60."
+        },
+        "AsgScaleInThreshold": {
+            "Type": "Number",
+            "Default": 25,
+            "MinValue": 1,
+            "MaxValue": 100,
+            "ConstraintDescription": "must be a valid number between 1 and 100.",
+            "Description": "The threshold (in percentage) for the FortiGate Auto-Scaling group to scale-in (remove) 1 instance. Minimum is 1. Maximum is 100."
+        },
+        "AsgScaleOutThreshold": {
+            "Type": "Number",
+            "Default": 80,
+            "MinValue": 1,
+            "MaxValue": 100,
+            "ConstraintDescription": "must be a valid number between 1 and 100.",
+            "Description": "The threshold (in percentage) for the FortiGate Auto-Scaling group to scale-out (add) 1 instance. Minimum is 1. Maximum is 100."
+        },
+        "AsgDesiredCapacity": {
+            "Type": "Number",
+            "Default": 0,
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 1.",
+            "Description": "The number of FortiGate instances the group should have at any time, also called desired capacity. Must keep at least 2 FortiGates in the group for High Availability. Minimum is 2."
+        },
+        "AsgMinSize": {
+            "Type": "Number",
+            "Default": 0,
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 1.",
+            "Description": "Minimum number of FortiGate instances in the Auto-Scaling Group. Minimum is 2."
+        },
+        "AsgMaxSize": {
+            "Type": "Number",
+            "Default": 0,
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 1.",
+            "Description": "Maximum number of FortiGate instances in the Auto-Scaling Group. Minimum is 2."
+        },
+        "AsgCooldown": {
+            "Type": "Number",
+            "Default": 300,
+            "MinValue": 60,
+            "MaxValue": 3600,
+            "ConstraintDescription": "must be a valid number between 60 and 3600.",
+            "Description": "Auto-Scaling group waits for the cooldown period (in seconds) to complete before resuming scaling activities. Minimum is 60. Maximum is 3600."
+        },
+        "LifecycleHookTimeout": {
+            "Type": "Number",
+            "Default": 400,
+            "MinValue": 60,
+            "MaxValue": 3600,
+            "ConstraintDescription": "must be a valid number between 60 and 3600.",
+            "Description": "The amount of time (in seconds) that can elapse before the FortiGate Autoscale lifecycle hook times out. Minimum is 60. Maximum is 3600."
+        },
+        "DependOnCondition": {
+            "Type": "String",
+            "Description": "A parameter for the parent CloudFormation stack to be able to create dependencies for the current stack on another resource. Not intended to be used in this stack."
+        },
+        "ProductAMI": {
+            "Type": "String",
+            "Default": "",
+            "Description": "The AMI for launch template for the auto scaling group."
+        },
+        "ProductCode": {
+            "Type": "String",
+            "Default": "",
+            "Description": "An optional product code provided for the AMI if using a custom AMI."
+        }
+    },
+    "Conditions": {
+        "GovCloudCondition": {
+            "Fn::Equals": [{
+                    "Ref": "AWS::Region"
+                },
+                "us-gov-west-1"
+            ]
+        },
+        "ELBV2TargetGroupIsDefined": {
+            "Fn::Not": [{
+                "Fn::Equals": [{
+                        "Ref": "ELBV2TargetGroupARNs"
+                    },
+                    ""
+                ]
+            }]
+        },
+        "InstanceProfileIsNotDefined": {
+            "Fn::Equals": [{
+                    "Ref": "InstanceProfileArn"
+                },
+                ""
+            ]
+        }
+    },
+    "Resources": {
+        "FgtInstanceIamRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "InstanceProfileIsNotDefined",
+            "Properties": {
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+                    "arn:aws:iam::aws:policy/AWSLambdaExecute"
+                ],
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ec2.amazonaws.com"
+                        },
+                        "Action": "sts:AssumeRole"
+                    }]
+                },
+                "Path": "/",
+                "Policies": [{
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                            "Action": [
+                                "s3:GetObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": [
+                                    "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
+                                    {
+                                        "S3BucketName": {
+                                            "Ref": "S3BucketName"
+                                        },
+                                        "S3KeyPrefix": {
+                                            "Ref": "S3KeyPrefix"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Effect": "Allow"
+                        }]
+                    },
+                    "PolicyName": "fortigate-autoscale-instance-policy"
+                }]
+            }
+        },
+        "FgtInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Condition": "InstanceProfileIsNotDefined",
+            "Properties": {
+                "Roles": [{
+                    "Ref": "FgtInstanceIamRole"
+                }]
+            }
+        },
+        "AsgLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "ResourceTagPrefix"
+                            },
+                            "fortigate-autoscale-launch-template"
+                        ]
+                    ]
+                },
+                "LaunchTemplateData": {
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": [
+                                "{\"config-url\": \"${configUrl}\",\"productcode\":\"${productCode}\"}",
+                                {
+                                    "configUrl": {
+                                        "Fn::Sub": [
+                                            "https://${api}.execute-api.${region}.amazonaws.com/${stage}/${resource}",
+                                            {
+                                                "region": {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                "api": {
+                                                    "Ref": "APIGatewayId"
+                                                },
+                                                "stage": "prod",
+                                                "resource": "fgt-asg-handler"
+                                            }
+                                        ]
+                                    },
+                                    "productCode": {
+                                        "Ref": "ProductCode"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "InstanceInitiatedShutdownBehavior": "terminate",
+                    "ImageId": {
+                        "Ref": "ProductAMI"
+                    },
+                    "BlockDeviceMappings": [],
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::If": [
+                                "InstanceProfileIsNotDefined",
+                                {
+                                    "Fn::GetAtt": [
+                                        "FgtInstanceProfile",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Ref": "InstanceProfileArn"
+                                }
+                            ]
+                        }
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "NetworkInterfaces": [{
+                        "DeviceIndex": 0,
+                        "Groups": [{
+                            "Ref": "SecurityGroupId"
+                        }],
+                        "AssociatePublicIpAddress": true
+                    }],
+                    "KeyName": {
+                        "Ref": "KeyPairName"
+                    }
+                }
+            }
+        },
+        "FgtAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "ResourceTagPrefix"
+                            },
+                            "fortigate-auto-scaling-group"
+                        ]
+                    ]
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "AsgLaunchTemplate"
+                    },
+                    "Version": "1"
+                },
+                "Cooldown": {
+                    "Ref": "AsgCooldown"
+                },
+                "DesiredCapacity": {
+                    "Ref": "AsgDesiredCapacity"
+                },
+                "HealthCheckGracePeriod": {
+                    "Ref": "AsgHealthCheckGracePeriod"
+                },
+                "HealthCheckType": "EC2",
+                "MaxSize": {
+                    "Ref": "AsgMaxSize"
+                },
+                "MinSize": 0,
+                "VPCZoneIdentifier": [{
+                        "Ref": "AsgSubnet1Id"
+                    },
+                    {
+                        "Ref": "AsgSubnet2Id"
+                    }
+                ],
+                "TerminationPolicies": [
+                    "Default"
+                ],
+                "TargetGroupARNs": {
+                    "Fn::If": [
+                        "ELBV2TargetGroupIsDefined",
+                        {
+                            "Fn::Split": [
+                                ",",
+                                {
+                                    "Ref": "ELBV2TargetGroupARNs"
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [{
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [{
+                                        "Ref": "ResourceTagPrefix"
+                                    },
+                                    "fortigate-auto-scaling-group"
+                                ]
+                            ]
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            },
+            "DependsOn": [
+                "AsgLaunchTemplate"
+            ]
+        },
+        "AsgScaleInPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroup"
+                },
+                "ScalingAdjustment": "-1"
+            },
+            "DependsOn": [
+                "FgtAutoScalingGroup"
+            ]
+        },
+        "AsgScaleOutPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroup"
+                },
+                "ScalingAdjustment": "1"
+            },
+            "DependsOn": [
+                "FgtAutoScalingGroup"
+            ]
+        },
+        "AlarmScaleInThresholdCpuUtil": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": {
+                    "Ref": "AsgScaleInThreshold"
+                },
+                "AlarmDescription": "Alarm if CPU too low or metric disappears indicating instance is down",
+                "Period": {
+                    "Ref": "AsgCooldown"
+                },
+                "AlarmActions": [{
+                    "Ref": "AsgScaleInPolicy"
+                }],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [{
+                    "Name": "AutoScalingGroupName",
+                    "Value": {
+                        "Ref": "FgtAutoScalingGroup"
+                    }
+                }],
+                "ComparisonOperator": "LessThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        },
+        "AlarmScaleOutThresholdCpuUtil": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": {
+                    "Ref": "AsgScaleOutThreshold"
+                },
+                "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+                "Period": {
+                    "Ref": "AsgCooldown"
+                },
+                "AlarmActions": [{
+                    "Ref": "AsgScaleOutPolicy"
+                }],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [{
+                    "Name": "AutoScalingGroupName",
+                    "Value": {
+                        "Ref": "FgtAutoScalingGroup"
+                    }
+                }],
+                "ComparisonOperator": "GreaterThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        },
+        "AsgLifeCycleHookLaunching": {
+            "Type": "AWS::AutoScaling::LifecycleHook",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroup"
+                },
+                "LifecycleHookName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "ResourceTagPrefix"
+                            },
+                            "lifecyle-hook-instance-launching"
+                        ]
+                    ]
+                },
+                "LifecycleTransition": "autoscaling:EC2_INSTANCE_LAUNCHING",
+                "HeartbeatTimeout": {
+                    "Ref": "LifecycleHookTimeout"
+                },
+                "DefaultResult": "ABANDON"
+            }
+        },
+        "AsgLifeCycleHookTerminating": {
+            "Type": "AWS::AutoScaling::LifecycleHook",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroup"
+                },
+                "LifecycleHookName": {
+                    "Fn::Join": [
+                        "-",
+                        [{
+                                "Ref": "ResourceTagPrefix"
+                            },
+                            "lifecyle-hook-instance-terminating"
+                        ]
+                    ]
+                },
+                "LifecycleTransition": "autoscaling:EC2_INSTANCE_TERMINATING",
+                "HeartbeatTimeout": {
+                    "Ref": "LifecycleHookTimeout"
+                },
+                "DefaultResult": "CONTINUE"
+            }
+        },
+        "AsgLifecycleHookTriggerEventRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "EventPattern": {
+                    "Fn::Sub": [
+                        "{\"source\":[\"aws.autoscaling\"],\"detail-type\":[\"EC2 Instance Launch Successful\",\"EC2 Instance Launch Unsuccessful\",\"EC2 Instance-launch Lifecycle Action\", \"EC2 Instance Terminate Successful\",\"EC2 Instance Terminate unsuccessful\",\"EC2 Instance-terminate Lifecycle Action\"], \"detail\": {\"AutoScalingGroupName\": [\"${asgName}\"]}}",
+                        {
+                            "asgName": {
+                                "Fn::Join": [
+                                    "-",
+                                    [{
+                                            "Ref": "ResourceTagPrefix"
+                                        },
+                                        "fortigate-auto-scaling-group"
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "State": "ENABLED",
+                "Description": "Trigger when FortiGate auto-scaling group is launching / terminating instances or taking lifecycle actions.",
+                "Targets": [{
+                    "Id": {
+                        "Fn::Join": [
+                            "-",
+                            [
+                                "fortigate-autoscale-lifecycle-event-rule",
+                                {
+                                    "Ref": "UniqueId"
+                                }
+                            ]
+                        ]
+                    },
+                    "Arn": {
+                        "Ref": "AsgHandlerFunctionArn"
+                    }
+                }]
+            }
+        },
+        "AsgLambdaPermissionLifecycleTriggerInvokation": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "AsgHandlerFunctionName"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "AsgLifecycleHookTriggerEventRule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [{
+                    "Label": {
+                        "default": "Basic configuration"
+                    },
+                    "Parameters": [
+                        "ResourceTagPrefix",
+                        "CustomIdentifier",
+                        "AsgSubnet1Id",
+                        "AsgSubnet2Id",
+                        "APIGatewayId",
+                        "ELBV2TargetGroupARNs"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Launch template configuration"
+                    },
+                    "Parameters": [
+                        "InstanceType",
+                        "KeyPairName",
+                        "ProductAMI",
+                        "ProductCode"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Auto scaling group configuration"
+                    },
+                    "Parameters": [
+                        "LifecycleHookTimeout",
+                        "AsgDesiredCapacity",
+                        "AsgMinSize",
+                        "AsgMaxSize",
+                        "AsgHealthCheckGracePeriod",
+                        "AsgCooldown",
+                        "AsgScaleOutThreshold",
+                        "AsgScaleInThreshold",
+                        "FortiGateElbTgHealthyThreshold"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Deployment package configuration"
+                    },
+                    "Parameters": [
+                        "S3BucketName",
+                        "S3KeyPrefix"
+                    ]
+                }
+            ]
+        }
+    },
+    "Outputs": {
+        "AutoScalingGroupName": {
+            "Description": "FortiGate Autoscale Auto Scaling Group Name",
+            "Value": {
+                "Ref": "FgtAutoScalingGroup"
+            }
+        }
+    }
+}
