@@ -203,13 +203,46 @@ module.exports = class AutoscaleHandler {
     }
 
     async parseInstanceInfo(instanceId) {
-        await this.throwNotImplementedException();
-        return instanceId;
+        // look for this vm in both byol and payg vmss
+        // look from byol first
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance({
+            instanceId: instanceId,
+            scalingGroupName: this._settings['byol-scaling-group-name']
+        });
+        if (this._selfInstance) {
+            this.setScalingGroup(
+                this._settings['master-scaling-group-name'],
+                this._settings['byol-scaling-group-name']
+            );
+        } else { // not found in byol vmss, look from payg
+            this._selfInstance = await this.platform.describeInstance({
+                instanceId: instanceId,
+                scalingGroupName: this._settings['payg-scaling-group-name']
+            });
+            if (this._selfInstance) {
+                this.setScalingGroup(
+                    this._settings['master-scaling-group-name'],
+                this._settings['payg-scaling-group-name']
+                );
+            }
+        }
+        if (this._selfInstance) {
+            this.logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
+        `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
+        } else {
+            this.logger.warn(`cannot identify instance: vmid:(${instanceId})`);
+        }
     }
 
     async checkInstanceAuthorization(instance) {
-        await this.throwNotImplementedException();
-        return instance && false;
+        // TODO: can we generalize this method to core?
+        if (!instance ||
+                instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
+            // not trusted
+            return await Promise.reject('Unauthorized calling instance (' +
+            `instanceId: ${instance.instanceId}). Instance not found in VPC.`);
+        }
+        return await Promise.resolve(true);
     }
 
     async handleGetLicense(event, context, callback) {
@@ -836,9 +869,10 @@ module.exports = class AutoscaleHandler {
     }
 
     async loadSettings() {
-        if (!this._settings) {
+        if (!(this._settings && Object.keys(this._settings) > 0)) {
             await this.platform.getSettingItems();// initialize the platform settings
         }
+        return this._settings;
     }
 
     /**
@@ -993,18 +1027,18 @@ module.exports = class AutoscaleHandler {
                     description = 'The FortiGate Autoscale handler URL.';
                     editable = false;
                     break;
-                case 'masterautoscalinggroupname':
-                    keyName = 'master-auto-scaling-group-name';
+                case 'masterscalinggroupname':
+                    keyName = 'master-scaling-group-name';
                     description = 'The name of the master auto scaling group.';
                     editable = false;
                     break;
-                case 'paygautoscalinggroupname':
-                    keyName = 'payg-auto-scaling-group-name';
+                case 'paygscalinggroupname':
+                    keyName = 'payg-scaling-group-name';
                     description = 'The name of the PAYG auto scaling group.';
                     editable = false;
                     break;
-                case 'byolautoscalinggroupname':
-                    keyName = 'byol-auto-scaling-group-name';
+                case 'byolscalinggroupname':
+                    keyName = 'byol-scaling-group-name';
                     description = 'The name of the BYOL auto scaling group.';
                     editable = false;
                     break;
@@ -1273,11 +1307,16 @@ module.exports = class AutoscaleHandler {
                 // fetch the content for each untrack license file
                 let updateTasks = [];
                 untrackedFiles.forEach(licenseItem => {
-                    updateTasks.push((async () => {
-                        const content = await platform.getLicenseFileContent(licenseItem.fileName);
-                        licenseItem.content = content;
-                        return licenseItem;
-                    })());
+                    if (!licenseItem.content) {
+                        updateTasks.push((async () => {
+                            const content =
+                                await platform.getLicenseFileContent(licenseItem.fileName);
+                            licenseItem.content = content;
+                            return licenseItem;
+                        })());
+                    } else {
+                        updateTasks.push(licenseItem);
+                    }
                 });
 
                 untrackedFiles = await Promise.all(updateTasks);

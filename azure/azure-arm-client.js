@@ -252,8 +252,9 @@ class CosmosDbApiClient {
      * API ref: https://docs.microsoft.com/en-us/rest/api/cosmos-db/create-a-collection
      * @param {*} dbName the db name to create the collection
      * @param {*} collectionName the name of collectioin to create
+     * @param {Array<String>} partitionKey the partition key for the collection
      */
-    async createCollection(dbName, collectionName) {
+    async createCollection(dbName, collectionName, partitionKey = null) {
         let date = (new Date()).toUTCString();
         let _token = getAuthorizationTokenUsingMasterKey('post',
             'colls', `dbs/${dbName}`, date, this.masterKey);
@@ -264,14 +265,21 @@ class CosmosDbApiClient {
             'x-ms-date': date,
             Accept: 'application/json'
         };
+        let body = {
+            id: collectionName
+        };
+        if (partitionKey) {
+            body.partitionKey = {
+                paths: partitionKey.map(key => `/${key}`),
+                kind: 'Hash'
+            };
+        }
         return await new Promise(function(resolve, reject) {
             // use post here
             request.post({
                 url: path,
                 headers: headers,
-                body: {
-                    id: collectionName
-                },
+                body: body,
                 json: true
             }, function(error, response) {
                 if (error) {

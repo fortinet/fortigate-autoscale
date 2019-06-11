@@ -123,13 +123,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 if (!Array.isArray(collections) || collections.length === 0) {
                     return Promise.resolve(true);
                 }
-                var createCollection = async function(collectionName) {
-                    let result = await dbClient.createCollection(DATABASE_NAME, collectionName);
+                var createCollection = async function(collection) {
+                    let result = await dbClient.createCollection(DATABASE_NAME,
+                        collection.TableName,
+                        collection.KeySchema.map(partitionKey => partitionKey.AttributeName));
                     if (result.statusCode === 201) {
-                        logger.info(`Collection (${collectionName}) created.`);
+                        logger.info(`Collection (${collection.TableName}) created.`);
                         return true;
                     } else if (result.statusCode === 409) {
-                        logger.info(`Collection (${collectionName}) already exists.`);
+                        logger.info(`Collection (${collection.TableName}) already exists.`);
                         return true;
                     } else {
                         logger.info('Unknown response from API:', JSON.stringify(result));
@@ -137,7 +139,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     }
                 };
                 collections.forEach(collectionName => {
-                    collectionCreationPromises.push(createCollection(collectionName));
+                    collectionCreationPromises.push(
+                        createCollection(DB[collectionName.toUpperCase()])
+                    );
                 });
                 try {
                     await Promise.all(collectionCreationPromises);
@@ -241,7 +245,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 voteEndTime: Date.now() + (electionTimeout - 5) * 1000,
                 voteState: voteState
             };
-            const TABLE = DB.ELECTION;
+            const TABLE = DB.FORTIGATEMASTERELECTION;
             return !!await dbClient.createDocument(DATABASE_NAME, TABLE.TableName,
                 document, TABLE.KeySchema[0].AttributeName, method === 'replace');
         } catch (error) {
@@ -259,7 +263,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             name: 'asgName',
             value: this.masterScalingGroupName
         };
-        let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.ELECTION.TableName,
+        let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.FORTIGATEMASTERELECTION.TableName,
             keyExpression, null, {crossPartition: true});
         if (!Array.isArray(items) || items.length === 0) {
             logger.info('No elected master was found in the db!');
@@ -272,7 +276,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async removeMasterRecord() {
         try {
-            return await dbClient.deleteDocument(DATABASE_NAME, DB.ELECTION.TableName,
+            return await dbClient.deleteDocument(DATABASE_NAME, DB.FORTIGATEMASTERELECTION.TableName,
                 this.masterScalingGroupName);
         } catch (error) {
             if (error.statusCode && error.statusCode === 404) {
@@ -286,7 +290,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             logger.info('calling finalizeMasterElection');
             let electedMaster = this._masterRecord || await this.getMasterRecord();
             electedMaster.voteState = 'done';
-            let result = await dbClient.replaceDocument(DATABASE_NAME, DB.ELECTION.TableName,
+            let result = await dbClient.replaceDocument(DATABASE_NAME, DB.FORTIGATEMASTERELECTION.TableName,
                 electedMaster);
             logger.info(`called finalizeMasterElection, result: ${JSON.stringify(result)}`);
             return !!result;
@@ -330,7 +334,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 inevitableFailToSyncTime,
                 interval,
                 healthCheckRecord,
-                items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
+                items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.FORTIGATEAUTOSCALE.TableName,
                     keyExpression, filterExpression, {crossPartition: true});
             if (!Array.isArray(items) || items.length === 0) {
                 logger.info('called getInstanceHealthCheck: no record found');
@@ -437,7 +441,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 logger.info(`instance already out of sync: healthcheck info: ${healthCheckObject}`);
                 result = true;
             } else {
-                result = await dbClient.replaceDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
+                result = await dbClient.replaceDocument(DATABASE_NAME, DB.FORTIGATEAUTOSCALE.TableName,
                     document);
             }
             logger.info('called updateInstanceHealthCheck');
@@ -453,7 +457,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async deleteInstanceHealthCheck(instanceId) {
         logger.warn('calling deleteInstanceHealthCheck');
         try {
-            return !!await dbClient.deleteDocument(DATABASE_NAME, DB.AUTOSCALE.TableName,
+            return !!await dbClient.deleteDocument(DATABASE_NAME, DB.FORTIGATEAUTOSCALE.TableName,
                 `${this.scalingGroupName}-${instanceId}`);
         } catch (error) {
             logger.warn('called deleteInstanceHealthCheck. error:', error);
@@ -520,7 +524,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     if (error) {
                         reject(error);
                     } else if (response && response.statusCode === 200 || response.isSuccessful) {
-                        resolve(result);
+                        resolve(text);
                     } else {
                         reject(response);
                     }
@@ -593,7 +597,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return keyFilter && filteredItems || formattedItems;
         } catch (error) {
             logger.warn(`getSettingItems > error: ${JSON.stringify(error)}`);
-            return [];
+            return {};
         }
     }
 
@@ -818,7 +822,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
 
     async listLicenseFiles() {
         let blobService = storageClient.refBlobService();
-        let platform = this.platform;
+        let platform = this;
         let prefix = platform._settings['fortigate-license-storage-key-prefix'];
         return await new Promise((resolve, reject) => {
             // NOTE: the etag of each object returned by Azure API function:
@@ -829,43 +833,45 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             // getBlobToText and getBlobProperties
             // see: https://github.com/Azure/azure-storage-node/issues/586
             blobService.listBlobsSegmented(prefix, null,
-            (error, data) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    if (data && data.entries) {
-                        // need to fire an extra call to get file content
-                        let contentQueries = data.entries.forEach(async item => {
-                            const blob = await platform.getBlobFromStorage({
-                                storageName: '',
-                                keyPrefix: prefix,
-                                fileName: item.name
-                            });
-                            return {
-                                filePath: item.properties.container,
-                                fileName: item.properties.name,
-                                fileETag: `"${item.properties.etag}"`,// the etag should be enclosed with double quote. //eslint-disable-line max-len
-                                content: blob.content
-                            };
-                        });
-                        let contentQueryPromise = async queries => {
-                            let contents = await Promise.all(queries);
-                            let iterable = contents.map(item => {
-                                let licenseItem = new AutoScaleCore.LicenseItem(
-                                        item.fileName,
-                                        item.fileETag,
-                                        item.content
-                                );
-                                return [licenseItem.blobKey, licenseItem];
-                            });
-                            return new Map(iterable);
-                        };
-                        resolve(contentQueryPromise(contentQueries));
+                (error, data) => {
+                    if (error) {
+                        reject(error);
                     } else {
-                        resolve(new Map());
+                        if (data && data.entries) {
+                            // need to fire an extra call to get file content
+
+                            let contentQueryPromise = async blobList => {
+                                let contentQueries = blobList.entries.map(async item => {
+                                    const blob = await platform.getBlobFromStorage({
+                                        storageName: '',
+                                        keyPrefix: prefix,
+                                        fileName: item.name,
+                                        getProperties: true
+                                    });
+                                    return {
+                                        filePath: blob.properties.container,
+                                        fileName: blob.properties.name,
+                                        fileETag: `"${blob.properties.etag}"`,// the etag should be enclosed with double quote. //eslint-disable-line max-len
+                                        content: blob.content
+                                    };
+                                });
+                                let contents = await Promise.all(contentQueries);
+                                let iterable = contents.map(item => {
+                                    let licenseItem = new AutoScaleCore.LicenseItem(
+                                            item.fileName,
+                                            item.fileETag,
+                                            item.content
+                                    );
+                                    return [licenseItem.blobKey, licenseItem];
+                                });
+                                return new Map(iterable);
+                            };
+                            resolve(contentQueryPromise(data));
+                        } else {
+                            resolve(new Map());
+                        }
                     }
-                }
-            });
+                });
         });
     }
 
@@ -880,7 +886,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 recordCount = items.length;
                 records = items;
             }
-            let iterable = items.map(item => [item.checksum, item]);
+            let iterable = records.map(item => {
+                const licenseRecord = AutoScaleCore.LicenseRecord.fromDb(item);
+                return [licenseRecord.checksum, licenseRecord];
+            });
+            logger.info(`called listLicenseUsage: (${recordCount}) licenses in use.`);
             return new Map(iterable);
         } catch (error) {
             return new Map();
@@ -926,7 +936,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 recordCount = items.length;
                 records = items;
             }
-            let iterable = items.map(item => [item.checksum, item]);
+            let iterable = records.map(item => {
+                const licenseRecord = AutoScaleCore.LicenseRecord.fromDb(item);
+                return [licenseRecord.checksum, licenseRecord];
+            });
+            logger.info(`called listLicenseStock: (${recordCount}) licenses in stock.`);
             return new Map(iterable);
         } catch (error) {
             return new Map();
@@ -937,14 +951,22 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async updateLicenseStock(licenseItem, replace = true) {
         try {
             const TABLE = DB.LICENSESTOCK;
+            let item = {
+                id: licenseItem.id,
+                blobKey: licenseItem.blobKey,
+                checksum: licenseItem.checksum,
+                fileName: licenseItem.fileName,
+                algorithm: licenseItem.algorithm
+            };
             let doc = await dbClient.createDocument(DATABASE_NAME, TABLE.TableName,
-                licenseItem, TABLE.KeySchema[0].AttributeName, replace || true);
+                item, TABLE.KeySchema[0].AttributeName, replace || true);
             if (doc) {
                 return true;
             } else {
                 return false;
             }
         } catch (error) {
+            logger.error(`Called updateLicenseStock: error >, ${JSON.stringify(error)}`);
             throw error;
         }
     }
@@ -982,7 +1004,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // to the rest of AutoscaleHandler initialization
         await this.platform.init();
         await this.loadSettings();
-        if (!this._settings) {
+        if (!(this._settings && Object.keys(this._settings).length > 0)) {
             await this.saveSettings();
         }
         return await super.init();
@@ -1138,7 +1160,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         };
 
         try {
-            const TABLE = DB.AUTOSCALE;
+            const TABLE = DB.FORTIGATEAUTOSCALE;
             let doc = await dbClient.createDocument(DATABASE_NAME, TABLE.TableName,
                 document, TABLE.KeySchema[0].AttributeName);
             if (doc) {
@@ -1332,38 +1354,6 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             context.res = this.proxyResponse(500, error);
         }
     }
-
-    async parseInstanceInfo(instanceId) {
-        // look for this vm in both byol and payg vmss
-        // look from byol first
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance({
-            instanceId: instanceId,
-            scalingGroupName: process.env.SCALING_GROUP_NAME_BYOL
-        });
-        if (this._selfInstance) {
-            this.setScalingGroup(
-                process.env.MASTER_SCALING_GROUP_NAME,
-                process.env.SCALING_GROUP_NAME_BYOL
-            );
-        } else { // not found in byol vmss, look from payg
-            this._selfInstance = await this.platform.describeInstance({
-                instanceId: instanceId,
-                scalingGroupName: process.env.SCALING_GROUP_NAME_PAYG
-            });
-            if (this._selfInstance) {
-                this.setScalingGroup(
-                    process.env.MASTER_SCALING_GROUP_NAME,
-                    process.env.SCALING_GROUP_NAME_PAYG
-                );
-            }
-        }
-        if (this._selfInstance) {
-            logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
-        `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`);
-        } else {
-            logger.warn(`cannot identify instance: vmid:(${instanceId})`);
-        }
-    }
     // end of AzureAutoscaleHandler class
 }
 
@@ -1447,7 +1437,13 @@ exports.handleGetLicense = async (context, req) => {
     handler.useLogger(logger);
     initModule();
     logger.log(`Incoming request: ${JSON.stringify(req)}`);
-    return await handler.handleGetLicense(context, req);
+    let callback = (err, data) => {
+        if (err) {
+            logger.error(err);
+        }
+        context.res = data;
+    };
+    return await handler.handleGetLicense(req, context, callback);
 };
 
 exports.handleListCustomLog = async (context, req) => {

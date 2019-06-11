@@ -1177,7 +1177,7 @@
                 },
                 "EnableVmInfoCache": "true",
                 "VmInfoCacheTime": 3600,
-                "FortiGateLicenseStorageKeyPrefix": "fgt-asg-license/",
+                "FortiGateLicenseStorageKeyPrefix": "fgt-asg-license",
                 "FortiGateTrafficPort": {
                     "Ref": "LoadBalancingTrafficPort"
                 },

@@ -106,7 +106,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async createTables() {
         let errors = [];
         await Promise.all([
-            DB.AUTOSCALE, DB.ELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
+            DB.FORTIGATEAUTOSCALE, DB.FORTIGATEMASTERELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
             DB.NICATTACHMENT, DB.CUSTOMLOG]
             .map(table => this.createTable(table).catch(err => errors.push(err)))
         );
@@ -241,7 +241,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async putMasterRecord(candidateInstance, voteState, method = 'new') {
         try {
             let params = {
-                TableName: DB.ELECTION.TableName,
+                TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 Item: {
                     asgName: this.scalingGroupName,
                     ip: candidateInstance.primaryPrivateIpAddress,
@@ -266,7 +266,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async getMasterRecord() {
         const
             params = {
-                TableName: DB.ELECTION.TableName,
+                TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 FilterExpression: '#PrimaryKeyName = :primaryKeyValue',
                 ExpressionAttributeNames: {
                     '#PrimaryKeyName': 'asgName'
@@ -290,7 +290,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // only purge the master with a done votestate to avoid a
         // race condition
         const params = {
-            TableName: DB.ELECTION.TableName,
+            TableName: DB.FORTIGATEMASTERELECTION.TableName,
             Key: {
                 asgName: this.masterScalingGroupName
             },
@@ -311,7 +311,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let electedMaster = this._masterRecord || await this.getMasterRecord();
             electedMaster.voteState = 'done';
             const params = {
-                TableName: DB.ELECTION.TableName,
+                TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 Item: electedMaster
             };
             let result = await docClient.put(params).promise();
@@ -339,7 +339,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             Key: {
                 instanceId: instance.instanceId
             },
-            TableName: DB.AUTOSCALE.TableName
+            TableName: DB.FORTIGATEAUTOSCALE.TableName
         };
         try {
             let scriptExecutionStartTime,
@@ -447,7 +447,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 Key: {
                     instanceId: healthCheckObject.instanceId
                 },
-                TableName: DB.AUTOSCALE.TableName,
+                TableName: DB.FORTIGATEAUTOSCALE.TableName,
                 UpdateExpression: 'set heartBeatLossCount = :HeartBeatLossCount, ' +
                     'heartBeatInterval = :heartBeatInterval, ' +
                     'nextHeartBeatTime = :NextHeartBeatTime, ' +
@@ -479,7 +479,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async deleteInstanceHealthCheck(instanceId) {
         try {
             let params = {
-                TableName: DB.AUTOSCALE.TableName,
+                TableName: DB.FORTIGATEAUTOSCALE.TableName,
                 Key: {
                     instanceId: instanceId
                 }
@@ -1905,7 +1905,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             await this.platform.describeInstance({
                 instanceId: event.detail.EC2InstanceId
             });
-        this.setScalingGroup(this._settings['master-auto-scaling-group-name'],
+        this.setScalingGroup(this._settings['master-scaling-group-name'],
                     event.detail.AutoScalingGroupName);
         // attach nic2
         if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
@@ -2029,7 +2029,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 syncState: 'in-sync',
                 masterIp: masterIp
             },
-            TableName: DB.AUTOSCALE.TableName
+            TableName: DB.FORTIGATEAUTOSCALE.TableName
         };
         return await docClient.put(params).promise();
     }
@@ -2479,18 +2479,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /** @override */
     async removeInstance(instance) {
         return await this.platform.terminateInstanceInAutoScalingGroup(instance);
-    }
-
-    /** @override */
-    async checkInstanceAuthorization(instance) {
-        // TODO: can we generalize this method to core?
-        if (!instance ||
-                instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
-            // not trusted
-            return await Promise.reject('Unauthorized calling instance (' +
-            `instanceId: ${instance.instanceId}). Instance not found in VPC.`);
-        }
-        return await Promise.resolve(true);
     }
 
     async handleTgwVpnAttachment(event) {

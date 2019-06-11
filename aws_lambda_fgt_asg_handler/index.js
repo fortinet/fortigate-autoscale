@@ -116,7 +116,7 @@ async function restart() {
     await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
     // bring up the rest instances which will become the slave(s)
     await autoscaleHandler.updateCapacity(
-        autoscaleHandler._settings['payg-auto-scaling-group-name'], 1, 1, settings.maxSize);
+        autoscaleHandler._settings['payg-scaling-group-name'], 1, 1, settings.maxSize);
     if (settings.desiredCapacity > 1) {
         await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
         await autoscaleHandler.updateCapacity(

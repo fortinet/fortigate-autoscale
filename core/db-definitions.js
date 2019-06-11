@@ -34,7 +34,7 @@ const DB = {
         TableName: 'FortiGateLifecycleItem',
         AdditionalAttributeDefinitions: []
     },
-    AUTOSCALE: {
+    FORTIGATEAUTOSCALE: {
         AttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
@@ -79,7 +79,7 @@ const DB = {
             }
         ]
     },
-    ELECTION: {
+    FORTIGATEMASTERELECTION: {
         AttributeDefinitions: [
             {
                 AttributeName: 'asgName',

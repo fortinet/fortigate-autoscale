@@ -910,7 +910,7 @@
                         },
                         {
                             "name": "FORTIGATE_LICENSE_STORAGE_KEY_PREFIX",
-                            "value": "fgt-asg-license/"
+                            "value": "fgt-asg-license"
                         },
                         {
                             "name": "FORTIGATE_PROTECTED_INTERNAL_ELB_DNS",
@@ -1609,7 +1609,7 @@
                     "capacity": {
                         "minimum": "[parameters('byolInstanceCount')]",
                         "maximum": "[parameters('byolInstanceCount')]",
-                        "default": "[parameters('byolInstanceCount')]"
+                        "default": 0
                     },
                     "rules": []
                 }]
