@@ -16,6 +16,12 @@ module.exports = class CloudPlatform {
         throw new Error('Not Implemented');
     }
 
+    /**
+     * @returns {Boolean} whether the CloudPlatform is initialzied or not
+     */
+    get initialized() {
+        return this._initialized;
+    }
     /* eslint-disable no-unused-vars */
     /**
      * Initialize (and wait for) any required resources such as database tables etc.

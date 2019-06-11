@@ -71,70 +71,8 @@ module.exports = class AutoscaleHandler {
         throw new Error('Not Implemented');
     }
 
-    /**
-     *
-     * @param {CloudPlatform.RequestEvent} event Event from the platform
-     * @param {CloudPlatform.RequestContext} context the runtime context of this function
-     * call from the platform
-     * @param {CloudPlatform.RequestCallback} callback the callback function the platorm
-     * uses to end a request
-     */
-    async handle(event, context, callback) { // eslint-disable-line unused-vars
-        this._step = 'initializing';
-        let proxyMethod = 'httpMethod' in event && event.httpMethod ||
-            'method' in event && event.method,
-            result;
-        try {
-            const platformInitSuccess = await this.init();
-            // return 500 error if script cannot finish the initialization.
-            if (!platformInitSuccess) {
-                result = 'fatal error, cannot initialize.';
-                this.logger.error(result);
-                callback(null, this.proxyResponse(500, result));
-            } else if (event.source === 'aws.autoscaling') {
-                this._step = 'aws.autoscaling';
-                result = await this.handleAutoScalingEvent(event);
-                callback(null, this.proxyResponse(200, result));
-            } else {
-                // authenticate the calling instance
-                this.parseRequestInfo(event);
-                if (!this._requestInfo.instanceId) {
-                    result = 'Instance id not provided.';
-                    this.logger.error(result);
-                    callback(null, this.proxyResponse(403, result));
-                    return;
-                }
-                await this.parseInstanceInfo(this._requestInfo.instanceId);
-
-                await this.checkInstanceAuthorization(this._selfInstance);
-                if (proxyMethod === 'GET') {
-                    this._step = 'fortigate:getConfig';
-                    result = await this.handleGetConfig();
-                    callback(null, this.proxyResponse(200, result));
-                } else if (proxyMethod === 'POST') {
-                    // handle status messages
-                    if (this._requestInfo.status) {
-                        this._step = 'fortigate:handleStatusMessage';
-                        result = await this.handleStatusMessage(event);
-                    } else {
-                        this._step = 'fortigate:handleSyncedCallback';
-                        result = await this.handleSyncedCallback();
-                    }
-                    callback(null, this.proxyResponse(200, result));
-                } else {
-                    this._step = '¯\\_(ツ)_/¯';
-                    this.logger.log(`${this._step} unexpected event!`, event);
-                    // probably a test call from the lambda console?
-                    // should do nothing in response
-                }
-            }
-        } catch (ex) {
-            if (ex.message) {
-                ex.message = `${this._step}: ${ex.message}`;
-            }
-            this.logger.error(ex);
-            callback(null, this.proxyResponse(500, ex));
-        }
+    async handle() {
+        await this.throwNotImplementedException();
     }
 
     async init() {
@@ -265,34 +203,8 @@ module.exports = class AutoscaleHandler {
     }
 
     async parseInstanceInfo(instanceId) {
-        // look for this vm in both byol and payg scaling group
-        // check if hybrid licensing feature is on or off to determine whether apply instance
-        // scaling group restriction or not
-        const hybridLicensingEnabled = this._settings['enable-hybrid-licensing'] === 'true';
-        // look from byol first
-        let params = {
-            instanceId: instanceId
-        };
-        if (hybridLicensingEnabled && this._settings['byol-scaling-group-name']) {
-            params.scalingGroupName = this._settings['byol-scaling-group-name'];
-        }
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance(params);
-        // not found in byol scaling group, look from payg
-        if (!this._selfInstance && this._settings['payg-scaling-group-name']) {
-            params.scalingGroupName = this._settings['payg-scaling-group-name'];
-            this._selfInstance = this._selfInstance || await this.platform.describeInstance(params);
-        }
-        if (this._selfInstance) {
-            this.setScalingGroup(
-                this._settings['master-scaling-group-name'],
-                this._selfInstance.scalingGroupName
-            );
-            this.logger.info(`instance identification (id: ${this._selfInstance.instanceId}, ` +
-                `scaling group self: ${this.scalingGroupName}, ` +
-                `master: ${this.masterScalingGroupName})`);
-        } else {
-            this.logger.warn(`cannot identify instance: vmid:(${instanceId})`);
-        }
+        await this.throwNotImplementedException();
+        return instanceId;
     }
 
     async checkInstanceAuthorization(instance) {
@@ -1081,19 +993,19 @@ module.exports = class AutoscaleHandler {
                     description = 'The FortiGate Autoscale handler URL.';
                     editable = false;
                     break;
-                case 'masterscalinggroupname':
-                    keyName = 'master-scaling-group-name';
-                    description = 'The name of the master scaling group.';
+                case 'masterautoscalinggroupname':
+                    keyName = 'master-auto-scaling-group-name';
+                    description = 'The name of the master auto scaling group.';
                     editable = false;
                     break;
-                case 'paygscalinggroupname':
-                    keyName = 'payg-scaling-group-name';
-                    description = 'The name of the PAYG scaling group.';
+                case 'paygautoscalinggroupname':
+                    keyName = 'payg-auto-scaling-group-name';
+                    description = 'The name of the PAYG auto scaling group.';
                     editable = false;
                     break;
-                case 'byolscalinggroupname':
-                    keyName = 'byol-scaling-group-name';
-                    description = 'The name of the BYOL scaling group.';
+                case 'byolautoscalinggroupname':
+                    keyName = 'byol-auto-scaling-group-name';
+                    description = 'The name of the BYOL auto scaling group.';
                     editable = false;
                     break;
                 case 'requiredconfigset':

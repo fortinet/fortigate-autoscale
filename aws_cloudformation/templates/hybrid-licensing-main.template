@@ -1271,8 +1271,7 @@
                     "Parameters": [
                         "HeartBeatInterval",
                         "HeartBeatLossCount",
-                        "HeartBeatDelayAllowance",
-                        "HeartBeatInterval"
+                        "HeartBeatDelayAllowance"
                     ]
                 },
                 {

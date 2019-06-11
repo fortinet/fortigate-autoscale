@@ -920,6 +920,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         try {
             let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
                 DB.LICENSESTOCK.TableName, null, null, {crossPartition: true});
+            let recordCount = 0,
+                records = [];
             if (Array.isArray(items)) {
                 recordCount = items.length;
                 records = items;
@@ -1194,164 +1196,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
-    async handleGetLicense(context, event) { // eslint-disable-line no-unused-vars
-        // for a consideration of a large volume of license files:
-        // could use Azure Event Gridsubscription to update the license file list in the db
-        // but since the volume of files is so small, there's no big impact on performance.
-        // in conclusion, no need to use Event Grid.
-        // for a small amount of license file (such as less than 10 files):
-        // could list all file whenever comes a get-license request.
-        try {
-            await this.platform.init();
-            // authenticate the calling instance
-            this.parseRequestInfo(event);
-            if (!this._requestInfo.instanceId) {
-                context.res = this.proxyResponse(403, 'Instance id not provided.');
-                return;
-            }
-            await this.parseInstanceInfo(this._requestInfo.instanceId);
-
-            if (!(this._selfInstance && this.scalingGroupName)) {
-                throw new Error('Unauthorized calling instance ' +
-                `(vmid: ${this._requestInfo.instanceId}). Instance not found in scale set.`);
-            }
-
-            let [licenseFiles, stockRecords, usageRecords] = await Promise.all([
-                this.platform.listLicenseFiles(),// expect it to return a map
-                this.platform.listLicenseStock(),// expect it to return a map
-                this.platform.listLicenseUsage() // expect it to return a map
-            ]);
-
-            // update the license stock records on db if any change in file storage
-            // this returns the newest stockRecords on the db
-            stockRecords = await this.updateLicenseStockRecord(licenseFiles, stockRecords);
-
-            let availStockItem,
-                updateUsage = true;
-
-            let itemKey, itemValue;
-
-            // TODO: remove the workaround if mantis item: #0534971 is resolved
-            // a workaround for double get call:
-            // check if a license is already assigned to one fgt, if it makes a second get call
-            // for license, returns the tracked usage record.
-
-            for ([itemKey, itemValue] of usageRecords.entries()) {
-                if (itemValue.asgName === this.scalingGroupName &&
-                    itemValue.instanceId === this._selfInstance.instanceId) {
-                    availStockItem = itemValue;
-                    updateUsage = false;
-                    break;
-                }
-            }
-
-            // this is a greedy approach
-            // try to find one available license and use it.
-            // if none availabe, try to check if any used one could be recycled.
-            // if none recyclable, throw an error.
-
-            if (!availStockItem) {
-                for ([itemKey, itemValue] of stockRecords.entries()) {
-                    if (itemKey && !usageRecords.has(itemKey)) {
-                        availStockItem = itemValue;
-                        break;
-                    }
-                }
-
-                // if not found available license file
-                if (!availStockItem) {
-                    [availStockItem] = await this.findRecycleableLicense(stockRecords,
-                        usageRecords, 1);
-                }
-            }
-
-            if (!availStockItem) {
-                throw new Error('No license available.');
-            }
-
-            let licenseFile = await this.platform.getBlobFromStorage({
-                storageName: '',
-                keyPrefix: availStockItem.filePath,
-                fileName: availStockItem.fileName
-            });
-
-            // license file found
-            // update usage records
-            if (updateUsage) {
-                await this.platform.updateLicenseUsage({
-                    stockItem: availStockItem,
-                    asgName: this.scalingGroupName,
-                    instanceId: this._selfInstance.instanceId
-                });
-            }
-            context.res = this.proxyResponse(200, licenseFile.content);
-        } catch (error) {
-            logger.error(error);
-            context.res = this.proxyResponse(500, error);
-        }
-    }
-
-    async updateLicenseStockRecord(licenseFiles, stockRecords) {
-        if (licenseFiles instanceof Map && stockRecords instanceof Map) {
-            let fileQueries = [],
-                untrackedFiles = new Map(licenseFiles.entries());// copy the map
-            try {
-                if (stockRecords.size > 0) {
-                    // filter out tracked license files
-                    stockRecords.forEach(item => {
-                        let licenseFileKey =
-                            this.platform.genLicenseFileSimpleKey(item.fileName, item.fileETag);
-                        if (licenseFiles.has(licenseFileKey)) {
-                            untrackedFiles.delete(licenseFileKey);
-                        }
-                    }, this);
-                }
-                untrackedFiles.forEach(item => {
-                    fileQueries.push(this.platform.getBlobFromStorage({
-                        path: 'fgt-asg-license',
-                        fileName: item.name,
-                        getProperties: true
-                    }).catch(() => {
-                        return null;
-                    }));
-                }, this);
-                let fileObjects = await Promise.all(fileQueries);
-                let updateTasks = [];
-                fileObjects.forEach(item => {
-                    if (item) {
-                        let algorithm = 'sha1',
-                            checksum = AutoScaleCore.Functions.calStringChecksum(
-                                item.content, algorithm);
-                        // duplicate license
-                        if (stockRecords.has(checksum)) {
-                            logger.warn('updateLicenseStockRecord > warning: duplicate' +
-                                    ` license found: filename: ${item.properties.name}`);
-                        } else {
-                            updateTasks.push((function(fileItem, ref) {
-                                return ref.platform.updateLicenseStock(
-                                    {
-                                        item: fileItem,
-                                        checksum: checksum,
-                                        algorithm: algorithm,
-                                        replace: false}
-                                ).catch(error => {
-                                    logger.error(error);
-                                });
-                            })(item, this));
-                        }
-                    }
-                }, this);
-                await Promise.all(updateTasks);
-                return updateTasks.length > 0 ? this.platform.listLicenseStock() : stockRecords;
-            } catch (error) {
-                logger.error(error);
-            }
-        } else {
-            return stockRecords;
-        }
-    }
-
-    async findRecycleableLicense(stockRecords, usageRecords, limit = 'all') {
+    /** @override */
+    async findRecyclableLicense(stockRecords, usageRecords, limit = -1) {
         if (stockRecords instanceof Map && usageRecords instanceof Map) {
             let gracePeriod = (parseInt(this._settings['get-license-grace-period']) || 600) * 1000;
             // do health check on each item
