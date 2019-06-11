@@ -243,5 +243,5 @@ exports.uuidGenerator = uuidGenerator;
 exports.sleep = sleep;
 exports.waitFor = waitFor;
 exports.calStringChecksum = calStringChecksum;
-exports.toGmtTime = toGmtTime;
 exports.configSetResourceFinder = configSetResourceFinder;
+exports.toGmtTime = toGmtTime;

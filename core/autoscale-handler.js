@@ -39,6 +39,8 @@ module.exports = class AutoscaleHandler {
         this._masterRecord = null;
         this._masterInfo = null;
         this._requestInfo = {};
+        this.scalingGroupName = null;
+        this.masterScalingGroupName = null;
     }
 
     static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
@@ -47,14 +49,6 @@ module.exports = class AutoscaleHandler {
 
     static get DEFAULT_HEART_BEAT_INTERVAL() {
         return DEFAULT_HEART_BEAT_INTERVAL;
-    }
-
-    /**
-     * Get the read-only settings object from the platform. To modify the settings object,
-     * do it via the platform instance but not here.
-     */
-    get _settings() {
-        return this.platform && this.platform._settings;
     }
 
     /**
@@ -950,23 +944,38 @@ module.exports = class AutoscaleHandler {
                     break;
                 case 'deploymentsettingssaved':
                     keyName = 'deployment-settings-saved';
-                    description = 'A flag setting item that indicates all deployment' +
-                    'settings have been saved.';
+                    description = 'A flag setting item that indicates all deployment ' +
+                        'settings have been saved.';
                     editable = false;
                     break;
-                case 'desiredcapacity':
+                case 'byolscalinggroupdesiredcapacity':
+                    keyName = 'byol-scaling-group-desired-capacity';
+                    description = 'BYOL Scaling group desired capacity.';
+                    editable = true;
+                    break;
+                case 'byolscalinggroupminsize':
+                    keyName = 'byol-scaling-group-min-size';
+                    description = 'BYOL Scaling group min size.';
+                    editable = true;
+                    break;
+                case 'byolscalinggroupmaxsize':
+                    keyName = 'byol-scaling-group-max-size';
+                    description = 'BYOL Scaling group max size.';
+                    editable = true;
+                    break;
+                case 'scalinggroupdesiredcapacity':
                     keyName = 'scaling-group-desired-capacity';
-                    description = 'Scaling group desired capacity.';
+                    description = 'PAYG Scaling group desired capacity.';
                     editable = true;
                     break;
-                case 'minsize':
+                case 'scalinggroupminsize':
                     keyName = 'scaling-group-min-size';
-                    description = 'Scaling group min size.';
+                    description = 'PAYG Scaling group min size.';
                     editable = true;
                     break;
-                case 'maxsize':
+                case 'scalinggroupmaxsize':
                     keyName = 'scaling-group-max-size';
-                    description = 'Scaling group max size.';
+                    description = 'PAYG Scaling group max size.';
                     editable = true;
                     break;
                 case 'resourcetagprefix':
@@ -994,10 +1003,34 @@ module.exports = class AutoscaleHandler {
                     description = 'Asset storage key prefix.';
                     editable = false;
                     break;
-                case 'vpcid':
-                    keyName = 'vpc-id';
+                case 'fortigateautoscalevpcid':
+                    keyName = 'fortigate-autoscale-vpc-id';
                     description = 'VPC ID of the FortiGate Autoscale.';
                     editable = false;
+                    break;
+                case 'fortigateautoscalesubnet1':
+                    keyName = 'fortigate-autoscale-subnet-1';
+                    description = 'The ID of the subnet 1 (in the first selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscalesubnet2':
+                    keyName = 'fortigate-autoscale-subnet-2';
+                    description = 'The ID of the subnet 2 (in the second selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
+                case 'fortigateautoscaleprotectedsubnet1':
+                    keyName = 'fortigate-autoscale-protected-subnet1';
+                    description = 'The ID of the protected subnet 1 (in the first selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = true;
+                    break;
+                case 'fortigateautoscaleprotectedsubnet2':
+                    keyName = 'fortigate-autoscale-protected-subnet2';
+                    description = 'The ID of the protected subnet 2 (in the second selected AZ) ' +
+                        'of the FortiGate Autoscale.';
+                    editable = true;
                     break;
                 case 'fortigatepsksecret':
                     keyName = 'fortigate-psk-secret';
@@ -1026,6 +1059,11 @@ module.exports = class AutoscaleHandler {
                 case 'heartbeatinterval':
                     keyName = 'heartbeat-interval';
                     description = 'The FortiGate sync heartbeat interval in second.';
+                    editable = true;
+                    break;
+                case 'masterelectiontimeout':
+                    keyName = 'master-election-timeout';
+                    description = 'The FortiGate master election timtout time in second.';
                     editable = true;
                     break;
                 case 'heartbeatlosscount':
@@ -1289,6 +1327,68 @@ module.exports = class AutoscaleHandler {
         if (self) {
             this.scalingGroupName = self;
             this.platform.setScalingGroup(self);
+        }
+    }
+
+    /**
+     * Check and update the route to the NAT gateway instance (which is one healthy ForitGate
+     * from the scaling groups)
+     */
+    async updateNatGatewayRoute() {
+        return await this.throwNotImplementedException();
+    }
+
+    /**
+     *
+     * @param {Map<String, LicenseItem>} licenseFiles a map of LicenseItem based on
+     * the license files in the blob storage. Each map key is the 'blobKey' of the LicenseItem.
+     * @param {Map<String, LicenseRecord>} existingRecords a map of LicenseRecord based on
+     * the existing license record in the db. Each map key is the 'checksum' of the LicenseItem.
+     */
+    async updateLicenseStockRecord(licenseFiles, existingRecords) {
+        if (licenseFiles instanceof Map && existingRecords instanceof Map) {
+            let untrackedFiles = new Map(licenseFiles.entries()); // copy the map
+            try {
+                if (existingRecords.size > 0) {
+                    // filter out tracked license files
+                    existingRecords.forEach(licenseRecord => {
+                        if (licenseFiles.has(licenseRecord.blobKey)) {
+                            untrackedFiles.delete(licenseRecord.blobKey);
+                        }
+                    }, this);
+                }
+                let platform = this.platform;
+                // fetch the content for each untrack license file
+                let updateTasks = [];
+                untrackedFiles.forEach(licenseItem => {
+                    updateTasks.push((async () => {
+                        const content = await platform.getLicenseFileContent(licenseItem.fileName);
+                        licenseItem.content = content;
+                        return licenseItem;
+                    })());
+                });
+
+                untrackedFiles = await Promise.all(updateTasks);
+                updateTasks = [];
+
+                untrackedFiles.forEach(licenseItem => {
+                    if (existingRecords.has(licenseItem.checksum)) {
+                        this.logger.warn('updateLicenseStockRecord > warning: duplicate' +
+                            ` license found: filename: ${licenseItem.fileName}`);
+                    } else {
+                        updateTasks.push(platform.updateLicenseStock(licenseItem, false)
+                        .catch(error => {
+                            this.logger.error(error);
+                        }));
+                    }
+                });
+                await Promise.all(updateTasks);
+                return updateTasks.length > 0 ? this.platform.listLicenseStock() : existingRecords;
+            } catch (error) {
+                this.logger.error(error);
+            }
+        } else {
+            return existingRecords;
         }
     }
 };

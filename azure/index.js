@@ -516,7 +516,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         let queries = [];
         queries.push(new Promise((resolve, reject) => {
             blobService.getBlobToText(parameters.keyPrefix, parameters.fileName,
-                (error, text, result, response) => {
+                (error, text, result, response) => { // eslint-disable-line no-unused-vars
                     if (error) {
                         reject(error);
                     } else if (response && response.statusCode === 200 || response.isSuccessful) {
@@ -647,7 +647,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             if (!Array.isArray(items) || items.length === 0) {
                 return null;
             }
-            if (items[0].timestamp + VM_INFO_CACHE_TIME * 1000 < Date.now()) {
+            if (items[0].expireTime < Date.now()) {
                 logger.info('called getVmInfoCache > cached expired.');
                 return null;
             }
@@ -818,6 +818,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
 
     async listLicenseFiles() {
         let blobService = storageClient.refBlobService();
+        let platform = this.platform;
+        let prefix = platform._settings['fortigate-license-storage-key-prefix'];
         return await new Promise((resolve, reject) => {
             // NOTE: the etag of each object returned by Azure API function:
             // listBlobsSegmented
@@ -826,7 +828,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             // in the Azure API function:
             // getBlobToText and getBlobProperties
             // see: https://github.com/Azure/azure-storage-node/issues/586
-            blobService.listBlobsSegmented('fgt-asg-license', null,
+            blobService.listBlobsSegmented(prefix, null,
             (error, data) => {
                 if (error) {
                     reject(error);
@@ -846,16 +848,19 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                                 content: blob.content
                             };
                         });
-                        let contents = await Promise.all(contentQueries);
-                        let iterable = contents.map(item => {
-                            let licenseItem = new AutoScaleCore.LicenseItem(
-                                    item.fileName,
-                                    item.fileETag,
-                                    item.content
-                            );
-                            return [licenseItem.blobKey, licenseItem];
-                        });
-                        resolve(new Map(iterable));
+                        let contentQueryPromise = async queries => {
+                            let contents = await Promise.all(queries);
+                            let iterable = contents.map(item => {
+                                let licenseItem = new AutoScaleCore.LicenseItem(
+                                        item.fileName,
+                                        item.fileETag,
+                                        item.content
+                                );
+                                return [licenseItem.blobKey, licenseItem];
+                            });
+                            return new Map(iterable);
+                        };
+                        resolve(contentQueryPromise(contentQueries));
                     } else {
                         resolve(new Map());
                     }
@@ -875,7 +880,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 recordCount = items.length;
                 records = items;
             }
-            let iterable = items.map(item => [item['sha1-checksum'], item]);
+            let iterable = items.map(item => [item.checksum, item]);
             return new Map(iterable);
         } catch (error) {
             return new Map();
@@ -885,13 +890,14 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async updateLicenseUsage(licenseRecord, replace = false) {
         let document = {
-            id: parameters.stockItem.checksum,
-            'sha1-checksum': parameters.stockItem.checksum,
-            filePath: parameters.stockItem.filePath,
-            fileName: parameters.stockItem.fileName,
-            asgName: parameters.asgName,
-            instanceId: parameters.instanceId,
-            assignedTime: Date.now()
+            id: licenseRecord.id,
+            blobKey: licenseRecord.blobKey,
+            checksum: licenseRecord.checksum,
+            fileName: licenseRecord.fileName,
+            algorithm: licenseRecord.algorithm,
+            instanceId: licenseRecord.instanceId,
+            scalingGroupName: licenseRecord.scalingGroupName,
+            assignedTime: licenseRecord.assignedTime
         };
 
         try {
@@ -914,8 +920,6 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         try {
             let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
                 DB.LICENSESTOCK.TableName, null, null, {crossPartition: true});
-            let recordCount = 0,
-                records = [];
             if (Array.isArray(items)) {
                 recordCount = items.length;
                 records = items;
@@ -928,19 +932,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
-    async updateLicenseStock(parameters) {
-        // eTag is originally wrapped with a pair of double quotes.
-        // NOTE: decide to use whatever the etag is passed in here. the double quotes should
-        // be handled in the caller. (May 17, 2019)
-        let document = {
-            id: parameters.checksum,
-            checksum: parameters.checksum,
-            filePath: parameters.item.properties.container,
-            fileName: parameters.item.properties.name,
-            algorithm: parameters.algorithm,
-            fileETag: parameters.item.properties.etag
-        };
-
+    async updateLicenseStock(licenseItem, replace = true) {
         try {
             const TABLE = DB.LICENSESTOCK;
             let doc = await dbClient.createDocument(DATABASE_NAME, TABLE.TableName,
@@ -992,19 +984,6 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             await this.saveSettings();
         }
         return await super.init();
-    }
-
-    async init() {
-        let success;
-        try {
-            // call parent's init to enforce some general init checkings.
-            success = await super.init();
-        } catch (error) {
-            throw error;
-        }
-        // load settings
-        this._settings = this._settings || await this.platform.getSettingItems();
-        return success;
     }
 
     /* eslint-disable max-len */

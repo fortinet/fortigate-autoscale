@@ -1515,6 +1515,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
+    // eslint-disable-next-line no-unused-vars
     async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
         logger.info('calling getVmInfoCache.');
         try {

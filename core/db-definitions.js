@@ -226,19 +226,23 @@ const DB = {
     VMINFOCACHE: {
         AttributeDefinitions: [
             {
-                AttributeName: 'instanceId',
+                AttributeName: 'id',
                 AttributeType: 'S'
             }
         ],
         KeySchema: [
             {
-                AttributeName: 'instanceId',
+                AttributeName: 'id',
                 KeyType: 'HASH'
             }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'VmInfoCache',
         AdditionalAttributeDefinitions: [
+            {
+                AttributeName: 'instanceId',
+                AttributeType: 'S'
+            },
             {
                 AttributeName: 'vmId',
                 AttributeType: 'S'
@@ -250,6 +254,14 @@ const DB = {
             {
                 AttributeName: 'info',
                 AttributeType: 'S'
+            },
+            {
+                AttributeName: 'timestamp',
+                AttributeType: 'N'
+            },
+            {
+                AttributeName: 'expireTime',
+                AttributeType: 'N'
             }
         ]
     },
@@ -300,7 +312,7 @@ const DB = {
                 AttributeType: 'S'
             },
             {
-                AttributeName: 'sha1-checksum',
+                AttributeName: 'checksum',
                 AttributeType: 'S'
             },
             {
@@ -312,7 +324,7 @@ const DB = {
                 AttributeType: 'S'
             },
             {
-                AttributeName: 'asgName',
+                AttributeName: 'scalingGroupName',
                 AttributeType: 'S'
             },
             {
@@ -322,6 +334,10 @@ const DB = {
             {
                 AttributeName: 'assignedTime',
                 AttributeType: 'N'
+            },
+            {
+                AttributeName: 'blobKey',
+                AttributeType: 'S'
             }
         ]
     },
@@ -358,12 +374,20 @@ const DB = {
             {
                 AttributeName: 'instanceId',
                 AttributeType: 'S'
+            },
+            {
+                AttributeName: 'publicIp',
+                AttributeType: 'S'
             }
         ],
         KeySchema: [
             {
                 AttributeName: 'instanceId',
                 KeyType: 'HASH'
+            },
+            {
+                AttributeName: 'publicIp',
+                KeyType: 'RANGE'
             }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },

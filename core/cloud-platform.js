@@ -16,12 +16,6 @@ module.exports = class CloudPlatform {
         throw new Error('Not Implemented');
     }
 
-    /**
-     * @returns {Boolean} whether the CloudPlatform is initialzied or not
-     */
-    get initialized() {
-        return this._initialized;
-    }
     /* eslint-disable no-unused-vars */
     /**
      * Initialize (and wait for) any required resources such as database tables etc.
@@ -122,7 +116,7 @@ module.exports = class CloudPlatform {
         if (this._settings['autoscale-handler-url']) {
             return await Promise.resolve(this._settings['autoscale-handler-url']);
         } else {
-            throw new Error('Api Gateway setting: autoscale-handler-url, not found.');
+            throw new Error('Autoscale callback URL setting: autoscale-handler-url, not found.');
         }
     }
 
@@ -292,18 +286,28 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    /**
+     * get the blob from storage
+     * @param {Object} parameters parameter object
+     * @returns {Object} the object must have the property 'content' containing the blob content
+     */
     async getBlobFromStorage(parameters) {
-        await this.throwNotImplementedException();
+        return await this.throwNotImplementedException();
     }
 
     async listBlobFromStorage(parameters) {
         await this.throwNotImplementedException();
     }
 
+    async getLicenseFileContent(fileName) {
+        return await this.throwNotImplementedException();
+    }
+
     /**
      * List license files in storage
      * @param {Object} parameters parameter require to list and filter licenses
-     * @returns {Map} must return a Map Key: checksum, Value: the file info (must include content)
+     * @returns {Map<LicenseItem>} must return a Map of LicenseItem with blobKey as key,
+     * and LicenseItem as value
      */
     async listLicenseFiles(parameters) {
         await this.throwNotImplementedException();
@@ -358,6 +362,26 @@ module.exports = class CloudPlatform {
 
     async terminateInstanceInAutoScalingGroup(instance) {
         await this.throwNotImplementedException();
+    }
+
+    /**
+     * Retrieve the cached vm info from database
+     * @param {String} scaleSetName scaling group name the vm belongs to
+     * @param {String} instanceId the instanceId of the vm if instanceId is the unique ID
+     * @param {String} vmId another unique ID to identify the vm if instanceId is not the unique ID
+     */
+    async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
+        return await this.throwNotImplementedException() || scaleSetName && instanceId && vmId;
+    }
+
+    /**
+     *
+     * @param {String} scaleSetName scaling group name the vm belongs to
+     * @param {Object} info the json object of the info to cache in database
+     * @param {Integer} cacheTime the maximum time in seconds to keep the cache in database
+     */
+    async setVmInfoCache(scaleSetName, info, cacheTime = 3600) {
+        return await this.throwNotImplementedException() || scaleSetName && info && cacheTime;
     }
 
     /**
