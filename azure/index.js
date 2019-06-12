@@ -1014,7 +1014,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     /* eslint-disable max-len */
     /**
-     *
+     * @override
      * @param {AzurePlatform.RequestEvent} event Event from the api-gateway.
      * @param {AzurePlatform.RequestContext} context the runtime context of this function
      * call from the platform
@@ -1022,9 +1022,8 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      * uses to end a request
      */
     /* eslint-enable max-len */
-    async handle(event, context, callback) { // eslint-disable-line unused-vars
-        // TODO: may need to change when using TS
-        await super.handle(event, context, callback);
+    async handle(event, context, callback) { // eslint-disable-line no-unused-vars
+        await super.handle(...arguments);
     }
 
     /** @override */

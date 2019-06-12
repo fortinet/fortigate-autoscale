@@ -71,8 +71,84 @@ module.exports = class AutoscaleHandler {
         throw new Error('Not Implemented');
     }
 
-    async handle() {
-        await this.throwNotImplementedException();
+    /* eslint-disable max-len */
+    /**
+     *
+     * @param {Platform.RequestEvent} event Event from platform.
+     * @param {Platform.RequestContext} context the runtime context of this function
+     * call from the platform
+     * @param {Platform.RequestCallback} callback the callback function the platorm
+     * uses to end a request
+     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+     */
+    async handle(event, context, callback) { // eslint-disable-line no-unused-vars
+        this._step = 'initializing';
+        let proxyMethod = 'method' in event && event.method ||
+            'httpMethod' in event && event.httpMethod,
+            result;
+        try {
+            const platformInitSuccess = await this.init();
+            // return 500 error if script cannot finish the initialization.
+            if (!platformInitSuccess) {
+                result = 'fatal error, cannot initialize.';
+                this.logger.error(result);
+                callback(null, this.proxyResponse(500, result));
+            } else if (event.source === 'autoscaling') {
+                this._step = 'autoscaling';
+                result = await this.handleAutoScalingEvent(event);
+                callback(null, this.proxyResponse(200, result));
+            } else {
+                // authenticate the calling instance
+                this.parseRequestInfo(event);
+                if (!this._requestInfo.instanceId) {
+                    callback(null, this.proxyResponse(403, 'Instance id not provided.'));
+                    return;
+                }
+                await this.parseInstanceInfo(this._requestInfo.instanceId);
+
+                await this.checkInstanceAuthorization(this._selfInstance);
+
+                if (proxyMethod === 'GET') {
+                    this._step = 'fortigate:getConfig';
+                    result = await this.handleGetConfig();
+                    callback(null, this.proxyResponse(200, result));
+                } else if (proxyMethod === 'POST') {
+                    this._step = 'fortigate:handleSyncedCallback';
+                    // handle status messages
+                    if (this._requestInfo.status) {
+                        result = await this.handleStatusMessage(event);
+                    } else {
+                        result = await this.handleSyncedCallback();
+                    }
+                    callback(null, this.proxyResponse(200, result));
+                } else {
+                    this._step = '¯\\_(ツ)_/¯';
+
+                    this.logger.warn(`${this._step} unexpected event!`, event);
+                    // probably a test call?
+                    callback(null, this.proxyResponse(500, result));
+                }
+            }
+
+        } catch (ex) {
+            if (ex.message) {
+                ex.message = `${this._step}: ${ex.message}`;
+            }
+            try {
+                console.error('ERROR while ', this._step, proxyMethod, ex);
+            } catch (ex2) {
+                console.error('ERROR while ', this._step, proxyMethod, ex.message, ex, ex2);
+            }
+            if (proxyMethod) {
+                callback(null,
+                    this.proxyResponse(500, {
+                        message: ex.message,
+                        stack: ex.stack
+                    }));
+            } else {
+                callback(ex);
+            }
+        }
     }
 
     async init() {

@@ -1780,6 +1780,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-disable max-len */
     /**
      *
+     * @override
      * @param {AWSPlatform.RequestEvent} event Event from the api-gateway.
      * @param {AWSPlatform.RequestContext} context the runtime context of this function
      * call from the platform
@@ -1788,9 +1789,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      */
     /* eslint-enable max-len */
-    async handle(event, context, callback) { // eslint-disable-line unused-vars
-        // TODO: may need to change when using TS
-        await super.handle(event, context, callback);
+    async handle(event, context, callback) { // eslint-disable-line no-unused-vars
+        await super.handle(...arguments);
     }
 
     async getFazIp() {
