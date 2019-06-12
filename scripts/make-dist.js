@@ -370,7 +370,8 @@ async function makeDistAWSLambdaNicAttachment(options = {saveToDist: 'zip', keep
 }
 
 async function makeDistAWSLambdaTgwVpnHandler(options = {saveToDist: 'zip', keepTemp: false}) {
-    console.info('Making distribution zip package for: AWS Lambda Transit Gateway VPN handler function');
+    console.info('Making distribution zip package for: ' +
+        'AWS Lambda Transit Gateway VPN handler function');
     let pm = Packman.spawn(),
         packageName = options.packageName ? options.packageName : 'aws_lambda_tgw_vpn_handler',
         rTempDir = await pm.makeTempDir(),

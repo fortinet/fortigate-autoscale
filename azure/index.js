@@ -6,7 +6,6 @@ Author: Fortinet
 */
 
 exports = module.exports;
-const url = require('url');
 const AutoScaleCore = require('fortigate-autoscale-core');
 const armClient = require('./azure-arm-client');
 const UNIQUE_ID = process.env.UNIQUE_ID || '';
@@ -263,8 +262,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             name: 'asgName',
             value: this.masterScalingGroupName
         };
-        let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.FORTIGATEMASTERELECTION.TableName,
-            keyExpression, null, {crossPartition: true});
+        let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
+            DB.FORTIGATEMASTERELECTION.TableName, keyExpression, null, {crossPartition: true});
         if (!Array.isArray(items) || items.length === 0) {
             logger.info('No elected master was found in the db!');
             return null;
@@ -276,8 +275,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async removeMasterRecord() {
         try {
-            return await dbClient.deleteDocument(DATABASE_NAME, DB.FORTIGATEMASTERELECTION.TableName,
-                this.masterScalingGroupName);
+            return await dbClient.deleteDocument(DATABASE_NAME,
+                DB.FORTIGATEMASTERELECTION.TableName, this.masterScalingGroupName);
         } catch (error) {
             if (error.statusCode && error.statusCode === 404) {
                 return true; // ignore if the file to delete not exists.
@@ -290,8 +289,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             logger.info('calling finalizeMasterElection');
             let electedMaster = this._masterRecord || await this.getMasterRecord();
             electedMaster.voteState = 'done';
-            let result = await dbClient.replaceDocument(DATABASE_NAME, DB.FORTIGATEMASTERELECTION.TableName,
-                electedMaster);
+            let result = await dbClient.replaceDocument(DATABASE_NAME,
+                DB.FORTIGATEMASTERELECTION.TableName, electedMaster);
             logger.info(`called finalizeMasterElection, result: ${JSON.stringify(result)}`);
             return !!result;
         } catch (error) {
@@ -334,7 +333,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 inevitableFailToSyncTime,
                 interval,
                 healthCheckRecord,
-                items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.FORTIGATEAUTOSCALE.TableName,
+                items = await dbClient.simpleQueryDocument(DATABASE_NAME,
+                    DB.FORTIGATEAUTOSCALE.TableName,
                     keyExpression, filterExpression, {crossPartition: true});
             if (!Array.isArray(items) || items.length === 0) {
                 logger.info('called getInstanceHealthCheck: no record found');
@@ -441,8 +441,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 logger.info(`instance already out of sync: healthcheck info: ${healthCheckObject}`);
                 result = true;
             } else {
-                result = await dbClient.replaceDocument(DATABASE_NAME, DB.FORTIGATEAUTOSCALE.TableName,
-                    document);
+                result = await dbClient.replaceDocument(DATABASE_NAME,
+                    DB.FORTIGATEAUTOSCALE.TableName, document);
             }
             logger.info('called updateInstanceHealthCheck');
             return !!result;
@@ -536,7 +536,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     (error, result, response) => {
                         if (error) {
                             reject(error);
-                        } else if (response && response.statusCode === 200 || response.isSuccessful) {
+                        } else if (response && response.statusCode === 200 ||
+                            response.isSuccessful) {
                             resolve(result);
                         } else {
                             reject(response);
@@ -851,7 +852,8 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                                     return {
                                         filePath: blob.properties.container,
                                         fileName: blob.properties.name,
-                                        fileETag: `"${blob.properties.etag}"`,// the etag should be enclosed with double quote. //eslint-disable-line max-len
+                                        // the etag should be enclosed with double quote.
+                                        fileETag: `"${blob.properties.etag}"`,
                                         content: blob.content
                                     };
                                 });
@@ -1038,7 +1040,9 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling handleGetConfig');
         let config,
             masterInfo,
-            params = {};
+            params = {},
+            masterIp,
+            duplicatedGetConfigCall;
 
         // FortiGate actually returns its vmId instead of instanceid
         const instanceId = this._requestInfo.instanceId;

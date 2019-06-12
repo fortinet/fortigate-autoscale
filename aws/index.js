@@ -35,8 +35,6 @@ const
     s3 = new AWS.S3(),
     elbv2 = new AWS.ELBv2(),
     RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '',
-    DEFAULT_MASTER_ELECTION_TIMEOUT = 300,
-    SCRIPT_TIMEOUT = process.env.SCRIPT_TIMEOUT ? process.env.SCRIPT_TIMEOUT : 300,
     DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
     moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems;
@@ -105,10 +103,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     async createTables() {
         let errors = [];
-        await Promise.all([
-            DB.FORTIGATEAUTOSCALE, DB.FORTIGATEMASTERELECTION, DB.LIFECYCLEITEM, DB.FORTIANALYZER, DB.SETTINGS,
-            DB.NICATTACHMENT, DB.CUSTOMLOG]
-            .map(table => this.createTable(table).catch(err => errors.push(err)))
+        await Promise.all(Object.values(DB).map(table =>
+            this.createTable(table).catch(err => errors.push(err)))
         );
         errors.forEach(err => logger.error(err));
         return errors.length === 0;
@@ -240,6 +236,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async putMasterRecord(candidateInstance, voteState, method = 'new') {
         try {
+            let electionTimeout = parseInt(this._settings['master-election-timeout']);
             let params = {
                 TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 Item: {
@@ -248,7 +245,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     instanceId: candidateInstance.instanceId,
                     vpcId: candidateInstance.virtualNetworkId,
                     subnetId: candidateInstance.subnetId,
-                    voteEndTime: Date.now() + (SCRIPT_TIMEOUT - 1) * 1000,
+                    voteEndTime: Date.now() + electionTimeout * 1000,
                     voteState: voteState
                 }
             };
@@ -1925,12 +1922,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 errorTasks.push('handleLoadBalancerAttachment');
             }));
         }
-        await Promise.all(tasks);
-        result = errorTasks.length === 0 && !!this._selfInstance;
-        if (result) {
-            // TODO: if any additional process here failed, should turn this lifecycle hook into
+        try {
+            // if any additional process here failed, should turn this lifecycle hook into
             // the abandon state then proceed to clean this instance and related components
-
             await Promise.all(tasks);
             result = errorTasks.length === 0 && !!this._selfInstance;
             if (result) {
