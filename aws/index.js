@@ -379,7 +379,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                             (interval * 1000 + heartBeatDelayAllowance);
                     healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
                     heartBeatLossCount = data.Item.heartBeatLossCount + 1;
-                    logger.info('hb sync is late again.\n' +
+                    logger.info(`hb sync is late${heartBeatLossCount > 1 ? ' again' : ''}.\n` +
                         `hb loss count becomes: ${heartBeatLossCount},\n` +
                         `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
                         'expected hb arrived time: ' +
@@ -1752,12 +1752,17 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      * Proxy the response to AWS API Gateway call
      * @param {Number} statusCode status code for the HTTP resonse
      * @param {String | Object} res the response body
+     * @param {Object} logOptions the response logging options
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      * @return {Object} the response to AWS API Gateway call
      */
     /* eslint-enable max-len */
-    proxyResponse(statusCode, res) {
-        let log = logger.log(`(${statusCode}) response body:`, JSON.stringify(res)).flush();
+    proxyResponse(statusCode, res, logOptions = null) {
+        let responseLog = res;
+        if (logOptions && logOptions.maskResponse) {
+            responseLog = '[********] is masked in this log. ¯\\_(ツ)_/¯';
+        }
+        let log = logger.log(`(${statusCode}) response body:`, JSON.stringify(responseLog)).flush();
         if (process.env.DEBUG_SAVE_CUSTOM_LOG && (!process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR ||
                 process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR &&
                 logger.errorCount > 0) && log !== '') {

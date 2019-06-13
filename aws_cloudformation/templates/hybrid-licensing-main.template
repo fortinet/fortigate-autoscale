@@ -1072,6 +1072,7 @@
                 "MasterElectionTimeout": {
                     "Ref": "MasterElectionTimeout"
                 },
+                "MasterElectionNoWait": "true",
                 "HeartBeatInterval": {
                     "Ref": "HeartBeatInterval"
                 },

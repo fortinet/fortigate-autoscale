@@ -257,7 +257,7 @@
         "licenseAssetKeyPrefix": "fgt-asg-license",
         "enableHybridLicensing": true,
         "enableFortiAnalyzer": false,
-        "databaseSharedThroughput": "[add(add(variables('databaseSharedThroughputBase'), if(bool(variables('enableHybridLicensing')), 200, 0)), if(bool(variables('enableFortiAnalyzer')), 100, 0))]",
+        "databaseSharedThroughput": "[add(add(variables('databaseSharedThroughputBase'), if(variables('enableHybridLicensing'), 200, 0)), if(variables('enableFortiAnalyzer'), 100, 0))]",
         "vNetName": "[if(equals(parameters('VnetNewOrExisting'), 'existing'), parameters('VNetName'), concat(variables('uniqueResourceNamePrefix'), '-virtual-network'))]",
         "vnetID": "[resourceId(variables('resourceGroupName'),'Microsoft.Network/virtualNetworks', variables('vNetName'))]",
         "addressPrefix": "[parameters('SubnetAddressPrefix')]",
@@ -956,6 +956,10 @@
                         {
                             "name": "MASTER_ELECTION_TIMEOUT",
                             "value": "[parameters('MasterElectionTimeout')]"
+                        },
+                        {
+                            "name": "MASTER_ELECTION_NO_WAIT",
+                            "value": "true"
                         },
                         {
                             "name": "MASTER_SCALING_GROUP_NAME",

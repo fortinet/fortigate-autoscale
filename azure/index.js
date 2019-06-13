@@ -737,16 +737,19 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 }
                 let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
                     DB.CUSTOMLOG.TableName,
-                    null, filterExp, {crossPartition: true}, {
-                        order: {
-                            by: 'timestamp',
-                            direction: 'asc'
-                        }
-                    });
+                    null, filterExp, {crossPartition: true});
                 if (!Array.isArray(items)) {
                     return '';
                 }
                 currentCount = 0;
+                items.sort((a, b) => {
+                    if (a.id < b.id) {
+                        return -1;
+                    } else if (a.id > b.id) {
+                        return 1;
+                    }
+                    return 0;
+                });
                 items.forEach(item => {
                     currentCount++;
                     if (!logTimeFrom || item.timestamp < logTimeFrom) {
@@ -800,12 +803,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 timeRangeTo = timeTo && !isNaN(timeTo) ? parseInt(timeTo) : Date.now();
             let deletionTasks = [], errorTasks = [];
             let items = await dbClient.simpleQueryDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
-                null, null, {crossPartition: true}, {
-                    order: {
-                        by: 'timestamp',
-                        direction: 'asc'
-                    }
-                });
+                null, null, {crossPartition: true});
             if (!Array.isArray(items) || items.length === 0) {
                 return `${deletionTasks.length} rows deleted. ${errorTasks.length} error rows.`;
             }
@@ -993,8 +991,12 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         this.masterScalingGroupName = null;
     }
 
-    proxyResponse(statusCode, res) {
-        let log = logger.log(`(${statusCode}) response body:`, res).flush();
+    proxyResponse(statusCode, res, logOptions = null) {
+        let responseLog = res;
+        if (logOptions && logOptions.maskResponse) {
+            responseLog = '[********] is masked in this log. ¯\\_(ツ)_/¯';
+        }
+        let log = logger.log(`(${statusCode}) response body:`, responseLog).flush();
         if (process.env.DEBUG_SAVE_CUSTOM_LOG && (!process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR ||
             process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR &&
             logger.errorCount > 0) && log !== '') {
@@ -1090,9 +1092,15 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     // master election done
                     return true;
                 } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-                // master election not done, wait for a moment
-                // clear the current master record cache and get a new one in the next call
-                    this._masterRecord = null;
+                    // if not wait for the master election to complete,
+                    if (this._settings['master-election-no-wait'] === 'true') {
+                        return true;
+                    } else {
+                        // master election not done, wait for a moment
+                        // clear the current master record cache and get a new one in the next call
+                        this._masterRecord = null;
+                        return false;
+                    }
                 }
                 return false;
             },
@@ -1137,8 +1145,12 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
+            let getPendingMasterIp = !(this._settings['master-election-no-wait'] === 'true' &&
+                this._masterRecord && this._masterRecord.voteState === 'pending');
             params.callbackUrl = await this.platform.getCallbackEndpointUrl();
-            params.masterIp = masterInfo.primaryPrivateIpAddress;
+            params.masterIp = getPendingMasterIp && masterInfo &&
+                masterInfo.primaryPrivateIpAddress || null;
+            params.allowHeadless = this._settings['master-election-no-wait'] === 'true';
             config = await this.getSlaveConfig(params);
             logger.info('called handleGetConfig: returning slave config' +
                 `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);

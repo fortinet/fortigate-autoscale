@@ -11,9 +11,9 @@
     "package.json"
   ],
   "dependencies": {
-    "azure-storage": "^2.10.2",
+    "azure-storage": "^2.10.3",
     "fortigate-autoscale-core": "file:../core",
-    "ms-rest-azure": "^2.5.9",
+    "ms-rest-azure": "^2.6.0",
     "request": "^2.87.0"
   },
   "devDependencies": {

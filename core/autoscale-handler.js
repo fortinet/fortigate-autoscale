@@ -451,7 +451,7 @@ module.exports = class AutoscaleHandler {
             this.logger.info(`called handleGetLicense, license: ${availStockItem.fileName} is ` +
             `assigned to instance (id: ${this._selfInstance.instanceId}).`);
 
-            callback(null, this.proxyResponse(200, availStockItem.content));
+            callback(null, this.proxyResponse(200, availStockItem.content, {maskResponse: true}));
 
 
         } catch (ex) {
@@ -472,6 +472,7 @@ module.exports = class AutoscaleHandler {
 
         let parameters = {},
             masterIp,
+            isMaster = false,
             lifecycleShouldAbandon = false;
 
         parameters.instanceId = instanceId;
@@ -496,6 +497,7 @@ module.exports = class AutoscaleHandler {
         if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
             this.scalingGroupName === this.masterScalingGroupName) {
             // use master health check result as self health check result
+            isMaster = true;
             this._selfHealthCheck = this._masterHealthCheck;
         } else if (this._selfHealthCheck && !this._selfHealthCheck.healthy) {
             // if this instance is unhealth, skip master election check
@@ -515,13 +517,22 @@ module.exports = class AutoscaleHandler {
                     if (masterInfo &&
                         masterInfo.primaryPrivateIpAddress ===
                         this._selfInstance.primaryPrivateIpAddress) {
+                        isMaster = true;
                         return true;
                     } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+                        // if no wait for master election, I could become a headless instance
+                        // may allow any non master instance to come up without master.
+                        // They will receive the new master ip on one of their following
+                        // heartbeat sync callback
+                        if (this._settings['master-election-no-wait'] === 'true') {
+                            return true;
+                        } else {
                         // if i am not the new master, and the new master hasn't come up to
                         // finalize the election, I should keep on waiting.
                         // should return false to continue.
-                        this._masterRecord = null; // clear the master record cache
-                        return false;
+                            this._masterRecord = null; // clear the master record cache
+                            return false;
+                        }
                     } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
                         // if i am not the new master, and the master election is final, then no
                         // need to wait.
@@ -598,6 +609,7 @@ module.exports = class AutoscaleHandler {
         if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
             this.scalingGroupName === this.masterScalingGroupName &&
             this._masterRecord && this._masterRecord.voteState === 'pending') {
+            isMaster = true;
             if (!this._selfHealthCheck || this._selfHealthCheck && this._selfHealthCheck.healthy) {
                 // if election couldn't be finalized, remove the current election so someone else
                 // could start another election
@@ -621,15 +633,23 @@ module.exports = class AutoscaleHandler {
                 !lifecycleShouldAbandon);
 
             masterIp = this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null;
+            // if slave finds master is pending, don't update master ip to the health check record
+            if (!isMaster && this._masterRecord && this._masterRecord.voteState === 'pending' &&
+            this._settings['master-election-no-wait'] === 'true') {
+                masterIp = null;
+            }
             await this.addInstanceToMonitor(this._selfInstance, interval, masterIp);
+            let logMessagMasterIp = !masterIp &&
+                this._settings['master-election-no-wait'] === 'true' ? ' without master ip)' :
+                ` master-ip: ${masterIp})`;
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
-                    `master-ip: ${masterIp}) is added to monitor at timestamp: ${Date.now()}.`);
+                    `${logMessagMasterIp} is added to monitor at timestamp: ${Date.now()}.`);
             // if this newly come-up instance is the new master, save its instance id as the
             // default password into settings because all other instance will sync password from
             // the master there's a case if users never changed the master's password, when the
             // master was torn-down, there will be no way to retrieve this original password.
             // so in this case, should keep track of the update of default password.
-            if (this._selfInstance.instanceId === this._masterInfo.instanceId &&
+            if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
                     this.scalingGroupName === this.masterScalingGroupName) {
                 await this.platform.setSettingItem('fortigate-default-password',
                     this._selfInstance.instanceId,
@@ -744,13 +764,13 @@ module.exports = class AutoscaleHandler {
         if (!apiEndpoint) {
             errorMessage = 'Api endpoint is missing';
         }
-        if (!parameters.masterIp) {
+        if (!(parameters.masterIp || parameters.allowHeadless)) {
             errorMessage = 'Master ip is missing';
         }
         if (!pskSecret) {
             errorMessage = 'psksecret is missing';
         }
-        if (!pskSecret || !apiEndpoint || !parameters.masterIp) {
+        if (!pskSecret || !apiEndpoint || !(parameters.masterIp || parameters.allowHeadless)) {
             throw new Error(`Base config is invalid (${errorMessage}): ${
                 JSON.stringify({
                     syncInterface: syncInterface,
@@ -767,8 +787,10 @@ module.exports = class AutoscaleHandler {
                 {'@vpn_connection': parameters.vpnConfiguration});
             this._baseConfig += config;
         }
+        const setMasterIp = !parameters.masterIp && parameters.allowHeadless ? '' :
+            `\n    set master-ip ${parameters.masterIp}`;
         return await this._baseConfig.replace(new RegExp('set role master', 'gm'),
-                `set role slave\n    set master-ip ${parameters.masterIp}`)
+                `set role slave${setMasterIp}`)
             .replace(new RegExp('{CALLBACK_URL}', 'gm'), parameters.callbackUrl);
     }
 
@@ -1086,6 +1108,12 @@ module.exports = class AutoscaleHandler {
                 case 'masterelectiontimeout':
                     keyName = 'master-election-timeout';
                     description = 'The FortiGate master election timtout time in second.';
+                    editable = true;
+                    break;
+                case 'masterelectionnowait':
+                    keyName = 'master-election-no-wait';
+                    description = 'Do not wait for the new master to come up. This FortiGate ' +
+                        'can receive the new master ip in one of its following heartbeat sync.';
                     editable = true;
                     break;
                 case 'heartbeatlosscount':
