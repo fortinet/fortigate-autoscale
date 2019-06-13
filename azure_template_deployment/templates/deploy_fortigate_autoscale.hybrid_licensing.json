@@ -139,7 +139,7 @@
         "PAYGInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "The number of FortiGate instances the PAYG virtual machine scale set should have at any time, also called desired capacity. Recommended value: 0."
+                "description": "The minimum number of FortiGate instances in the PAYG virtual machine scale set. Recommended value: 0."
             },
             "minValue": 0,
             "defaultValue": 0
@@ -147,7 +147,7 @@
         "MaxPAYGInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "Maximum number of VM instances in the PAYG VMSS."
+                "description": "The maximum number of FortiGate instances in the PAYG virtual machine scale set."
             },
             "minValue": 0,
             "defaultValue": 6
@@ -250,9 +250,14 @@
         "funcionAppInsightName": "[concat(variables('functionAppName'),'-insights')]",
         "databaseAccountName": "[concat(variables('uniqueResourceNamePrefix'),'dba001')]",
         "databaseName": "FortiGateAutoscale",
-        "databaseSharedThroughput": 400,
+        "databaseSharedThroughputBase": 500,
         "storageAccountName": "[concat(variables('uniqueResourceNamePrefix'),'sta001')]",
         "storageAccountid": "[concat(resourceGroup().id,'/providers/','Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+        "configsetAssetKeyPrefix": "configset",
+        "licenseAssetKeyPrefix": "fgt-asg-license",
+        "enableHybridLicensing": true,
+        "enableFortiAnalyzer": false,
+        "databaseSharedThroughput": "[add(add(variables('databaseSharedThroughputBase'), if(bool(variables('enableHybridLicensing')), 200, 0)), if(bool(variables('enableFortiAnalyzer')), 100, 0))]",
         "vNetName": "[if(equals(parameters('VnetNewOrExisting'), 'existing'), parameters('VNetName'), concat(variables('uniqueResourceNamePrefix'), '-virtual-network'))]",
         "vnetID": "[resourceId(variables('resourceGroupName'),'Microsoft.Network/virtualNetworks', variables('vNetName'))]",
         "addressPrefix": "[parameters('SubnetAddressPrefix')]",
@@ -410,6 +415,7 @@
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiGateMasterElection')]",
             "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]",
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
             "properties": {
@@ -417,7 +423,7 @@
                     "id": "FortiGateMasterElection",
                     "partitionKey": {
                         "paths": [
-                            "/asgName"
+                            "/scalingGroupName"
                         ],
                         "kind": "Hash"
                     },
@@ -448,6 +454,7 @@
             "apiVersion": "[variables('documentDbApiVersion')]",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiAnalyzer')]",
+            "condition": "[bool(variables('enableFortiAnalyzer'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
@@ -487,6 +494,7 @@
             "apiVersion": "[variables('documentDbApiVersion')]",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/LicenseStock')]",
+            "condition": "[bool(variables('enableHybridLicensing'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
@@ -526,6 +534,7 @@
             "apiVersion": "[variables('documentDbApiVersion')]",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/LicenseUsage')]",
+            "condition": "[bool(variables('enableHybridLicensing'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
@@ -688,7 +697,7 @@
                 "name": "[parameters('StorageAccountType')]"
             },
             "resources": [{
-                    "name": "default/configset",
+                    "name": "[concat('default/', variables('configsetAssetKeyPrefix'))]",
                     "type": "blobServices/containers",
                     "apiVersion": "[variables('storageApiVersion')]",
                     "dependsOn": [
@@ -696,7 +705,7 @@
                     ]
                 },
                 {
-                    "name": "default/fgt-asg-license",
+                    "name": "[concat('default/',variables('licenseAssetKeyPrefix'))]",
                     "type": "blobServices/containers",
                     "apiVersion": "[variables('storageApiVersion')]",
                     "dependsOn": [
@@ -785,7 +794,7 @@
                             "value": "[parameters('RestAppSecret')]"
                         },
                         {
-                            "name": "SCALESET_DB_ACCOUNT",
+                            "name": "AUTOSCALE_DB_ACCOUNT",
                             "value": "[variables('databaseAccountName')]"
                         },
                         {
@@ -910,7 +919,7 @@
                         },
                         {
                             "name": "FORTIGATE_LICENSE_STORAGE_KEY_PREFIX",
-                            "value": "fgt-asg-license"
+                            "value": "[variables('licenseAssetKeyPrefix')]"
                         },
                         {
                             "name": "FORTIGATE_PROTECTED_INTERNAL_ELB_DNS",
@@ -1603,13 +1612,13 @@
             "properties": {
                 "name": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-byol')]",
                 "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  variables('resourceGroupName'), '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('lpVmssName'))]",
-                "enabled": true,
+                "enabled": false,
                 "profiles": [{
-                    "name": "Profile1",
+                    "name": "[concat(variables('uniqueResourceNamePrefix'),'-deployed-profile')]",
                     "capacity": {
                         "minimum": "[parameters('byolInstanceCount')]",
                         "maximum": "[parameters('byolInstanceCount')]",
-                        "default": 0
+                        "default": "[parameters('byolInstanceCount')]"
                     },
                     "rules": []
                 }]
@@ -1628,7 +1637,7 @@
                 "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  variables('resourceGroupName'), '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('regVmssName'))]",
                 "enabled": true,
                 "profiles": [{
-                    "name": "Profile1",
+                    "name": "[concat(variables('uniqueResourceNamePrefix'),'-deployed-profile')]",
                     "capacity": {
                         "minimum": "0",
                         "maximum": "[parameters('MaxPaygInstanceCount')]",
@@ -1853,5 +1862,59 @@
                 }
             }
         }
-    ]
+    ],
+    "outputs": {
+        "uniqueResourceNamePrefix": {
+            "type": "string",
+            "value": "[variables('uniqueResourceNamePrefix')]"
+        },
+        "resourceGroupName": {
+            "type": "string",
+            "value": "[variables('resourceGroupName')]"
+        },
+        "storageAccountName": {
+            "type": "string",
+            "value": "[variables('storageAccountName')]"
+        },
+        "storageAccountAccessKey": {
+            "type": "string",
+            "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('storageApiVersion')).keys[0].value]"
+        },
+        "configsetAssetKeyPrefix": {
+            "type": "string",
+            "value": "[variables('configsetAssetKeyPrefix')]"
+        },
+        "byolScaleSetName": {
+            "type": "string",
+            "value": "[variables('lpVmssName')]"
+        },
+        "byolAutoscaleSettingsName": {
+            "type": "string",
+            "value": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-byol')]"
+        },
+        "paygScaleSetName": {
+            "type": "string",
+            "value": "[variables('regVmssName')]"
+        },
+        "licenseAssetKeyPrefix": {
+            "type": "string",
+            "value": "[variables('licenseAssetKeyPrefix')]"
+        },
+        "byolScaleSetDefaultSize": {
+            "type": "int",
+            "value": "[parameters('BYOLInstanceCount')]"
+        },
+        "paygScaleSetDefaultSize": {
+            "type": "int",
+            "value": "[parameters('PAYGInstanceCount')]"
+        },
+        "paygScaleSetMinSize": {
+            "type": "int",
+            "value": 0
+        },
+        "paygScaleSetMaxSize": {
+            "type": "int",
+            "value": "[parameters('PAYGInstanceCount')]"
+        }
+    }
 }
