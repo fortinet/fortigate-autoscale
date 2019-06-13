@@ -480,7 +480,8 @@ class CosmosDbApiClient {
     }
 
     /**
-     * API ref: https://docs.microsoft.com/en-us/rest/api/cosmos-db/create-a-document
+     * create a document
+     * @see https://docs.microsoft.com/en-us/rest/api/cosmos-db/create-a-document
      * @param {String} dbName the db name to create this document
      * @param {String} collectionName the collection name to create this document
      * @param {Object} document the structure of the document to create.
@@ -528,12 +529,15 @@ class CosmosDbApiClient {
     }
 
     /**
-     * API ref: https://docs.microsoft.com/en-us/rest/api/cosmos-db/replace-a-document
+     * replace a document
+     * @see https://docs.microsoft.com/en-us/rest/api/cosmos-db/replace-a-document
      * @param {String} dbName the db to create the document
      * @param {String} collectionName the collection to create the document
      * @param {Object} document the structure of the document. an document.id is required
+     * @param {String} partitionKey must provide the name of the partition key specified
+     * in the collection if the collection is created with a partition key. leave it null otherwise.
      */
-    async replaceDocument(dbName, collectionName, document) {
+    async replaceDocument(dbName, collectionName, document, partitionKey = null) {
         let date = (new Date()).toUTCString();
         let _token = getAuthorizationTokenUsingMasterKey('put',
             'docs', `dbs/${dbName}/colls/${collectionName}/docs/${document.id}`, date,
@@ -545,6 +549,9 @@ class CosmosDbApiClient {
             'x-ms-version': '2017-02-22',
             'x-ms-date': date
         };
+        if (partitionKey) {
+            headers['x-ms-documentdb-partitionkey'] = `["${document[partitionKey]}"]`;
+        }
 
         return await new Promise(function(resolve, reject) {
             // use post here
@@ -568,12 +575,15 @@ class CosmosDbApiClient {
     }
 
     /**
-     * API ref: https://docs.microsoft.com/en-us/rest/api/cosmos-db/delete-a-document
+     * delete a document
+     * @see https://docs.microsoft.com/en-us/rest/api/cosmos-db/delete-a-document
      * @param {String} dbName the db to create the document
      * @param {String} collectionName the collection to create the document
      * @param {String} documentId the document id. is required
+     * @param {String} partitionKey must provide the name of the partition key specified
+     * in the collection if the collection is created with a partition key. leave it null otherwise.
      */
-    async deleteDocument(dbName, collectionName, documentId) {
+    async deleteDocument(dbName, collectionName, documentId, partitionKey = null) {
         let date = (new Date()).toUTCString();
         let _token = getAuthorizationTokenUsingMasterKey('delete',
             'docs', `dbs/${dbName}/colls/${collectionName}/docs/${documentId}`, date,
@@ -585,6 +595,10 @@ class CosmosDbApiClient {
             'x-ms-version': '2017-02-22',
             'x-ms-date': date
         };
+        if (partitionKey) {
+            headers['x-ms-documentdb-partitionkey'] = `["${document[partitionKey]}"]`;
+        }
+
         return await new Promise(function(resolve, reject) {
             // use delete here
             request.delete({

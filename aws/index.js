@@ -22,11 +22,6 @@ AWS.config.apiVersions = {
 };
 
 const
-    EXPIRE_LIFECYCLE_ENTRY = (process.env.EXPIRE_LIFECYCLE_ENTRY || 60 * 60) * 1000,
-    ENABLE_SECOND_NIC = process.env.ENABLE_SECOND_NIC &&
-        process.env.ENABLE_SECOND_NIC.trim().toLowerCase() === 'true',
-    ENABLE_TGW_VPN = process.env.ENABLE_TGW_VPN &&
-        process.env.ENABLE_TGW_VPN.trim().toLowerCase() === 'true',
     autoScaling = new AWS.AutoScaling(),
     dynamodb = new AWS.DynamoDB(),
     docClient = new AWS.DynamoDB.DocumentClient(),
@@ -189,7 +184,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     return await this.removeLifecycleItem(item);
                 };
                 items.forEach(item => {
-                    if (Date.now() - item.timestamp > EXPIRE_LIFECYCLE_ENTRY) {
+                    if (Date.now() - item.timestamp > this._settings['lifecycle-hook-timeout']) {
                         awaitAll.push(remove(item));
                         itemToRemove.push(item);
                     }
@@ -240,7 +235,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let params = {
                 TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 Item: {
-                    asgName: this.scalingGroupName,
+                    scalingGroupName: this.scalingGroupName,
                     ip: candidateInstance.primaryPrivateIpAddress,
                     instanceId: candidateInstance.instanceId,
                     vpcId: candidateInstance.virtualNetworkId,
@@ -250,7 +245,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 }
             };
             if (method !== 'replace') {
-                params.ConditionExpression = 'attribute_not_exists(asgName)';
+                params.ConditionExpression = 'attribute_not_exists(scalingGroupName)';
             }
             return !!await docClient.put(params).promise();
         } catch (error) {
@@ -266,7 +261,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 FilterExpression: '#PrimaryKeyName = :primaryKeyValue',
                 ExpressionAttributeNames: {
-                    '#PrimaryKeyName': 'asgName'
+                    '#PrimaryKeyName': 'scalingGroupName'
                 },
                 ExpressionAttributeValues: {
                     ':primaryKeyValue': this.scalingGroupName
@@ -289,14 +284,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         const params = {
             TableName: DB.FORTIGATEMASTERELECTION.TableName,
             Key: {
-                asgName: this.masterScalingGroupName
+                scalingGroupName: this.masterScalingGroupName
             },
-            ConditionExpression: '#AsgName = :asgName',
+            ConditionExpression: '#ScalingGroupName = :scalingGroupName',
             ExpressionAttributeNames: {
-                '#AsgName': 'asgName'
+                '#ScalingGroupName': 'scalingGroupName'
             },
             ExpressionAttributeValues: {
-                ':asgName': this.masterScalingGroupName
+                ':scalingGroupName': this.masterScalingGroupName
             }
         };
         return await docClient.delete(params).promise();
@@ -1546,7 +1541,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     id: info.InstanceId,
                     instanceId: info.InstanceId,
                     vmId: info.InstanceId,
-                    asgName: scaleSetName,
+                    scalingGroupName: scaleSetName,
                     info: typeof info === 'string' ? info : JSON.stringify(info),
                     cacheTime: now,
                     expireTime: now + cacheTime * 1000
@@ -1860,7 +1855,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     await this.platform.removeMasterRecord();
                 }
                 // detach nic2
-                if (this._selfInstance && ENABLE_SECOND_NIC) {
+                if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
                     tasks.push(this.handleNicDetachment(event).catch(() => {
                         errorTasks.push('handleNicDetachment');
                     }));
@@ -2016,7 +2011,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             Item: {
                 instanceId: instance.instanceId,
                 ip: instance.primaryPrivateIpAddress,
-                autoScalingGroupName: this.masterScalingGroupName,
+                scalingGroupName: this.masterScalingGroupName,
                 nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
                 heartBeatLossCount: 0,
                 heartBeatInterval: heartBeatInterval,
@@ -2079,7 +2074,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
             if (this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                this._masterRecord.asgName === this._selfInstance.scalingGroupName) {
+                this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName) {
                 await this.platform.removeMasterRecord();
             }
             await this.removeInstance(this._selfInstance);
@@ -2089,7 +2084,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
 
         // get TGW_VPN record
-        if (ENABLE_TGW_VPN) {
+        if (this._settings['enable-transit-gateway-vpn'] === 'true') {
             let vpnAttachmentRecord =
                 await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
             if (vpnAttachmentRecord) {
@@ -2145,12 +2140,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         tasks.push(
                             platform.getInstanceHealthCheck({
                                 instanceId: rec.instanceId,
-                                asgName: rec.asgName
+                                scalingGroupName: rec.scalingGroupName
                             }, interval).catch(() => null));
                         tasks.push(
                             platform.describeInstance({
                                 instanceId: item.instanceId,
-                                scalingGroupName: item.asgName,
+                                scalingGroupName: item.scalingGroupName,
                                 readCache: false
                             }).catch(() => null));
                         let [healthCheck, instance] = await Promise.all(tasks);

@@ -54,7 +54,7 @@ const DB = {
         TableName: 'FortiGateAutoscale',
         AdditionalAttributeDefinitions: [
             {
-                AttributeName: 'asgName',
+                AttributeName: 'scalingGroupName',
                 AttributeType: 'S'
             },
             {
@@ -82,13 +82,13 @@ const DB = {
     FORTIGATEMASTERELECTION: {
         AttributeDefinitions: [
             {
-                AttributeName: 'asgName',
+                AttributeName: 'scalingGroupName',
                 AttributeType: 'S'
             }
         ],
         KeySchema: [
             {
-                AttributeName: 'asgName',
+                AttributeName: 'scalingGroupName',
                 KeyType: 'HASH'
             }
         ],
@@ -100,7 +100,7 @@ const DB = {
                 AttributeType: 'S'
             },
             {
-                AttributeName: 'asgName',
+                AttributeName: 'scalingGroupName',
                 AttributeType: 'S'
             },
             {
@@ -248,7 +248,7 @@ const DB = {
                 AttributeType: 'S'
             },
             {
-                AttributeName: 'asgName',
+                AttributeName: 'scalingGroupName',
                 AttributeType: 'S'
             },
             {

@@ -576,7 +576,7 @@ module.exports = class AutoscaleHandler {
                 await this.retrieveMaster(null, true);
 
                 if (this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                    this._masterRecord.asgName === this._selfInstance.scalingGroupName) {
+                    this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName) {
                     await this.platform.removeMasterRecord();
                 }
                 await this.removeInstance(this._selfInstance);

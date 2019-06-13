@@ -236,7 +236,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             let electionTimeout = parseInt(this._settings['master-election-timeout']);
             let document = {
                 id: this.masterScalingGroupName,
-                asgName: this.masterScalingGroupName,
+                scalingGroupName: this.masterScalingGroupName,
                 ip: candidateInstance.primaryPrivateIpAddress,
                 instanceId: candidateInstance.instanceId,
                 vpcId: candidateInstance.virtualNetworkId,
@@ -259,11 +259,12 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
      */
     async getMasterRecord() {
         const keyExpression = {
-            name: 'asgName',
+            name: 'scalingGroupName',
             value: this.masterScalingGroupName
         };
+        const TABLE = DB.FORTIGATEMASTERELECTION;
         let items = await dbClient.simpleQueryDocument(DATABASE_NAME,
-            DB.FORTIGATEMASTERELECTION.TableName, keyExpression, null, {crossPartition: true});
+            TABLE.TableName, keyExpression, null, {crossPartition: true});
         if (!Array.isArray(items) || items.length === 0) {
             logger.info('No elected master was found in the db!');
             return null;
@@ -275,8 +276,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async removeMasterRecord() {
         try {
+            const TABLE = DB.FORTIGATEMASTERELECTION;
             return await dbClient.deleteDocument(DATABASE_NAME,
-                DB.FORTIGATEMASTERELECTION.TableName, this.masterScalingGroupName);
+                TABLE.TableName, this.masterScalingGroupName,
+                TABLE.KeySchema[0].AttributeName);
         } catch (error) {
             if (error.statusCode && error.statusCode === 404) {
                 return true; // ignore if the file to delete not exists.
@@ -289,8 +292,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             logger.info('calling finalizeMasterElection');
             let electedMaster = this._masterRecord || await this.getMasterRecord();
             electedMaster.voteState = 'done';
+            const TABLE = DB.FORTIGATEMASTERELECTION;
             let result = await dbClient.replaceDocument(DATABASE_NAME,
-                DB.FORTIGATEMASTERELECTION.TableName, electedMaster);
+                TABLE.TableName, electedMaster,
+                TABLE.KeySchema[0].AttributeName);
             logger.info(`called finalizeMasterElection, result: ${JSON.stringify(result)}`);
             return !!result;
         } catch (error) {
@@ -312,11 +317,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return Promise.reject(`invalid instance: ${JSON.stringify(instance)}`);
         }
 
-        let asgName = instance.asgName ? instance.asgName : this.scalingGroupName;
+        let scalingGroupName = instance.scalingGroupName ? instance.scalingGroupName : this.scalingGroupName;
 
         const keyExpression = {
                 name: 'id',
-                value: `${asgName}-${instance.instanceId}`
+                value: `${scalingGroupName}-${instance.instanceId}`
             }, filterExpression = [
                 {
                     name: 'instanceId',
@@ -430,7 +435,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 id: `${this.scalingGroupName}-${healthCheckObject.instanceId}`,
                 instanceId: healthCheckObject.instanceId,
                 ip: healthCheckObject.ip,
-                asgName: this.scalingGroupName,
+                scalingGroupName: this.scalingGroupName,
                 nextHeartBeatTime: checkPointTime + heartBeatInterval * 1000,
                 heartBeatLossCount: healthCheckObject.heartBeatLossCount,
                 heartBeatInterval: heartBeatInterval,
@@ -441,8 +446,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 logger.info(`instance already out of sync: healthcheck info: ${healthCheckObject}`);
                 result = true;
             } else {
+                const TABLE = DB.FORTIGATEAUTOSCALE;
                 result = await dbClient.replaceDocument(DATABASE_NAME,
-                    DB.FORTIGATEAUTOSCALE.TableName, document);
+                    TABLE.TableName, document,
+                    TABLE.KeySchema[0].AttributeName);
             }
             logger.info('called updateInstanceHealthCheck');
             return !!result;
@@ -457,8 +464,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async deleteInstanceHealthCheck(instanceId) {
         logger.warn('calling deleteInstanceHealthCheck');
         try {
-            return !!await dbClient.deleteDocument(DATABASE_NAME, DB.FORTIGATEAUTOSCALE.TableName,
-                `${this.scalingGroupName}-${instanceId}`);
+            const TABLE = DB.FORTIGATEAUTOSCALE;
+            return !!await dbClient.deleteDocument(DATABASE_NAME, TABLE.TableName,
+                `${this.scalingGroupName}-${instanceId}`,
+                TABLE.KeySchema[0].AttributeName);
         } catch (error) {
             logger.warn('called deleteInstanceHealthCheck. error:', error);
             return false;
@@ -643,7 +652,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 value: vmId ? vmId : instanceId
             },
             {
-                name: 'asgName',
+                name: 'scalingGroupName',
                 value: scaleSetName
             }];
 
@@ -668,7 +677,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             id: `${scaleSetName}-${info.instanceId}`,
             instanceId: info.instanceId,
             vmId: info.properties.vmId,
-            asgName: scaleSetName,
+            scalingGroupName: scaleSetName,
             info: typeof info === 'string' ? info : JSON.stringify(info),
             timestamp: Date.now()
         };
@@ -804,7 +813,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 if (item.timestamp >= timeRangeFrom && item.timestamp <= timeRangeTo) {
                     deletionTasks.push(
                         dbClient.deleteDocument(DATABASE_NAME, DB.CUSTOMLOG.TableName,
-                        item.id).catch(e => {
+                        item.id, DB.CUSTOMLOG.KeySchema[0].AttributeName).catch(e => {
                             errorTasks.push({item: item,error: e});
                             return e;
                         }));
@@ -1067,7 +1076,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 if (this._masterRecord && this._masterRecord.voteState === 'pending' &&
                 this._selfInstance &&
                 this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                this._masterRecord.asgName === this.scalingGroupName) {
+                this._masterRecord.scalingGroupName === this.scalingGroupName) {
                     duplicatedGetConfigCall = true;
                     masterIp = this._masterRecord.ip;
                     return true;
@@ -1104,7 +1113,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // terminates this election. then tear down this instance whether it's master or not.
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
             if (this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                this._masterRecord.asgName === this._selfInstance.scalingGroupName) {
+                this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName) {
                 await this.platform.removeMasterRecord();
             }
             // await this.removeInstance(this._selfInstance);
@@ -1154,7 +1163,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             id: `${this.scalingGroupName}-${instance.instanceId}`,
             instanceId: instance.instanceId,
             ip: instance.primaryPrivateIpAddress,
-            asgName: this.scalingGroupName,
+            scalingGroupName: this.scalingGroupName,
             nextHeartBeatTime: Date.now() + heartBeatInterval * 1000,
             heartBeatLossCount: 0,
             heartBeatInterval: heartBeatInterval,
@@ -1193,7 +1202,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
         return this._masterRecord && await this.platform.describeInstance(
             { instanceId: instanceId,
-                scalingGroupName: this._masterRecord.asgName
+                scalingGroupName: this._masterRecord.scalingGroupName
             });
     }
 
@@ -1233,19 +1242,19 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 maxCount = parseInt(limit); // set a positive maxcount
             }
             usageRecords.forEach(item => {
-                if (item.instanceId && item.asgName) {
+                if (item.instanceId && item.scalingGroupName) {
                     queries.push(async function(rec, ref) {
                         // get instance health check and instance info
                         let tasks = [];
                         tasks.push(
                             ref.platform.getInstanceHealthCheck({
                                 instanceId: rec.instanceId,
-                                asgName: rec.asgName
+                                scalingGroupName: rec.scalingGroupName
                             }, 3600000).catch(() => null));
                         tasks.push(
                             ref.platform.describeInstance({
                                 instanceId: item.instanceId,
-                                scalingGroupName: item.asgName,
+                                scalingGroupName: item.scalingGroupName,
                                 readCache: false
                             }).catch(() => null));
                         let [healthCheck, instance] = await Promise.all(tasks);
@@ -1373,7 +1382,7 @@ function initModule() {
     // process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT is used globally as the script approximate
     // starting time
     process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT = Date.now();
-    dbClient = new armClient.CosmosDB.ApiClient(process.env.SCALESET_DB_ACCOUNT,
+    dbClient = new armClient.CosmosDB.ApiClient(process.env.AUTOSCALE_DB_ACCOUNT,
         process.env.REST_API_MASTER_KEY);
     computeClient = new armClient.Compute.ApiClient(process.env.SUBSCRIPTION_ID,
         process.env.RESOURCE_GROUP);
