@@ -454,7 +454,7 @@
             "apiVersion": "[variables('documentDbApiVersion')]",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiAnalyzer')]",
-            "condition": "[bool(variables('enableFortiAnalyzer'))]",
+            "condition": "[variables('enableFortiAnalyzer')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
@@ -494,7 +494,7 @@
             "apiVersion": "[variables('documentDbApiVersion')]",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/LicenseStock')]",
-            "condition": "[bool(variables('enableHybridLicensing'))]",
+            "condition": "[variables('enableHybridLicensing')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],

@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.8",
+    "parameters": {
+      "ResourceNamePrefix": {
+        "value": ""
+      },
+      "StorageAccountType": {
+        "value": "Standard_LRS"
+      },
+      "RestAppID": {
+        "value": ""
+      },
+      "RestAppSecret": {
+        "value": ""
+      },
+      "VnetNewOrExisting": {
+        "value": "new"
+      },
+      "VNetName": {
+        "value": ""
+      },
+      "SubnetAddressPrefix": {
+        "value": "10.0.0.0/16"
+      },
+      "Subnet1Prefix": {
+        "value": "10.0.0.0/24"
+      },
+      "Subnet2Prefix": {
+        "value": "10.0.1.0/24"
+      },
+      "Subnet3Prefix": {
+        "value": "10.0.2.0/24"
+      },
+      "Subnet4Prefix": {
+        "value": "10.0.3.0/24"
+      },
+      "InstanceType": {
+        "value": "Standard_F4"
+      },
+      "FOSVersion": {
+        "value": "6.0.4"
+      },
+      "FortiGatePSKSecret": {
+        "value": ""
+      },
+      "AdminUsername": {
+        "value": "azureadmin"
+      },
+      "AdminPassword": {
+        "value": ""
+      },
+      "BYOLInstanceCount": {
+        "value": 2
+      },
+      "PAYGInstanceCount": {
+        "value": 0
+      },
+      "MaxPAYGInstanceCount": {
+        "value": 6
+      },
+      "ScaleOutThreshold": {
+        "value": 80
+      },
+      "ScaleInThreshold": {
+        "value": 20
+      },
+      "MasterElectionTimeout": {
+        "value": 300
+      },
+      "GetLicenseGracePeriod": {
+        "value": 600
+      },
+      "PublicIPNewOrExisting": {
+        "value": "new"
+      },
+      "LoadBalancerIP": {
+        "value": "10"
+      },
+      "HeartBeatInterval": {
+        "value": 30
+      },
+      "HeartBeatLossCount": {
+        "value": 3
+      },
+      "HeartBeatDelayAllowance": {
+        "value": 2
+      },
+      "ScriptTimeout": {
+        "value": 230
+      },
+      "PackageResURL": {
+        "value": ""
+      }
+    }
+  }

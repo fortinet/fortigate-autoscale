@@ -227,7 +227,7 @@ module.exports = class AutoscaleHandler {
             if (this._settings['enable-second-nic'] === 'true') {
                 baseConfig = await this.getConfigSet('port2config') + baseConfig;
             }
-            for (let configset of requiredConfigSet) {
+            for (let configset of requiredConfigSet.split(',')) {
                 let [name, selected] = configset.trim().split('-');
                 if (selected && selected.toLowerCase() === 'yes') {
                     switch (name) {
