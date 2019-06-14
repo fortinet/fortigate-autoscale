@@ -580,10 +580,9 @@ class CosmosDbApiClient {
      * @param {String} dbName the db to create the document
      * @param {String} collectionName the collection to create the document
      * @param {String} documentId the document id. is required
-     * @param {String} partitionKey must provide the name of the partition key specified
-     * in the collection if the collection is created with a partition key. leave it null otherwise.
+     * @param {Boolean} partitioned if the table is partitioned
      */
-    async deleteDocument(dbName, collectionName, documentId, partitionKey = null) {
+    async deleteDocument(dbName, collectionName, documentId, partitioned = false) {
         let date = (new Date()).toUTCString();
         let _token = getAuthorizationTokenUsingMasterKey('delete',
             'docs', `dbs/${dbName}/colls/${collectionName}/docs/${documentId}`, date,
@@ -595,8 +594,8 @@ class CosmosDbApiClient {
             'x-ms-version': '2017-02-22',
             'x-ms-date': date
         };
-        if (partitionKey) {
-            headers['x-ms-documentdb-partitionkey'] = `["${document[partitionKey]}"]`;
+        if (partitioned) {
+            headers['x-ms-documentdb-partitionkey'] = `["${documentId}"]`;
         }
 
         return await new Promise(function(resolve, reject) {

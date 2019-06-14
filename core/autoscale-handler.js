@@ -655,13 +655,16 @@ module.exports = class AutoscaleHandler {
                     this._selfInstance.instanceId,
                     'default password comes from the new elected master.', false, false);
             }
-            return '';
+            return masterIp && this._selfHealthCheck &&
+                this._selfHealthCheck.masterIp !== masterIp ? {
+                    'master-ip': this._masterInfo.primaryPrivateIpAddress
+                } : '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
             // for those already in monitor, if there's a healthy master instance, notify
             // the instance with the master ip if the master ip in its monitor record doesn't match
             // the current master.
-            // if no master present (master is in failover process), keep what ever master ip
-            // it has, keep it in-sync as is.
+            // if no master present (master is coming up or in failover process), keep whatever
+            // master ip it has, keep it in-sync state as is.
             masterIp = this._masterInfo && this._masterHealthCheck &&
                 this._masterHealthCheck.healthy ?
                 this._masterInfo.primaryPrivateIpAddress : this._selfHealthCheck.masterIp;
@@ -675,9 +678,10 @@ module.exports = class AutoscaleHandler {
                 `heartBeatLossCount: ${this._selfHealthCheck.heartBeatLossCount}, ` +
                 `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
                 `syncState: ${this._selfHealthCheck.syncState}).`);
-            return masterIp && this._selfHealthCheck.masterIp !== masterIp ? {
-                'master-ip': this._masterInfo.primaryPrivateIpAddress
-            } : '';
+            return masterIp && this._selfHealthCheck &&
+                this._selfHealthCheck.masterIp !== masterIp ? {
+                    'master-ip': this._masterInfo.primaryPrivateIpAddress
+                } : '';
         } else {
             this.logger.info('instance is unhealthy. need to remove it. healthcheck record:',
                 JSON.stringify(this._selfHealthCheck));

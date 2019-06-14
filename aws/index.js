@@ -2054,9 +2054,15 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
                     return true;
                 } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-                    // master election not done, wait for a moment
-                    // clear the current master record cache and get a new one in the next call
-                    this._masterRecord = null;
+                    // if not wait for the master election to complete,
+                    if (this._settings['master-election-no-wait'] === 'true') {
+                        return true;
+                    } else {
+                        // master election not done, wait for a moment
+                        // clear the current master record cache and get a new one in the next call
+                        this._masterRecord = null;
+                        return false;
+                    }
                 } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
                     // master election done
                     return true;
@@ -2111,11 +2117,15 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } else {
 
             this._step = 'handler:getConfig:getSlaveConfig';
+            let getPendingMasterIp = !(this._settings['master-election-no-wait'] === 'true' &&
+                this._masterRecord && this._masterRecord.voteState === 'pending');
             params.callbackUrl = await this.platform.getCallbackEndpointUrl();
-            params.masterIp = masterInfo.primaryPrivateIpAddress;
+            params.masterIp = getPendingMasterIp && masterInfo &&
+                masterInfo.primaryPrivateIpAddress || null;
+            params.allowHeadless = this._settings['master-election-no-wait'] === 'true';
             config = await this.getSlaveConfig(params);
             logger.info('called handleGetConfig: returning slave config' +
-                `(master-ip: ${masterInfo.primaryPrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${params.masterIp || 'undetermined'}):\n ${config}`);
             return config;
         }
     }
