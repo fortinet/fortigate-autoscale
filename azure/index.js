@@ -140,7 +140,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 };
                 collections.forEach(collectionName => {
                     collectionCreationPromises.push(
-                                    createCollection(DB[collectionName.toUpperCase()])
+                        createCollection(DB[collectionName.toUpperCase()])
                     );
                 });
                 try {
@@ -1109,26 +1109,49 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     masterIp = this._masterRecord.ip;
                     return true;
                 }
-                // if i am the master, don't wait, continue, if not, wait
-                if (result &&
-                    result.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
-                    return true;
-                } else if (result && this._masterRecord &&
-                    this._masterRecord.voteState === 'done') {
-                    // master election done
-                    return true;
-                } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-                    // if not wait for the master election to complete,
-                    if (this._settings['master-election-no-wait'] === 'true') {
+
+                // if neither a pending master nor a master instance is found on the master
+                // scaling group. and if master-election-no-wait is enabled, allow this fgt
+                // to wake up without a master ip.
+                // this also implies this instance cannot be elected as the next maste which
+                // means it should be a slave.
+
+                // master info exists
+                if (result) {
+                    // i am the elected master
+                    if (result.primaryPrivateIpAddress ===
+                        this._selfInstance.primaryPrivateIpAddress) {
+                        masterIp = this._selfInstance.primaryPrivateIpAddress;
                         return true;
+                    } else if (this._masterRecord) {
+                        // i am not the elected master, how is the master election going?
+                        if (this._masterRecord.voteState === 'done') {
+                            // master election done
+                            return true;
+                        } else if (this._masterRecord.voteState === 'pending') {
+                            // master is still pending
+                            // if not wait for the master election to complete,
+                            if (this._settings['master-election-no-wait'] === 'true') {
+                                return true;
+                            } else {
+                                // master election not done, wait for a moment
+                                // clear the current master record cache and get a new one
+                                // in the next call
+                                this._masterRecord = null;
+                                return false;
+                            }
+                        }
                     } else {
-                        // master election not done, wait for a moment
-                        // clear the current master record cache and get a new one in the next call
-                        this._masterRecord = null;
+                        // master info exists but no master record?
+                        // this looks like a case that shouldn't happen. do the election again?
+                        logger.warn('master info found but master record not found. retry.');
                         return false;
                     }
+                } else {
+                    // master cannot be elected but I cannot be the next elected master either
+                    // if not wait for the master election to complete, let me become headless
+                    return this._settings['master-election-no-wait'] === 'true';
                 }
-                return false;
             },
             counter = currentCount => {
                 logger.info(`wait for master election (attempt: #${currentCount})`);
@@ -1159,15 +1182,14 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // this checking for 'duplicatedGetConfigCall' is to work around
         // the double GET config calls.
         // TODO: remove the workaround if mantis item: #0534971 is resolved
-        if (duplicatedGetConfigCall ||
-            masterInfo.primaryPrivateIpAddress === this._selfInstance.primaryPrivateIpAddress) {
+        if (duplicatedGetConfigCall || masterIp === this._selfInstance.primaryPrivateIpAddress) {
             this._step = 'handler:getConfig:getMasterConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
             params.callbackUrl = await this.platform.getCallbackEndpointUrl();
             config = await this.getMasterConfig(params);
             logger.info('called handleGetConfig: returning master config' +
-                `(master-ip: ${masterIp || masterInfo.primaryPrivateIpAddress}):\n ${config}`);
+                `(master-ip: ${masterIp}):\n ${config}`);
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
