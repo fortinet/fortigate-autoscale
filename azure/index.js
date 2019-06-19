@@ -181,9 +181,11 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             }
         };
         collections.forEach(collectionName => {
-            collectionCreationPromises.push(
-                createCollection(DB[collectionName.toUpperCase()])
-            );
+            let [table] = Object.values(DB).filter(
+                tableDef => tableDef.TableName === collectionName);
+            if (table) {
+                collectionCreationPromises.push(createCollection(table));
+            }
         });
         try {
             await Promise.all(collectionCreationPromises);

@@ -247,7 +247,16 @@
         "location": "[resourceGroup().location]",
         "functionAppName": "[concat(variables('uniqueResourceNamePrefix'),'funcapp')]",
         "hostingPlanName": "[concat(variables('functionAppName'),'-service-plan')]",
-        "funcionAppInsightName": "[concat(variables('functionAppName'),'-insights')]",
+        "functionAppInsightName": "[concat(variables('functionAppName'),'-insights')]",
+        "functionAppInsightAvailableLocations": [
+            "eastus",
+            "eastus2",
+            "southcentralus",
+            "westus",
+            "westus2",
+            "canadacentral"
+        ],
+        "enableAzureAppInsights": "[contains(variables('functionAppInsightAvailableLocations'), variables('location'))]",
         "databaseAccountName": "[concat(variables('uniqueResourceNamePrefix'),'dba001')]",
         "databaseName": "FortiGateAutoscale",
         "databaseSharedThroughputBase": 500,
@@ -751,8 +760,8 @@
                             "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),variables('storageApiVersion')).keys[0].value)]"
                         },
                         {
-                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-                            "value": "[reference(resourceId('Microsoft.Insights/components/', variables('funcionAppInsightName')), variables('insightsApiVersionMajority')).InstrumentationKey]"
+                            "name": "[if(variables('enableAzureAppInsights'), 'APPINSIGHTS_INSTRUMENTATIONKEY', 'DEPLOYED_APPINSIGHTS')]",
+                            "value": "[if(variables('enableAzureAppInsights'), reference(resourceId('Microsoft.Insights/components/', variables('functionAppInsightName')), variables('insightsApiVersionMajority')).InstrumentationKey, 'false')]"
                         },
                         {
                             "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
@@ -1007,9 +1016,10 @@
             }
         },
         {
+            "condition": "[variables('enableAzureAppInsights')]",
             "type": "Microsoft.Insights/components",
             "apiVersion": "[variables('insightsApiVersionMajority')]",
-            "name": "[variables('funcionAppInsightName')]",
+            "name": "[variables('functionAppInsightName')]",
             "kind": "web",
             "location": "[variables('location')]",
             "properties": {
