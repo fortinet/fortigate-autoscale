@@ -257,6 +257,7 @@
         "licenseAssetKeyPrefix": "fgt-asg-license",
         "enableHybridLicensing": true,
         "enableFortiAnalyzer": false,
+        "databaseTableNameList": "[concat('FortiGateAutoscale, FortiGateMasterElection, Settings, CustomLog, VmInfoCache', if(variables('enableHybridLicensing'), ', LicenseStock, LicenseUsage', ''), if(variables('enableFortiAnalyzer'), ', FortiAnalyzer', ''))]",
         "databaseSharedThroughput": "[add(add(variables('databaseSharedThroughputBase'), if(variables('enableHybridLicensing'), 200, 0)), if(variables('enableFortiAnalyzer'), 100, 0))]",
         "vNetName": "[if(equals(parameters('VnetNewOrExisting'), 'existing'), parameters('VNetName'), concat(variables('uniqueResourceNamePrefix'), '-virtual-network'))]",
         "vnetID": "[resourceId(variables('resourceGroupName'),'Microsoft.Network/virtualNetworks', variables('vNetName'))]",
@@ -972,6 +973,10 @@
                         {
                             "name": "REQUIRED_CONFIG_SET",
                             "value": "extraports-yes, extrastaticroutes-yes"
+                        },
+                        {
+                            "name": "REQUIRED_DB_TABLE",
+                            "value": "[variables('databaseTableNameList')]"
                         },
                         {
                             "name": "RESOURCE_TAG_PREFIX",

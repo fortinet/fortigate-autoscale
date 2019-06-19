@@ -17,6 +17,13 @@
             "ConstraintDescription": "must only contain uppercase and lowercase letters and numbers",
             "Description": "A short custom identifier as resource name prefix. This shorter version of name prefix is used on a resource that Resource tag prefix cannot apply to. Must be at most 10 characters long and only contain uppercase, lowercase letters, and numbers. Max length is 10."
         },
+        "UniqueId": {
+            "Type": "String",
+            "MaxLength": "8",
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "ConstraintDescription": "must only contain uppercase and lowercase letters and digits",
+            "Description": "A random string as a unique ID for all resources in this deployment stack and nested stacks. Max length is 8."
+        },
         "TrafficProtocol": {
             "Type": "String",
             "Default": "HTTPS",
@@ -35,6 +42,14 @@
             "MaxValue": 65535,
             "ConstraintDescription": "must be a valid port number between 1 and 65535.",
             "Description": "Port for balancing incoming web traffic. Minimum is 1. Maximum is 65535."
+        },
+        "HealthCheckPort": {
+            "Type": "Number",
+            "Default": 443,
+            "MinValue": 1,
+            "MaxValue": 65535,
+            "ConstraintDescription": "must be a valid port number between 1 and 65535.",
+            "Description": "Port that responds load balancing target group health check probes. Minimum is 1. Maximum is 65535."
         },
         "FgtTargetGroupHealthCheckThreshold": {
             "Type": "Number",
@@ -120,8 +135,12 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
+                            },
+                            {
+                                "Ref": "UniqueId"
                             },
                             "frontend-elb"
                         ]
@@ -132,8 +151,12 @@
                         "Value": {
                             "Fn::Join": [
                                 "-",
-                                [{
+                                [
+                                    {
                                         "Ref": "CustomIdentifier"
+                                    },
+                                    {
+                                        "Ref": "UniqueId"
                                     },
                                     "frontend-elb"
                                 ]
@@ -155,10 +178,14 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
                             },
-                            "frontend-target-group"
+                            {
+                                "Ref": "UniqueId"
+                            },
+                            "frontend-tg"
                         ]
                     ]
                 },
@@ -168,7 +195,7 @@
                 },
                 "HealthCheckProtocol": "TCP",
                 "HealthCheckPort": {
-                    "Ref": "TrafficPort"
+                    "Ref": "HealthCheckPort"
                 },
                 "HealthyThresholdCount": {
                     "Ref": "FgtTargetGroupHealthCheckThreshold"
@@ -188,10 +215,14 @@
                         "Value": {
                             "Fn::Join": [
                                 "-",
-                                [{
+                                [
+                                    {
                                         "Ref": "CustomIdentifier"
                                     },
-                                    "frontend-target-group"
+                                    {
+                                        "Ref": "UniqueId"
+                                    },
+                                    "frontend-tg"
                                 ]
                             ]
                         }
@@ -248,8 +279,12 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
+                            },
+                            {
+                                "Ref": "UniqueId"
                             },
                             "service-elb"
                         ]
@@ -260,8 +295,12 @@
                         "Value": {
                             "Fn::Join": [
                                 "-",
-                                [{
+                                [
+                                    {
                                         "Ref": "CustomIdentifier"
+                                    },
+                                    {
+                                        "Ref": "UniqueId"
                                     },
                                     "service-elb"
                                 ]
@@ -284,10 +323,14 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
                             },
-                            "service-target-group"
+                            {
+                                "Ref": "UniqueId"
+                            },
+                            "service-tg"
                         ]
                     ]
                 },
@@ -321,10 +364,14 @@
                         "Value": {
                             "Fn::Join": [
                                 "-",
-                                [{
+                                [
+                                    {
                                         "Ref": "CustomIdentifier"
                                     },
-                                    "service-target-group"
+                                    {
+                                        "Ref": "UniqueId"
+                                    },
+                                    "service-tg"
                                 ]
                             ]
                         }

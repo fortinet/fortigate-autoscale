@@ -93,7 +93,7 @@ module.exports = class AutoscaleHandler {
                 result = 'fatal error, cannot initialize.';
                 this.logger.error(result);
                 callback(null, this.proxyResponse(500, result));
-            } else if (event.source === 'autoscaling') {
+            } else if (event.source === 'aws.autoscaling') {
                 this._step = 'autoscaling';
                 result = await this.handleAutoScalingEvent(event);
                 callback(null, this.proxyResponse(200, result));
@@ -152,7 +152,7 @@ module.exports = class AutoscaleHandler {
     }
 
     async init() {
-        this.logger.info('calling init [Autoscale handler ininitialization]');
+        this.logger.info('calling init [Autoscale handler initialization]');
         // do the cloud platform initialization
         const success = this.platform.initialized || await this.platform.init();
         // ensure that the settings are saved properly.
@@ -1153,6 +1153,11 @@ module.exports = class AutoscaleHandler {
                 case 'requiredconfigset':
                     keyName = 'required-configset';
                     description = 'A comma-delimited list of required configsets.';
+                    editable = false;
+                    break;
+                case 'requireddbtable':
+                    keyName = 'required-db-table';
+                    description = 'A comma-delimited list of required DB table names.';
                     editable = false;
                     break;
                 case 'transitgatewayid':

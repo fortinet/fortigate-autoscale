@@ -31,6 +31,8 @@ const
     elbv2 = new AWS.ELBv2(),
     RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '',
     DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
+    MINIMUM_REQUIRED_DB_TABLE_KEYS = ['FORTIGATEAUTOSCALE', 'FORTIGATEMASTERELECTION',
+        'LIFECYCLEITEM', 'SETTINGS'],
     moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems;
 let logger = new AutoScaleCore.DefaultLogger(console);
@@ -40,15 +42,17 @@ let logger = new AutoScaleCore.DefaultLogger(console);
  */
 class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async init() {
-        let attempts = 0,
-            maxAttempts = 3,
-            done = false,
-            errors;
+        let attempts = 0, maxAttempts = 3, done = false, errors;
+        // these tables are minimum required tables for the autoscale.
+        let tableEntries = Object.entries(DB).filter(tableEntry => {
+            return MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(tableEntry[0]);
+        });
         while (attempts < maxAttempts) {
             errors = [];
             attempts++;
-            await Promise.all(Object.values(DB).map(
-                table => this.tableExists(table).catch(err => errors.push(err))));
+            await Promise.all(tableEntries.map(
+                entry => this.tableExists(entry[1]).catch(err => errors.push(err)))
+            );
             errors.forEach(err => logger.error(err));
             if (errors.length === 0) {
                 done = true;
@@ -1588,7 +1592,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // eslint-disable-next-line max-len
         // see reference: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#listObjectsV2-property
         let prefix = path.join(this._settings['asset-storage-key-prefix'],
-            this._settings['fortigate-license-storage-key-prefix']);
+            this._settings['fortigate-license-storage-key-prefix'], '/');
         let prefixLen = prefix && prefix.length;
         let iterable;
         let data = await s3.listObjectsV2({
@@ -1748,15 +1752,25 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
     async init() {
         let success;
-        try {
-            // call parent's init to enforce some general init checkings.
-            success = await super.init();
-        } catch (error) {
-            throw error;
+        // call parent's init to enforce some general init checkings.
+        success = await super.init();
+        // check other required tables existence
+        let requiredDbTableNames = this._settings['required-db-table'] &&
+            this._settings['required-db-table'].split(',') || [];
+        let otherRequiredTableEntries = Object.entries(DB).filter(entry => {
+            return !MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(entry[0]) &&
+                requiredDbTableNames.includes(entry[1].TableName);
+        });
+        let errors = [];
+        if (otherRequiredTableEntries.length > 0) {
+            logger.info('checking other required db table.');
+            await Promise.all(otherRequiredTableEntries.map(
+                entry => this.platform.tableExists(entry[1]).catch(err => errors.push(err)))
+            );
+            errors.forEach(err => logger.error(err));
         }
-        // load settings
-        this._settings = this._settings || await this.platform.getSettingItems();
-        return success;
+        logger.info('called init [Autoscale handler initialization]');
+        return success && errors.length === 0;
     }
 
     /* eslint-disable max-len */
@@ -2507,6 +2521,20 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         }
     }
 
+    async listNetworkInterfaces(status = null) {
+        logger.info('calling cleanUpAdditionalNics');
+        // RESOURCE_TAG_PREFIX
+        let nics = await this.platform.listNetworkInterfaces({
+            Filters: [{
+                Name: 'tag:FortiGateAutoscaleNicAttachment',
+                Values: [RESOURCE_TAG_PREFIX]
+            }]
+        });
+        return Array.isArray(nics) && nics.filter(nic => {
+            return !status || nic.Status === status;
+        });
+    }
+
     async cleanUpAdditionalNics() {
         logger.info('calling cleanUpAdditionalNics');
         // list all nics with tag: {key: 'FortiGateAutoscaleNicAttachment', value:
@@ -2905,6 +2933,28 @@ exports.handler = async (event, context, callback) => {
     handler.useLogger(logger);
     initModule();
     await handler.handle(event, context, callback);
+};
+
+/**
+ * Handle get license
+ * @param {Object} event The event been passed to
+ * @param {Object} context The Lambda function runtime context
+ * @param {Function} callback a callback function been triggered by AWS Lambda mechanism
+ */
+exports.handleGetLicense = async (event, context, callback) => {
+    process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + context.getRemainingTimeInMillis();
+    logger = new AutoScaleCore.DefaultLogger(console);
+    const handler = new AwsAutoscaleHandler();
+    if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+        logger.outputQueue = true;
+        if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
+            logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
+        }
+    }
+    handler.useLogger(logger);
+    initModule();
+    await handler.handleGetLicense(event, context, callback);
 };
 
 /**

@@ -439,3 +439,25 @@ exports.getTableSchema = (tables, tableName) => {
     schema.ProvisionedThroughput = tables[tableName].ProvisionedThroughput;
     return schema;
 };
+
+exports.getKeys = (excludedNames = null) => {
+    let keys = [];
+    for (let [key, table] of Object.entries(DB)) {
+        if (!excludedNames ||
+                Array.isArray(excludedNames) && !excludedNames.includes(table.TableName)) {
+            keys.push(key);
+        }
+    }
+    return keys;
+};
+
+exports.getNames = (excludedKeys = null) => {
+    let names = [];
+    for (let [key, table] of Object.entries(DB)) {
+        if (!excludedKeys ||
+            Array.isArray(excludedKeys) && !excludedKeys.includes(key)) {
+            names.push(table.TableName);
+        }
+    }
+    return names;
+};

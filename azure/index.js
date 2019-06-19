@@ -11,8 +11,9 @@ const armClient = require('./azure-arm-client');
 const UNIQUE_ID = process.env.UNIQUE_ID || '';
 const RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '';
 const DATABASE_NAME = `FortiGateAutoscale${UNIQUE_ID}`;
-const DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX, null,
-    ['LIFECYCLEITEM', 'NICATTACHMENT', 'VPNATTACHMENT', 'FORTIANALYZER']);
+const DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
+const MINIMUM_REQUIRED_DB_TABLE_KEYS = ['FORTIGATEAUTOSCALE', 'FORTIGATEMASTERELECTION',
+    'LIFECYCLEITEM', 'SETTINGS'];
 const moduleId = AutoScaleCore.Functions.uuidGenerator(
     JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;
@@ -43,6 +44,7 @@ class AzureLogger extends AutoScaleCore.DefaultLogger {
 
 class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async init() {
+        let self = this;
         let checkDatabaseAvailability = async function() {
                 let attempts = 0,
                     maxAttempts = 3,
@@ -99,70 +101,19 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                             `unknown error:${JSON.stringify(result)}`);
                 }
             },
-            // eslint-disable-next-line no-unused-vars
-            checkCollectionsAvailability = async function(collections = []) {
-                if (!Array.isArray(collections) || collections.length === 0) {
-                    return [];
-                }
-                let result = await dbClient.listCollections(DATABASE_NAME);
-                let missingCollections = [];
-                if (result.body && result.body.DocumentCollections &&
-                            result.body.DocumentCollections.length >= 0) {
-                    let existingCollections = result.body.DocumentCollections.map(element => {
-                        return element.id;
-                    });
-                    missingCollections = collections.filter(collectionName => {
-                        return !existingCollections.includes(collectionName);
-                    });
-                }
-                logger.info('called checkCollectionsAvailability.' +
-                            `${missingCollections.length} collections missing.`);
-                return missingCollections;
-            },
-            createCollections = async function(collections) {
-                let collectionCreationPromises = [];
-                if (!Array.isArray(collections) || collections.length === 0) {
-                    return Promise.resolve(true);
-                }
-                var createCollection = async function(collection) {
-                    let result = await dbClient.createCollection(DATABASE_NAME,
-                                    collection.TableName, [collection.KeySchema[0].AttributeName]);
-                    if (result.statusCode === 201) {
-                        logger.info(`Collection (${collection.TableName}) created.`);
-                        return true;
-                    } else if (result.statusCode === 409) {
-                        logger.info(`Collection (${collection.TableName}) already exists.`);
-                        return true;
-                    } else {
-                        logger.info('Unknown response from API:', JSON.stringify(result));
-                        return false;
-                    }
-                };
-                collections.forEach(collectionName => {
-                    collectionCreationPromises.push(
-                        createCollection(DB[collectionName.toUpperCase()])
-                    );
-                });
-                try {
-                    await Promise.all(collectionCreationPromises);
-                    logger.info('called createCollections > successful.');
-                    return true;
-                } catch (error) {
-                    logger.info('called createCollections > error:', error);
-                    throw error;
-                }
-            },
             initDB = async function() {
                 try {
                     let collectionNames =
-                                        Object.keys(DB).map(tableName => DB[tableName].TableName);
+                        Object.entries(DB).filter(tableEntry => {
+                            return MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(tableEntry[0]);
+                        }).map(filteredTableEntry => DB[filteredTableEntry[0]].TableName);
                     let available = await checkDatabaseAvailability();
                     if (!available) {
                         await createDatabase();
-                        await createCollections(collectionNames);
+                        await self.createCollections(collectionNames);
                     } else {
-                        await checkCollectionsAvailability(collectionNames)
-                            .then(missingCollections => createCollections(missingCollections));
+                        await self.checkCollectionsAvailability(collectionNames)
+                            .then(missingCollections => self.createCollections(missingCollections));
                     }
                     return true;
                 } catch (error) {
@@ -188,6 +139,60 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         });
         this._initialized = true; // mark this platform class instance is initialized.
         return true;
+    }
+
+    async checkCollectionsAvailability(collections = []) {
+        if (!Array.isArray(collections) || collections.length === 0) {
+            return [];
+        }
+        let result = await dbClient.listCollections(DATABASE_NAME);
+        let missingCollections = [];
+        if (result.body && result.body.DocumentCollections &&
+            result.body.DocumentCollections.length >= 0) {
+            let existingCollections = result.body.DocumentCollections.map(element => {
+                return element.id;
+            });
+            missingCollections = collections.filter(collectionName => {
+                return !existingCollections.includes(collectionName);
+            });
+        }
+        logger.info('called checkCollectionsAvailability.' +
+            `${missingCollections.length} collections missing.`);
+        return missingCollections;
+    }
+
+    async createCollections(collections) {
+        let collectionCreationPromises = [];
+        if (!Array.isArray(collections) || collections.length === 0) {
+            return Promise.resolve(true);
+        }
+        var createCollection = async function(collection) {
+            let result = await dbClient.createCollection(DATABASE_NAME,
+                collection.TableName, [collection.KeySchema[0].AttributeName]);
+            if (result.statusCode === 201) {
+                logger.info(`Collection (${collection.TableName}) created.`);
+                return true;
+            } else if (result.statusCode === 409) {
+                logger.info(`Collection (${collection.TableName}) already exists.`);
+                return true;
+            } else {
+                logger.info('Unknown response from API:', JSON.stringify(result));
+                return false;
+            }
+        };
+        collections.forEach(collectionName => {
+            collectionCreationPromises.push(
+                createCollection(DB[collectionName.toUpperCase()])
+            );
+        });
+        try {
+            await Promise.all(collectionCreationPromises);
+            logger.info('called createCollections > successful.');
+            return true;
+        } catch (error) {
+            logger.info('called createCollections > error:', error);
+            throw error;
+        }
     }
 
     /**
@@ -1046,7 +1051,29 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         if (!(this._settings && Object.keys(this._settings).length > 0)) {
             await this.saveSettings();
         }
-        return await super.init();
+        let success = await super.init();
+        // check other required tables existence
+        let requiredDbTableNames = this._settings['required-db-table'] &&
+            this._settings['required-db-table'].split(',').map(tableName => tableName.trim()) || [];
+        let otherRequiredTableEntries = Object.entries(DB).filter(entry => {
+            return !MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(entry[0]) &&
+                requiredDbTableNames.includes(entry[1].TableName);
+        }).map(otherRequiredTableEntry => {
+            return otherRequiredTableEntry[1].TableName;
+        });
+        let errors = [];
+        let platform = this.platform;
+        if (otherRequiredTableEntries.length > 0) {
+            logger.info('checking other required db table.');
+            await platform.checkCollectionsAvailability(otherRequiredTableEntries)
+                .then(missingCollections => platform.createCollections(missingCollections))
+                .catch(err => {
+                    logger.error(err);
+                    errors.push(err);
+                });
+        }
+        logger.info('called init [Autoscale handler initialization]');
+        return success && errors.length === 0;
     }
 
     /* eslint-disable max-len */

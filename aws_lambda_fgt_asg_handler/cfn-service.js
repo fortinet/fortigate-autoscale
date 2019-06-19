@@ -16,6 +16,7 @@ let timer,
     responseData = {},
     responseStatus = cfnResponse.FAILED,
     scriptExecutionExpireTime;
+
 function timeout() {
     throw new Error('Execution is about to time out, sending failure response to CloudFormation');
 }
@@ -33,24 +34,11 @@ exports.handler = async (event, context) => {
         let serviceType = event.ResourceProperties.ServiceType;
         logger.info(`RequestType: ${event.RequestType}, serviceType: ${serviceType}`);
         if (event.RequestType === 'Create') {
-            let subnetPairs = [], params = Object.assign({}, event.ResourceProperties);
+            let params = Object.assign({}, event.ResourceProperties);
             switch (serviceType) {
                 case 'initiateAutoscale':
                     // initiate
-                    subnetPairs = [
-                        {
-                            subnetId: params.Subnet1,
-                            pairId: params.Subnet1Pair
-                        },
-                        {
-                            subnetId: params.Subnet2,
-                            pairId: params.Subnet2Pair
-                        }
-                    ];
-                    await autoscaleHandler.init();
-                    await autoscaleHandler.initiate(params.DesiredCapacity, params.MinSize,
-                        params.MaxSize, subnetPairs);
-                    await autoscaleHandler.restart();
+                    await autoscaleHandler.initiate();
                     break;
                 case 'saveSettings':
                     // no need to call await autoscaleHandler.init();
@@ -66,7 +54,6 @@ exports.handler = async (event, context) => {
                     // must also adjust the script timeout to allow enough time for the process to
                     // complete
                     // this may take a significantly long time
-                    await autoscaleHandler.init();
                     await autoscaleHandler.restart();
                     break;
                 case 'updateCapacity':
@@ -74,11 +61,11 @@ exports.handler = async (event, context) => {
                     await autoscaleHandler.init();
                     if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
                         await autoscaleHandler.updateCapacity(
-                            autoscaleHandler.getSettings()['byol-scaling-group-name'],
-                        params.desiredCapacity, params.minSize, params.maxSize);
+                            autoscaleHandler.getSettings()['byol-auto-scaling-group-name'],
+                            params.desiredCapacity, params.minSize, params.maxSize);
                     }
                     await autoscaleHandler.updateCapacity(
-                        autoscaleHandler.getSettings()['payg-scaling-group-name'],
+                        autoscaleHandler.getSettings()['payg-auto-scaling-group-name'],
                         params.desiredCapacity, params.minSize, params.maxSize);
                     break;
                 case 'stopAutoscale':
@@ -97,29 +84,33 @@ exports.handler = async (event, context) => {
                         let tasks = [];
                         // check if all additional nics are detached and removed
                         if (autoscaleHandler.getSettings()['enable-second-nic'] === 'true') {
-                            tasks.push(autoscaleHandler.getPlatform().listNicAttachmentRecord()
-                                .then(nicAttachmentCheck => {
-                                    return {checkName: 'nicAttachmentCheck',
-                                        result: !nicAttachmentCheck ||
-                                                nicAttachmentCheck.length === 0
+                            tasks.push(autoscaleHandler.checkNicStatus('in-use')
+                                .then(nics => {
+                                    return {
+                                        checkName: 'nicStatusCheck',
+                                        result: !nics || nics.length === 0
                                     };
                                 }));
                         }
                         if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
                             tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                                autoscaleHandler.getSettings()['byol-scaling-group-name']
+                                autoscaleHandler.getSettings()['byol-auto-scaling-group-name']
                             ).then(byolGroupCheck => {
                                 logger.log(byolGroupCheck);
-                                return {checkName: 'byolGroupCheck',
-                                    result: !byolGroupCheck || byolGroupCheck === 'stopped'};
+                                return {
+                                    checkName: 'byolGroupCheck',
+                                    result: !byolGroupCheck || byolGroupCheck === 'stopped'
+                                };
                             }));
                         }
                         tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                            autoscaleHandler.getSettings()['payg-scaling-group-name']
+                            autoscaleHandler.getSettings()['payg-auto-scaling-group-name']
                         ).then(paygGroupCheck => {
                             logger.log(paygGroupCheck);
-                            return {checkName: 'paygGroupCheck',
-                                result: !paygGroupCheck || paygGroupCheck === 'stopped'};
+                            return {
+                                checkName: 'paygGroupCheck',
+                                result: !paygGroupCheck || paygGroupCheck === 'stopped'
+                            };
                         }));
                         return Promise.all(tasks);
                     },
@@ -135,7 +126,7 @@ exports.handler = async (event, context) => {
                             return false;
                         }
                         throw new Error('cannot wait for auto scaling group status because ' +
-                    'script execution is about to expire');
+                            'script execution is about to expire');
                     };
                 await autoscaleHandler.init();
                 // this may take a significantly long time to wait for its fully stop
@@ -145,7 +136,7 @@ exports.handler = async (event, context) => {
                         promiseEmitter, validator, 5000, counter);
                 } catch (error) {
                     logger.warn('error occurs while waiting for fully stop the auto scaling group',
-                    error);
+                        error);
                     throw error;
                 }
                 // clean up
