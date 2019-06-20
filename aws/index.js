@@ -1667,7 +1667,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         } catch (error) {
             logger.info('called updateLicenseUsage with error. ' +
                 `error: ${JSON.stringify(error)}`);
-            return Promise.reject(error);
+            return false;
         }
     }
 

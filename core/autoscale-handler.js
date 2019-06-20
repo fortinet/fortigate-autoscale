@@ -416,23 +416,18 @@ module.exports = class AutoscaleHandler {
 
                 // license file found
                 // update usage records
+                let usageUpdated = false;
                 if (availStockItem && updateUsage) {
-                    try {
-                        availStockRecord.updateUsage(this._selfInstance.instanceId,
-                            this._selfInstance.scalingGroupName);
-                        await this.platform.updateLicenseUsage(availStockRecord,
-                                replaceUsageRecord);
-                    } catch (error) {
-                        if (error && error.code &&
-                            error.code === 'ConditionalCheckFailedException') {
-                            // duplicate key caught
-                            // reset availStockItem if cannot update
-                            availStockItem = null;
-                            // fetch the latest usage record from db again.
-                            usageRecords = await this.platform.listLicenseUsage();
-                        } else {
-                            throw error;
-                        }
+                    availStockRecord.updateUsage(this._selfInstance.instanceId,
+                        this._selfInstance.scalingGroupName);
+                    // if usage record not updated, try to use another one
+                    usageUpdated = await this.platform.updateLicenseUsage(availStockRecord,
+                        replaceUsageRecord);
+                    // reset availStockItem if cannot update
+                    if (!usageUpdated) {
+                        availStockItem = null;
+                        // fetch the latest usage record from db again.
+                        usageRecords = await this.platform.listLicenseUsage();
                     }
                 }
                 return availStockItem;

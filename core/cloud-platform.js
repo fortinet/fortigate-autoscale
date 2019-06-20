@@ -319,6 +319,12 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
+    /**
+     * Update the license useage record to db
+     * @param {LicenseRecord} licenseRecord the license record to update
+     * @param {Boolean} replace use replace or update method
+     * @return {Boolan} return the update result
+     */
     async updateLicenseUsage(licenseRecord, replace = false) {
         await this.throwNotImplementedException();
     }
