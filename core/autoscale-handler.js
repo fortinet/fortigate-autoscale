@@ -650,10 +650,9 @@ module.exports = class AutoscaleHandler {
                     this._selfInstance.instanceId,
                     'default password comes from the new elected master.', false, false);
             }
-            return masterIp && this._selfHealthCheck &&
-                this._selfHealthCheck.masterIp !== masterIp ? {
-                    'master-ip': this._masterInfo.primaryPrivateIpAddress
-                } : '';
+            return masterIp ? {
+                'master-ip': this._masterInfo.primaryPrivateIpAddress
+            } : '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
             // for those already in monitor, if there's a healthy master instance, notify
             // the instance with the master ip if the master ip in its monitor record doesn't match
@@ -672,7 +671,7 @@ module.exports = class AutoscaleHandler {
                 `(${this._selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
                 `heartBeatLossCount: ${this._selfHealthCheck.heartBeatLossCount}, ` +
                 `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
-                `syncState: ${this._selfHealthCheck.syncState}).`);
+                `syncState: ${this._selfHealthCheck.syncState}, master-ip: ${masterIp}).`);
             return masterIp && this._selfHealthCheck &&
                 this._selfHealthCheck.masterIp !== masterIp ? {
                     'master-ip': this._masterInfo.primaryPrivateIpAddress
