@@ -347,83 +347,87 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 parseInt(this._settings['heartbeat-delay-allowance']) * 1000,
                 inevitableFailToSyncTime,
                 interval,
+                healthCheckRecord,
                 data = await docClient.get(params).promise();
-            if (data.Item) {
-                // to get a more accurate heart beat elapsed time, the script execution time so far
-                // is compensated.
-                scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
-                interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
-                    heartBeatInterval : data.Item.heartBeatInterval;
-                heartBeatDelays = scriptExecutionStartTime - data.Item.nextHeartBeatTime;
-                // based on the test results, network delay brought more significant side effects
-                // to the heart beat monitoring checking than we thought. we have to expand the
-                // checking time to reasonably offset the delay.
-                // heartBeatDelayAllowance is used for this purpose
-                if (heartBeatDelays < heartBeatDelayAllowance) {
-                    // reset hb loss count if instance sends hb within its interval
-                    healthy = true;
-                    heartBeatLossCount = 0;
-                } else {
-                    // if the current sync heartbeat is late, the instance is still considered
-                    // healthy unless the the inevitable-fail-to-sync time has passed.
-                    // The the inevitable-fail-to-sync time is defined as:
-                    // the maximum amount of time for an instance to be able to sync without being
-                    // deemed unhealth. For example:
-                    // the instance has x (x < hb loss count allowance) loss count recorded.
-                    // the hb loss count allowance is X.
-                    // the hb interval is set to i second.
-                    // its hb sync time delay allowance is I ms.
-                    // its current hb sync time is t.
-                    // its expected next hb sync time is T.
-                    // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
-                    // inevitable-fail-to-sync time. This means the instance can never catch up
-                    // with a heartbeat sync that makes it possile to deem health again.
-                    inevitableFailToSyncTime = data.Item.nextHeartBeatTime +
-                        (parseInt(this._settings['heartbeat-loss-count']) -
-                            data.Item.heartBeatLossCount - 1) *
-                        (interval * 1000 + heartBeatDelayAllowance);
-                    healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
-                    heartBeatLossCount = data.Item.heartBeatLossCount + 1;
-                    logger.info(`hb sync is late${heartBeatLossCount > 1 ? ' again' : ''}.\n` +
-                        `hb loss count becomes: ${heartBeatLossCount},\n` +
-                        `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
-                        'expected hb arrived time: ' +
-                        `${data.Item.nextHeartBeatTime} ms in unix timestamp\n` +
-                        'current hb sync check time: ' +
-                        `${scriptExecutionStartTime} ms in unix timestamp\n` +
-                        `this hb sync delay is: ${heartBeatDelays} ms`);
-                    // log the math why this instance is deemed unhealthy
-                    if (!healthy) {
-                        logger.info('Instance is deemed unhealthy. reasons:\n' +
-                            `previous hb loss count: ${data.Item.heartBeatLossCount},\n` +
-                            `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
-                            'expected hb arrived time: ' +
-                            `${data.Item.nextHeartBeatTime} ms in unix timestamp\n` +
-                            'current hb sync check time: ' +
-                            `${scriptExecutionStartTime} ms in unix timestamp\n` +
-                            `this hb sync delays: ${heartBeatDelays} ms\n` +
-                            'the inevitable-fail-to-sync time: ' +
-                            `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
-                    }
-                }
-                logger.info('called getInstanceHealthCheck. (timestamp: ' +
-                    `${scriptExecutionStartTime},  interval:${heartBeatInterval})` +
-                    'healthcheck record:',
-                    JSON.stringify(data.Item));
-                return {
-                    instanceId: instance.instanceId,
-                    healthy: healthy,
-                    heartBeatLossCount: heartBeatLossCount,
-                    heartBeatInterval: interval,
-                    nextHeartBeatTime: Date.now() + interval * 1000,
-                    masterIp: data.Item.masterIp,
-                    syncState: data.Item.syncState,
-                    inSync: data.Item.syncState === 'in-sync'
-                };
-            } else {
+            if (!data.Item) {
                 logger.info('called getInstanceHealthCheck: no record found');
                 return null;
             }
+            healthCheckRecord = data.Item;
+            // to get a more accurate heart beat elapsed time, the script execution time so far
+            // is compensated.
+            scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
+            interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
+                heartBeatInterval : healthCheckRecord.heartBeatInterval;
+            heartBeatDelays = scriptExecutionStartTime - healthCheckRecord.nextHeartBeatTime;
+            // The the inevitable-fail-to-sync time is defined as:
+            // the maximum amount of time for an instance to be able to sync without being
+            // deemed unhealth. For example:
+            // the instance has x (x < hb loss count allowance) loss count recorded.
+            // the hb loss count allowance is X.
+            // the hb interval is set to i second.
+            // its hb sync time delay allowance is I ms.
+            // its current hb sync time is t.
+            // its expected next hb sync time is T.
+            // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
+            // inevitable-fail-to-sync time. This means the instance can never catch up
+            // with a heartbeat sync that makes it possile to deem health again.
+            inevitableFailToSyncTime = healthCheckRecord.nextHeartBeatTime +
+                (parseInt(this._settings['heartbeat-loss-count']) -
+                    healthCheckRecord.heartBeatLossCount - 1) *
+                (interval * 1000 + heartBeatDelayAllowance);
+            // based on the test results, network delay brought more significant side effects
+            // to the heart beat monitoring checking than we thought. we have to expand the
+            // checking time to reasonably offset the delay.
+            // heartBeatDelayAllowance is used for this purpose
+            if (heartBeatDelays < heartBeatDelayAllowance) {
+                // reset hb loss count if instance sends hb within its interval
+                healthy = true;
+                heartBeatLossCount = 0;
+            } else {
+                // if the current sync heartbeat is late, the instance is still considered
+                // healthy unless the the inevitable-fail-to-sync time has passed.
+                healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
+                heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
+                logger.info(`hb sync is late${heartBeatLossCount > 1 ? ' again' : ''}.\n` +
+                    `hb loss count becomes: ${heartBeatLossCount},\n` +
+                    `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
+                    'expected hb arrived time: ' +
+                    `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
+                    'current hb sync check time: ' +
+                    `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                    `this hb sync delay is: ${heartBeatDelays} ms`);
+                // log the math why this instance is deemed unhealthy
+                if (!healthy) {
+                    logger.info('Instance is deemed unhealthy. reasons:\n' +
+                        `previous hb loss count: ${healthCheckRecord.heartBeatLossCount},\n` +
+                        `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
+                        'expected hb arrived time: ' +
+                        `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
+                        'current hb sync check time: ' +
+                        `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                        `this hb sync delays: ${heartBeatDelays} ms\n` +
+                        'the inevitable-fail-to-sync time: ' +
+                        `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
+                }
+            }
+            logger.info('called getInstanceHealthCheck. (timestamp: ' +
+                `${scriptExecutionStartTime},  interval:${heartBeatInterval})` +
+                'healthcheck record:',
+                JSON.stringify(healthCheckRecord));
+            return {
+                instanceId: instance.instanceId,
+                ip: healthCheckRecord.ip || '',
+                healthy: healthy,
+                heartBeatLossCount: heartBeatLossCount,
+                heartBeatInterval: interval,
+                nextHeartBeatTime: Date.now() + interval * 1000,
+                masterIp: healthCheckRecord.masterIp,
+                syncState: healthCheckRecord.syncState,
+                inSync: healthCheckRecord.syncState === 'in-sync',
+                inevitableFailToSyncTime: inevitableFailToSyncTime,
+                healthCheckTime: scriptExecutionStartTime
+            };
         } catch (error) {
             logger.info('called getInstanceHealthCheck with error. ' +
                 `error: ${JSON.stringify(error)}`);
@@ -2226,9 +2230,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 healthCheckResults, recyclableRecords = [],
                 count = 0,
                 maxCount,
-                interval = 3600000, // giving a big fake interval so healthcheck should never fail
-                // by this interval. unless the healthcheck state is
-                // 'out-of-sync'
                 platform = this.platform;
             if (limit === 'all' || isNaN(limit) || parseInt(limit) <= 0) {
                 maxCount = -1; // set a negative max count to indicate no limit
@@ -2244,7 +2245,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                             platform.getInstanceHealthCheck({
                                 instanceId: rec.instanceId,
                                 scalingGroupName: rec.scalingGroupName
-                            }, interval).catch(() => null));
+                            }).catch(() => null));
                         tasks.push(
                             platform.describeInstance({
                                 instanceId: item.instanceId,
@@ -2274,13 +2275,15 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 // license will be recycled.
                 // the health check here only verifies the in-sync state of any fgt instance but
                 // it doesn't trigger failover.
-                if (stockRecords.has(result.checksum)) {
+                if (result.checksum && stockRecords.has(result.checksum)) {
                     let recyclable = false;
                     // if instance is gone? recycle the license
                     if (!result.instance) {
                         recyclable = true;
                     } else if (result.instance && result.healthCheck &&
-                        !result.healthCheck.inSync) {
+                        (!result.healthCheck.inSync ||
+                            result.healthCheck.inevitableFailToSyncTime <
+                            result.healthCheck.healthCheckTime)) {
                         // if instance exists but instance state isn't in-sync? recycle the license
                         recyclable = true;
                     } else if (result.instance && !result.healthCheck && result.usageRecord &&

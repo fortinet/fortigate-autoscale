@@ -316,7 +316,7 @@ module.exports = class AutoscaleHandler {
                 instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
             // not trusted
             return await Promise.reject('Unauthorized calling instance (' +
-            `instanceId: ${instance.instanceId}). Instance not found in VPC.`);
+                `instanceId: ${instance && instance.instanceId || null}). Instance not found in VPC.`);
         }
         return await Promise.resolve(true);
     }
@@ -450,8 +450,7 @@ module.exports = class AutoscaleHandler {
 
 
         } catch (ex) {
-            this.logger.error('called handleGetLicense > error: ', ex);
-            callback(ex);
+            callback(ex, this.proxyResponse(500, 'Error in getting license. Please check logs.'));
         }
     }
 

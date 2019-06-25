@@ -363,6 +363,26 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
                 heartBeatInterval : healthCheckRecord.heartBeatInterval;
             heartBeatDelays = scriptExecutionStartTime - healthCheckRecord.nextHeartBeatTime;
+            // The the inevitable-fail-to-sync time is defined as:
+            // the maximum amount of time for an instance to be able to sync without being
+            // deemed unhealth. For example:
+            // the instance has x (x < hb loss count allowance) loss count recorded.
+            // the hb loss count allowance is X.
+            // the hb interval is set to i second.
+            // its hb sync time delay allowance is I ms.
+            // its current hb sync time is t.
+            // its expected next hb sync time is T.
+            // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
+            // inevitable-fail-to-sync time. This means the instance can never catch up with a
+            // heartbeat sync that makes it possile to deem health again.
+            inevitableFailToSyncTime = healthCheckRecord.nextHeartBeatTime +
+                (parseInt(this._settings['heartbeat-loss-count']) -
+                    healthCheckRecord.heartBeatLossCount - 1) *
+                (interval * 1000 + heartBeatDelayAllowance);
+            // based on the test results, network delay brought more significant side effects
+            // to the heart beat monitoring checking than we thought. we have to expand the
+            // checking time to reasonably offset the delay.
+            // heartBeatDelayAllowance is used for this purpose
             if (heartBeatDelays <= heartBeatDelayAllowance) {
                 // reset hb loss cound if instance sends hb within its interval
                 healthy = true;
@@ -370,27 +390,10 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             } else {
                 // if the current sync heartbeat is late, the instance is still considered
                 // healthy unless the the inevitable-fail-to-sync time has passed.
-                // The the inevitable-fail-to-sync time is defined as:
-                // the maximum amount of time for an instance to be able to sync without being
-                // deemed unhealth. For example:
-                // the instance has x (x < hb loss count allowance) loss count recorded.
-                // the hb loss count allowance is X.
-                // the hb interval is set to i second.
-                // its hb sync time delay allowance is I ms.
-                // its current hb sync time is t.
-                // its expected next hb sync time is T.
-                // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
-                // inevitable-fail-to-sync time. This means the instance can never catch up with a
-                // heartbeat sync that makes it possile to deem health again.
-                inevitableFailToSyncTime = healthCheckRecord.nextHeartBeatTime +
-                    (parseInt(this._settings['heartbeat-loss-count']) -
-                        healthCheckRecord.heartBeatLossCount - 1) *
-                    (interval * 1000 + heartBeatDelayAllowance);
                 healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
                 heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
-                logger.info('hb sync is late again.\n' +
-                    `hb loss count goes from ${healthCheckRecord.heartBeatLossCount} to ` +
-                    `${heartBeatLossCount},\n` +
+                logger.info(`hb sync is late${heartBeatLossCount > 1 ? ' again' : ''}.\n` +
+                    `hb loss count becomes: ${heartBeatLossCount},\n` +
                     `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
                     'expected hb arrived time: ' +
                     `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
@@ -411,19 +414,22 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                         `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
                 }
             }
-            logger.info(`called getInstanceHealthCheck. (time: ${scriptExecutionStartTime}, ` +
-                `interval:${heartBeatInterval} delay: ${heartBeatDelays}) healthcheck record:`,
+            logger.info('called getInstanceHealthCheck. (timestamp: ' +
+                `${scriptExecutionStartTime},  interval:${heartBeatInterval})` +
+                'healthcheck record:',
                 JSON.stringify(healthCheckRecord));
             return {
                 instanceId: instance.instanceId,
-                ip: healthCheckRecord.ip ? healthCheckRecord.ip : '',
+                ip: healthCheckRecord.ip || '',
                 healthy: healthy,
                 heartBeatLossCount: heartBeatLossCount,
                 heartBeatInterval: interval,
                 nextHeartBeatTime: Date.now() + interval * 1000,
                 masterIp: healthCheckRecord.masterIp,
                 syncState: healthCheckRecord.syncState,
-                inSync: healthCheckRecord.syncState === 'in-sync'
+                inSync: healthCheckRecord.syncState === 'in-sync',
+                inevitableFailToSyncTime: inevitableFailToSyncTime,
+                healthCheckTime: scriptExecutionStartTime
             };
         } catch (error) {
             logger.info('called getInstanceHealthCheck with error. ' +
@@ -502,8 +508,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     virtualMachine = await computeClient.refVirtualMachineScaleSet(
                         parameters.scalingGroupName).getVirtualMachineByVmId(parameters.instanceId);
                     if (virtualMachine) {
-                        await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine,
-                            virtualMachine.instanceId);
+                        await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine);
                     }
                 }
             } else {
@@ -518,8 +523,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     virtualMachine = await computeClient.refVirtualMachineScaleSet(
                         parameters.scalingGroupName).getVirtualMachine(parameters.instanceId);
                     if (virtualMachine) {
-                        await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine,
-                            virtualMachine.instanceId);
+                        await this.setVmInfoCache(parameters.scalingGroupName, virtualMachine);
                     }
                 }
             }
@@ -688,14 +692,16 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    async setVmInfoCache(scaleSetName, info) {
+    async setVmInfoCache(scaleSetName, info, cacheTime = 3600) {
+        let now = Date.now();
         let document = {
             id: `${scaleSetName}-${info.instanceId}`,
             instanceId: info.instanceId,
             vmId: info.properties.vmId,
             scalingGroupName: scaleSetName,
             info: typeof info === 'string' ? info : JSON.stringify(info),
-            timestamp: Date.now()
+            cacheTime: now,
+            expireTime: now + cacheTime * 1000
         };
         try {
             const TABLE = DB.VMINFOCACHE;
@@ -1354,7 +1360,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                             ref.platform.getInstanceHealthCheck({
                                 instanceId: rec.instanceId,
                                 scalingGroupName: rec.scalingGroupName
-                            }, 3600000).catch(() => null));
+                            }).catch(() => null));
                         tasks.push(
                             ref.platform.describeInstance({
                                 instanceId: item.instanceId,
@@ -1363,7 +1369,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                             }).catch(() => null));
                         let [healthCheck, instance] = await Promise.all(tasks);
                         return {
-                            checksum: rec['sha1-checksum'],
+                            checksum: rec.checksum,
                             usageRecord: rec,
                             healthCheck: healthCheck,
                             instance: instance
@@ -1381,13 +1387,15 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 // the script sets a grace period for the fgt to complete the whole process.
                 // if the fgt instance exists, but no healthcheck record, if the grace period has
                 // passed, recycle the license.
-                if (stockRecords.has(result.checksum)) {
+                if (result.checksum && stockRecords.has(result.checksum)) {
                     let recyclable = false;
                     // if instance is gone? recycle the license
                     if (!result.instance) {
                         recyclable = true;
                     } else if (result.instance && result.healthCheck &&
-                        !result.healthCheck.healthy) {
+                        (!result.healthCheck.inSync ||
+                        result.healthCheck.inevitableFailToSyncTime <
+                        result.healthCheck.healthCheckTime)) {
                         // if instance exists but instance is unhealth? recycle the license
                         recyclable = true;
                     } else if (result.instance && !result.healthCheck && result.usageRecord &&
