@@ -352,7 +352,7 @@ module.exports = class CloudPlatform {
 
     /**
      * Find a recyclable license from those been previously used by a device but now the device
-     * has become unavailable. Hence, the licens it was assigned can be recycled.
+     * has become unavailable. Hence, the license it was assigned can be recycled.
      * @param {Map<licenseRecord>} stockRecords the stock records to compare with
      * @param {Map<licenseRecord>} usageRecords the usage records to compare with
      * @param {Number} limit find how many items? set to a negative number for no limit
@@ -369,6 +369,13 @@ module.exports = class CloudPlatform {
      * @param {Boolean} replace update method: replace existing or not. Default true
      */
     async updateLicenseStock(licenseItem, replace = true) {
+        await this.throwNotImplementedException();
+    }
+    /**
+     * Delete the given license item from db
+     * @param {LicenseItem} licenseItem the license item to update
+     */
+    async deleteLicenseStock(licenseItem) {
         await this.throwNotImplementedException();
     }
 

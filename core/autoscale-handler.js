@@ -1401,47 +1401,106 @@ module.exports = class AutoscaleHandler {
     async updateLicenseStockRecord(licenseFiles, existingRecords) {
         if (licenseFiles instanceof Map && existingRecords instanceof Map) {
             let untrackedFiles = new Map(licenseFiles.entries()); // copy the map
+            let recordsToDelete = new Map();
             try {
                 if (existingRecords.size > 0) {
                     // filter out tracked license files
+                    // if the tracked record doesn't match any file (may be deleted?), delete the
+                    // record
                     existingRecords.forEach(licenseRecord => {
                         if (licenseFiles.has(licenseRecord.blobKey)) {
                             untrackedFiles.delete(licenseRecord.blobKey);
+                        } else {
+                            recordsToDelete.set(licenseRecord.checksum, licenseRecord);
                         }
                     }, this);
                 }
-                let platform = this.platform;
+                let platform = this.platform, logger = this.logger;
                 // fetch the content for each untrack license file
-                let updateTasks = [];
-                untrackedFiles.forEach(licenseItem => {
-                    if (!licenseItem.content) {
-                        updateTasks.push((async () => {
-                            const content =
-                                await platform.getLicenseFileContent(licenseItem.fileName);
-                            licenseItem.content = content;
+                let updateTasks = [], updateTasksResult = [], doneTaskCount = 0;
+
+                if (recordsToDelete.size > 0) {
+                    recordsToDelete.forEach(licenseRecord => {
+                        updateTasks.push(platform.deleteLicenseStock(licenseRecord)
+                            .then(() => {
+                                logger.info(`remove license file (${licenseRecord.fileName}) ` +
+                                    'from stock.');
+                                return true;
+                            })
+                            .catch(error => {
+                                logger.error('cannot remove license file ' +
+                                    `(${licenseRecord.fileName}) from stock. ` +
+                                    `error: ${JSON.stringify(error)}`);
+                                return false;
+                            }));
+                    });
+                    updateTasksResult = await Promise.all(updateTasks);
+                    doneTaskCount = updateTasksResult.filter(result => { return result }).length;
+                    if (doneTaskCount > 0) {
+                        logger.info(`${doneTaskCount} files removed from stock.`);
+                    }
+                }
+
+                if (untrackedFiles.size > 0) {
+                    untrackedFiles.forEach(licenseItem => {
+                        if (!licenseItem.content) {
+                            updateTasks.push(platform.getLicenseFileContent(licenseItem.fileName)
+                                .then(content => {
+                                    licenseItem.content = content;
+                                    return licenseItem;
+                                })
+                                .catch(error => {
+                                    logger.error('cannot get the content of license file ' +
+                                        `(${licenseItem.fileName}). ` +
+                                        `error: ${JSON.stringify(error)}`);
+                                    return null;
+                                }));
+                        } else {
+                            updateTasks.push(licenseItem);
+                        }
+                    });
+
+                    updateTasksResult = await Promise.all(updateTasks);
+                    untrackedFiles = new Map(updateTasksResult.filter(licenseItem => {
+                        return !!licenseItem;
+                    }).map((licenseItem => {
+                        return [licenseItem.checksum, licenseItem];
+                    })));
+                }
+
+                if (untrackedFiles.size > 0) {
+                    updateTasks = [];
+                    untrackedFiles.forEach(licenseItem => {
+                        if (existingRecords.has(licenseItem.checksum)) {
+                            logger.warn('updateLicenseStockRecord > warning: duplicate' +
+                                ` license found: filename: ${licenseItem.fileName}`);
                             return licenseItem;
-                        })());
-                    } else {
-                        updateTasks.push(licenseItem);
-                    }
-                });
+                        } else {
+                            updateTasks.push(platform.updateLicenseStock(licenseItem, false)
+                                .then(() => {
+                                    logger.info(`added license file (${licenseItem.fileName}) ` +
+                                        'to stock.');
+                                    return licenseItem;
+                                })
+                                .catch(error => {
+                                    logger.error('cannot add license file ' +
+                                        `(${licenseItem.fileName}) to stock. ` +
+                                        `error: ${JSON.stringify(error)}`);
+                                    logger.error(error);
+                                }));
+                            return null;
+                        }
+                    });
+                    updateTasksResult = await Promise.all(updateTasks);
+                    untrackedFiles = new Map(updateTasksResult.filter(licenseItem => {
+                        return !!licenseItem;
+                    }).map((licenseItem => {
+                        return [licenseItem.checksum, licenseItem];
+                    })));
+                }
 
-                untrackedFiles = await Promise.all(updateTasks);
-                updateTasks = [];
-
-                untrackedFiles.forEach(licenseItem => {
-                    if (existingRecords.has(licenseItem.checksum)) {
-                        this.logger.warn('updateLicenseStockRecord > warning: duplicate' +
-                            ` license found: filename: ${licenseItem.fileName}`);
-                    } else {
-                        updateTasks.push(platform.updateLicenseStock(licenseItem, false)
-                        .catch(error => {
-                            this.logger.error(error);
-                        }));
-                    }
-                });
-                await Promise.all(updateTasks);
-                return updateTasks.length > 0 ? this.platform.listLicenseStock() : existingRecords;
+                return (untrackedFiles.size > 0 || recordsToDelete.size > 0) &&
+                    this.platform.listLicenseStock() || existingRecords;
             } catch (error) {
                 this.logger.error(error);
             }

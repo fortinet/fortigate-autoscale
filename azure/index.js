@@ -1011,6 +1011,18 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             throw error;
         }
     }
+
+    /** @override */
+    async deleteLicenseStock(licenseItem) {
+        try {
+            const TABLE = DB.LICENSESTOCK;
+            return await dbClient.deleteDocument(DATABASE_NAME,
+                TABLE.TableName, licenseItem.checksum, true);
+        } catch (error) {
+            logger.error(`Called deleteLicenseStock: error >, ${JSON.stringify(error)}`);
+            throw error;
+        }
+    }
     // end of azurePlatform class
 }
 

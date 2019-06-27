@@ -1717,7 +1717,25 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         } catch (error) {
             logger.info('called updateLicenseStock with error. ' +
                 `error: ${JSON.stringify(error)}`);
-            return Promise.reject(error);
+            throw error;
+        }
+    }
+    /** @override */
+    async deleteLicenseStock(licenseItem) { // eslint-disable-line no-unused-vars
+        logger.info('calling deleteLicenseStock');
+        try {
+            await docClient.delete({
+                TableName: DB.LICENSESTOCK.TableName,
+                Key: {
+                    checksum: licenseItem.checksum
+                }
+            }).promise();
+            logger.info('called deleteLicenseStock');
+            return true;
+        } catch (error) {
+            logger.info('called deleteLicenseStock with error. ' +
+                `error: ${JSON.stringify(error)}`);
+            throw error;
         }
     }
 
