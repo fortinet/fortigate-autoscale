@@ -654,11 +654,14 @@ module.exports = class AutoscaleHandler {
                 'master-ip': this._masterInfo.primaryPrivateIpAddress
             } : '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
-            // for those already in monitor, if there's a healthy master instance, notify
-            // the instance with the master ip if the master ip in its monitor record doesn't match
-            // the current master.
-            // if no master present (master is coming up or in failover process), keep whatever
-            // master ip it has, keep it in-sync state as is.
+            // this instance is already in monitor. if the master has changed (i.e.: the current
+            // master is different from the one this instance is holding), and the new master
+            // is in a healthy state now, notify it by sending the new master ip to it.
+
+            // if no master presents (reasons: waiting for the pending master instance to become
+            // in-service; the master has been purged but no new master is elected yet.)
+            // keep the calling instance 'in-sync'. don't update its master-ip.
+
             masterIp = this._masterInfo && this._masterHealthCheck &&
                 this._masterHealthCheck.healthy ?
                 this._masterInfo.primaryPrivateIpAddress : this._selfHealthCheck.masterIp;

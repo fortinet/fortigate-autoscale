@@ -28,7 +28,7 @@ async function init() {
         _initStarted = true;
         await autoscaleHandler.init();
     } else if (_initStarted && !autoscaleHandler._settings) {
-        return Promise.reject(new Error('Cannot initiate module. Faild to load settings.'));
+        return Promise.reject(new Error('Cannot initiate module. Failed to load settings.'));
     } else {
         return Promise.resolve(true);
     }
