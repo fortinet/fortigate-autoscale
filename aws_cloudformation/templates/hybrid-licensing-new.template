@@ -267,6 +267,7 @@
         },
         "InternalLoadBalancerDnsName": {
             "Type": "String",
+            "Default": "",
             "Description": "(Optional) DNS Name of the Elastic Load Balancer which is used in the private subnets. Specify if only you use your own one."
         },
         "GetLicenseGracePeriod": {

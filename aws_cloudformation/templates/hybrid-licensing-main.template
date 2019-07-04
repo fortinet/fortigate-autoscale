@@ -258,6 +258,7 @@
         },
         "InternalLoadBalancerDnsName": {
             "Type": "String",
+            "Default": "",
             "Description": "Optional. Specify the DNS Name of an existing internal load balancer used to route traffic from FortiGate to targets in a specified target group. Leave it blank if you don't use an existing load balancer."
         },
         "GetLicenseGracePeriod": {
