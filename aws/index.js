@@ -236,6 +236,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async putMasterRecord(candidateInstance, voteState, method = 'new') {
         try {
+            let now = Date.now();
             let electionTimeout = parseInt(this._settings['master-election-timeout']);
             let params = {
                 TableName: DB.FORTIGATEMASTERELECTION.TableName,
@@ -245,11 +246,15 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     instanceId: candidateInstance.instanceId,
                     vpcId: candidateInstance.virtualNetworkId,
                     subnetId: candidateInstance.subnetId,
-                    voteEndTime: Date.now() + electionTimeout * 1000,
+                    voteEndTime: now + electionTimeout * 1000,
                     voteState: voteState
                 }
             };
-            if (method !== 'replace') {
+            if (method === 'replace') {
+                // only attempts to replace the done master record or master election is expired
+                params.ConditionExpression = 'attribute_exists(scalingGroupName) AND ' +
+                    `voteState = 'new' OR voteState = 'pending' AND voteEndTime < ${now}`;
+            } else {
                 params.ConditionExpression = 'attribute_not_exists(scalingGroupName)';
             }
             return !!await docClient.put(params).promise();

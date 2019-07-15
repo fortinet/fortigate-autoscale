@@ -849,6 +849,11 @@ module.exports = class AutoscaleHandler {
                     } catch (error) {
                         this.logger.error('Something went wrong in the master election.');
                     }
+                } else {
+                    // election returned false, delete the current master info. do the election
+                    // again
+                    this._masterRecord = null;
+                    this._masterInfo = null;
                 }
             } else { // i am not in the master group, i am not allowed to hold a master election
                 this.logger.info(`This instance (id: ${this._selfInstance.instanceId}) not in ` +
