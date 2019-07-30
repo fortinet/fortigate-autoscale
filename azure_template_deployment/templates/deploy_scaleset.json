@@ -207,7 +207,7 @@
         "vnetID": "[resourceId(variables('namingInfix'),'Microsoft.Network/virtualNetworks', parameters('VNetName'))]",
         "subnet2Ref": "[concat(variables('vnetID'),'/subnets/', parameters('Subnet2Name'))]",
         "routeTableId": "[resourceId('Microsoft.Network/routeTables',variables('routeTableName'))]",
-        "userdata": "[concat('{\"config-url\": \"', parameters('EndpointURL'), '\"}\n')]"
+        "userdata": "[concat('{\"config-url\": \"', parameters('EndpointURL'), '/api/fgt-asg-handler', '\"}\n')]"
     },
     "resources": [{
             "type": "Microsoft.Network/routeTables",

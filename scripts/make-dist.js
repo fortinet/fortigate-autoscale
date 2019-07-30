@@ -10,71 +10,6 @@ const ARGV_PROCESS_PACKAGING_SCRIPT_NAME = 2;
 const REAL_PROJECT_ROOT = path.resolve(__dirname, '../');
 const REAL_PROJECT_DIRNAME = path.parse(path.resolve(__dirname, '../')).base;
 
-async function makeDistAWSLambda(options = {saveToDist: 'zip', keepTemp: false}) {
-    console.info('Making distribution zip package for: AWS Lambda');
-    let pm = Packman.spawn(),
-        rTempDir = await pm.makeTempDir(),
-        rTempDirSrc = path.resolve(rTempDir, 'src'),
-        rTempDirSrcLambda = path.resolve(rTempDirSrc, 'aws_lambda'),
-        rTempDirSrcLib = path.resolve(rTempDirSrcLambda, 'lib'),
-        rTempDirSrcCore = path.resolve(rTempDirSrcLib, 'core'),
-        rTempDirSrcAws = path.resolve(rTempDirSrcLib, 'aws'),
-        packageInfo,
-        zipFilePath,
-        rDirSrcCore = path.resolve(REAL_PROJECT_ROOT, './core'),
-        rDirSrcAws = path.resolve(REAL_PROJECT_ROOT, './aws'),
-        rDirSrcLambda = path.resolve(REAL_PROJECT_ROOT, './aws_lambda'),
-        rDirDist = path.resolve(REAL_PROJECT_ROOT, './dist'),
-        zipFileName,
-        saveAs;
-
-    // create temp dirs
-    await pm.makeDir(rTempDirSrc);
-    await pm.makeDir(rDirDist);
-    // copy lambda module to temp dir
-    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, ['node_modules', 'local*', 'test',
-        '.nyc_output', '.vscode', 'package-lock.json']);
-    // create library dir on funcapp
-    await pm.makeDir(rTempDirSrcLib);
-    // copy core module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
-    // copy aws module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
-    // install aws as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcAws.replace(rTempDirSrcLambda, '.')]);
-
-    // read package info of module lambda
-    packageInfo = pm.readPackageJsonAt(rTempDirSrcLambda);
-    zipFileName = `${packageInfo.name}.zip`;
-    // if only make zip file distribution file
-    if (options && options.saveToDist === 'zip') {
-    // zip
-        zipFilePath = await pm.zipSafe(zipFileName, rTempDirSrcLambda, ['*.git*', '*.vsc*']);
-        // copy the zip file to distribution directory
-        await pm.copy(zipFilePath, rDirDist);
-        // move zip file to upper level directory
-        await pm.moveSafe(zipFilePath, path.resolve(rTempDirSrcLambda, '..'));
-        saveAs = path.resolve(rDirDist, zipFileName);
-    } else if (options && options.saveToDist === 'directory') {
-        // copy folder to distribution directory
-        await pm.copy(rTempDirSrcLambda, rDirDist);
-        saveAs = rDirSrcLambda;
-    } else {
-        saveAs = rTempDirSrcLambda;
-    }
-    // if keep temp is true, the kept temp dir will be return and the calle is responsible for
-    // deleteing it after use.
-    if (!(options && options.keepTemp)) {
-        await pm.removeTempDir();
-    }
-    console.info('\n\n( ͡° ͜ʖ ͡°) package is saved as:');
-    console.info(`${saveAs}`);
-    return options && options.keepTemp ? rTempDirSrcLambda : null;
-}
-
 async function makeDistAWSLambdaFgtAsgHandler(options = {saveToDist: 'zip', keepTemp: false}) {
     console.info('Making distribution zip package for: AWS FortiGate Autoscale Handler function');
     let pm = Packman.spawn(),
@@ -591,7 +526,7 @@ async function makeDistAzureTemplateDeployment() {
 }
 
 async function makeDistAll() {
-    await makeDistAWSLambda();
+    await makeDistAWSLambdaFgtAsgHandler();
     await makeDistAzureFuncApp();
     await makeDistAzureTemplateDeployment();
     await makeDistProject();

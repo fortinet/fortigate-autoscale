@@ -2,12 +2,10 @@
 **/dist
 **/local
 **/local*
-scripts/clean-code.js
 
 # npm
 **/node_modules
 **/npm-debug.log
-**/package-lock.json
 
 # istanbul javascript test coverage
 **/.nyc_output
