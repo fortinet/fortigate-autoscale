@@ -75,6 +75,17 @@
             "ConstraintDescription": "must be a valid EC2 instance type.",
             "Description": "Instance type to launch as FortiGate On-Demand instances. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
         },
+        "FortiOSVersion": {
+            "Type": "String",
+            "Default": "Latest (6.2.1)",
+            "AllowedValues": [
+                "Latest (6.2.1)",
+                "FortiOS 6.2.1",
+                "FortiOS 6.0.6"
+            ],
+            "ConstraintDescription": "must be a valid FortiOS version from the selection.",
+            "Description": "FortiOS versions."
+        },
         "ExpireLifecycleEntry": {
             "Type": "Number",
             "Default": 400,
@@ -206,6 +217,22 @@
                 },
                 "us-gov-west-1"
             ]
+        },
+        "UseLatestFortiOSVersion": {
+            "Fn::Equals": [{
+                "Fn::Select": [
+                    0,
+                    {
+                    "Fn::Split": [
+                            " ",
+                            {
+                                "Ref": "FortiOSVersion"
+                            }
+                        ]
+                    }
+                ]},
+                "Latest"
+            ]
         }
     },
     "Resources": {
@@ -321,6 +348,35 @@
                     "FortiGateInstanceType": {
                         "Ref": "FortiGateInstanceType"
                     },
+                    "FortiOSVersion": {
+                        "Fn::If": [
+                            "UseLatestFortiOSVersion",
+                            "LATEST",
+                            {
+                                "Fn::Join":[
+                                    "",
+                                    {
+                                        "Fn::Split":[
+                                            ".",
+                                            {
+                                                "Fn::Select": [
+                                                    1,
+                                                    {
+                                                        "Fn::Split": [
+                                                            " ",
+                                                            {
+                                                                "Ref": "FortiOSVersion"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
                     "ExpireLifecycleEntry": {
                         "Ref": "ExpireLifecycleEntry"
                     },
@@ -410,6 +466,7 @@
                     "Parameters": [
                         "CustomIdentifier",
                         "FortiGateInstanceType",
+                        "FortiOSVersion",
                         "FortiGatePskSecret",
                         "FortiGateAdminPort",
                         "FortiGateAdminCidr",
@@ -484,6 +541,9 @@
                 },
                 "FortiGateInstanceType": {
                     "default": "Instance type"
+                },
+                "FortiOSVersion": {
+                    "default": "FortiOS version"
                 },
                 "LambdaDeploymentMethod": {
                     "default": "Deployment method"
