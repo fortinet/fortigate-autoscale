@@ -13,7 +13,7 @@ const RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '';
 const DATABASE_NAME = `FortiGateAutoscale${UNIQUE_ID}`;
 const DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
 const MINIMUM_REQUIRED_DB_TABLE_KEYS = ['FORTIGATEAUTOSCALE', 'FORTIGATEMASTERELECTION',
-    'LIFECYCLEITEM', 'SETTINGS'];
+    'SETTINGS'];
 const moduleId = AutoScaleCore.Functions.uuidGenerator(
     JSON.stringify(`${__filename}${Date.now()}`));
 const settingItems = AutoScaleCore.settingItems;

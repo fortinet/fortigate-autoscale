@@ -6,7 +6,7 @@
             "type": "string",
             "maxLength": 10,
             "metadata": {
-                "description": "A prefix for resource name on all applicable resources. Must be at most 10 characters long and only contain uppercase, lowercase letters, and numbers. Max length is 10."
+                "description": "The prefix for all applicable resource names. Must be at most 10 characters long and only contain uppercase letters, lowercase letters, and numbers."
             }
         },
         "StorageAccountType": {
@@ -18,7 +18,7 @@
                 "Standard_RAGRS"
             ],
             "metadata": {
-                "description": "Storage Account Type."
+                "description": "Storage account type."
             }
         },
         "RestAppID": {
@@ -30,7 +30,7 @@
         "RestAppSecret": {
             "type": "string",
             "metadata": {
-                "description": "Password for the Registered app."
+                "description": "Password (Authentication key) for the Registered app."
             }
         },
         "VnetNewOrExisting": {
@@ -62,28 +62,28 @@
             "type": "string",
             "defaultValue": "10.0.0.0/24",
             "metadata": {
-                "description": "Subnet 1 prefix in CIDR notation. E.g. 10.0.0.0/24."
+                "description": "Subnet 1 prefix in CIDR notation."
             }
         },
         "Subnet2Prefix": {
             "type": "string",
             "defaultValue": "10.0.1.0/24",
             "metadata": {
-                "description": "Subnet 2 prefix in CIDR notation. E.g. 10.0.1.0/24."
+                "description": "Subnet 2 prefix in CIDR notation."
             }
         },
         "Subnet3Prefix": {
             "type": "string",
             "defaultValue": "10.0.2.0/24",
             "metadata": {
-                "description": "Subnet 3 prefix in CIDR notation. E.g. 10.0.2.0/24."
+                "description": "Subnet 3 prefix in CIDR notation."
             }
         },
         "Subnet4Prefix": {
             "type": "string",
             "defaultValue": "10.0.3.0/24",
             "metadata": {
-                "description": "Subnet 4 prefix in CIDR notation. E.g. 10.0.3.0/24."
+                "description": "Subnet 4 prefix in CIDR notation."
             }
         },
         "InstanceType": {
@@ -95,7 +95,7 @@
                 "Standard_F4"
             ],
             "metadata": {
-                "description": "Size of the VMs in the VM Scale Set. The default is Standard_F4."
+                "description": "Size of the VMs in the VM Scale Set."
             }
         },
         "FOSVersion": {
@@ -177,7 +177,7 @@
             "defaultValue": 600,
             "minValue": 300,
             "metadata": {
-                "description": "The minimum time (in seconds) between a license is distributed and recycled to re-distribute. Minimum is 300."
+                "description": "The minimum time (in seconds) permitted before a distributed license can be revoked from a non-responsive FortiGate and re-distributed. Minimum is 300."
             }
         },
         "PublicIPNewOrExisting": {
@@ -195,7 +195,7 @@
             "type": "string",
             "defaultValue": "10",
             "metadata": {
-                "description": "Load Balancer's Front End Private IP for the last octet.  For example: 10.  Then, the Private IP would be 10.0.1.10 in the subnet with prefix 10.0.1.0/24."
+                "description": "The last octet of the Front End Private IP address to be used by the Load Balancer. For example, if set to 10, the Private IP for the Load Balancer  in the subnet with prefix 10.0.1.0/24 would be 10.0.1.10."
             }
         },
         "HeartBeatInterval": {
@@ -220,7 +220,7 @@
             "defaultValue": 2,
             "minValue": 0,
             "metadata": {
-                "description": "The maximum amount of time (in seconds) for acceptable network latency in FortiGate heartbeat arriving at the Autoscale handler. Minimum is 0."
+                "description": "The maximum amount of time (in seconds) allowed for network latency of the FortiGate heartbeat arriving at the Autoscale handler. Minimum is 0."
             }
         },
         "ScriptTimeout": {
@@ -229,7 +229,7 @@
             "minValue": 30,
             "maxValue": 230,
             "metadata": {
-                "description": "Timeout value (in seconds) for the Azure function script. The default value is 230. Minimum is 30. Maximum is 230."
+                "description": "Timeout value (in seconds) for the Azure function script. Minimum is 30. Maximum is 230."
             }
         },
         "PackageResURL": {
