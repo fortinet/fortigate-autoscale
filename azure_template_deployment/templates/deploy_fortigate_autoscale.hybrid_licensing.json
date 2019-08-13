@@ -48,7 +48,7 @@
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description": "Azure virtual network name. Input value of this parameter if conditionally required only if using an existing virtual network."
+                "description": "Required when VNet New Or Existing is set to 'existing'. It is the Azure virtual network name."
             }
         },
         "SubnetAddressPrefix": {
@@ -95,18 +95,17 @@
                 "Standard_F4"
             ],
             "metadata": {
-                "description": "Size of the VMs in the VM Scale Set. The default is Standard_F2."
+                "description": "Size of the VMs in the VM Scale Set. The default is Standard_F4."
             }
         },
         "FOSVersion": {
-            "defaultValue": "6.0.4",
+            "defaultValue": "6.0.5",
             "type": "string",
             "metadata": {
                 "description": "FortiOS version supported by FortiGate autoscale for Azure."
             },
             "allowedValues": [
-                "6.0.4",
-                "6.0.3"
+                "6.0.5"
             ]
         },
         "FortiGatePSKSecret": {
@@ -131,7 +130,7 @@
         "BYOLInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "The number of FortiGate instances the BYOL virtual machine scale set should have at any time, also called desired capacity. Recommend at least 2 FortiGates in the group for High Availability. Recommended value: 2."
+                "description": "The number of FortiGate instances the BYOL virtual machine scale set should have at any time. For High Availability, ensure at least 2 FortiGates are in the group. Recommended value: 2."
             },
             "defaultValue": 2,
             "minValue": 0
@@ -221,7 +220,7 @@
             "defaultValue": 2,
             "minValue": 0,
             "metadata": {
-                "description": "The maximum amount of time (in seconds) for network latency acceptable in FortiGate heartbeat arriving at the Autoscale handler. Minimum is 0."
+                "description": "The maximum amount of time (in seconds) for acceptable network latency in FortiGate heartbeat arriving at the Autoscale handler. Minimum is 0."
             }
         },
         "ScriptTimeout": {

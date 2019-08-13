@@ -1,23 +1,29 @@
 # FortiGate Autoscale
-A collection of **Node.js** modules and cloud-specific templates which support basic autoscale functionality for groups of FortiGate VM instances on various cloud platforms.
+A collection of **Node.js** modules and cloud-specific templates which support autoscale functionality for groups of FortiGate-VM instances on various cloud platforms.
+
+This project contains the code and templates for the **Amazon AWS** and **Microsoft Azure** autoscale deployments. For autoscale on **AliCloud** see the [alicloud-autoscale](https://github.com/fortinet/alicloud-autoscale/) repository.
 
 This project is organized in separate node modules:
 
  * [fortigate-autoscale/core](core) contains the core logic and provides an interface which can be extended to deal with the differences in cloud platform APIs.
  * [fortigate-autoscale/azure](azure) contains an implementation for the **Microsoft Azure** platform API and **Cosmos DB** storage backend.
  * [fortigate-autoscale/aws](aws) contains an implementation for the **AWS SDK** platform API with a **Dynamo DB** storage backend.
+
 The project also contains a deployment script which can generate packages for each cloud service's *serverless* implementation.
 
 ## Supported Platforms
-This project supports autoscaling for the cloud platforms listed below. The version tag in parentheses refers to the autoscale module version included in this project.
+This project supports autoscaling for the cloud platforms listed below:
+* Amazon AWS
+* Microsoft Azure
 
-  * Amazon AWS Lambda (1.0.0)
-  * Microsoft Azure (1.0.0)
+The current GA release is version 1.0.x.
+Version 2.0.0-beta includes the hybrid licensing feature and has been released as a preview.
 
 ## Deployment Packages
 To generate local deployment packages:
 
-  1. Clone this project.
+  1. From the [project release page](https://github.com/fortinet/fortigate-autoscale/releases), download the source code (.zip or .tar.gz) for the version you wish to install.
+  2. Extract the source code.
   2. Run `npm run build` at the project root directory.
 
 Deployment packages as well as source code will be available in the **dist** directory.
@@ -32,8 +38,8 @@ Deployment packages as well as source code will be available in the **dist** dir
 
 Installation Guides are available from the Fortinet Document Library:
 
-  * [ FortiGate / FortiOS Deploying Auto Scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
-  * [ FortiGate / FortiOS Deploying Auto Scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
+  + [ FortiGate / FortiOS Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
+  + [ FortiGate / FortiOS Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
