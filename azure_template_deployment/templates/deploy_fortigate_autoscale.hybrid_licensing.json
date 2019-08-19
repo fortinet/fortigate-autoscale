@@ -1001,7 +1001,7 @@
                         },
                         {
                             "name": "SCALING_GROUP_MIN_SIZE",
-                            "value": "0"
+                            "value": "[parameters('PAYGInstanceCount')]"
                         },
                         {
                             "name": "UNIQUE_ID",
