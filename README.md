@@ -11,20 +11,24 @@ This project is organized in separate node modules:
 
 The project also contains a deployment script which can generate packages for each cloud service's *serverless* implementation.
 
-## Supported Platforms
+## Supported platforms
 This project supports autoscaling for the cloud platforms listed below:
 * Amazon AWS
 * Microsoft Azure
 
-The current GA release is version 1.0.x.
-Version 2.0.0-beta includes the hybrid licensing feature and has been released as a preview.
+> **Note:** The current GA release is version 1.0.x and supports On-Demand (PAYG) instances only. Version 2.0.0-beta includes support for Azure hybrid licensing and has been released as a preview.
 
-## Deployment Packages
+## Deployment packages
 To generate local deployment packages:
 
   1. From the [project release page](https://github.com/fortinet/fortigate-autoscale/releases), download the source code (.zip or .tar.gz) for the version you wish to install.
+   * *Version 1.0.x* is the current GA release and supports On-Demand (PAYG) instances only
+     > Use this version to deploy FortiGate Autoscale for AWS and FortiGate Autoscale for Azure (PAYG instances).
+   * *Version 2.0.0-beta* includes includes support for Azure hybrid licensing and has been released as a preview.
+     > Use this version to deploy FortiGate Autoscale for Azure (hybrid licensing).
+
   2. Extract the source code.
-  2. Run `npm run build` at the project root directory.
+  3. Run `npm run build` at the project root directory.
 
 Deployment packages as well as source code will be available in the **dist** directory.
 
@@ -38,8 +42,10 @@ Deployment packages as well as source code will be available in the **dist** dir
 
 Installation Guides are available from the Fortinet Document Library:
 
-  + [ FortiGate / FortiOS Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
-  + [ FortiGate / FortiOS Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
+  + [ FortiGate / FortiOS 6.0 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
+  + [ FortiGate / FortiOS 6.2 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)
+  + [ FortiGate / FortiOS 6.0 Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
+  + [ FortiGate / FortiOS 6.2 Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.2/aws-cookbook/6.2.0/543390/deploying-auto-scaling-on-aws-without-transit-gateway-integration)
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
