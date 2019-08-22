@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.8",
+    "contentVersion": "1.0.0.9",
     "parameters": {
         "ResourceNamePrefix": {
             "type": "string",
@@ -333,7 +333,7 @@
         "osType": {
             "publisher": "Fortinet",
             "offer": "fortinet_fortigate-vm_v5",
-            "sku": "fortinet_fg-vm_payg",
+            "sku": "fortinet_fg-vm_payg_20190624",
             "version": "[parameters('fosversion')]"
         },
         "osType2": {
