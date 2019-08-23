@@ -15,14 +15,14 @@
             }
         },
         "FOSVersion": {
-            "defaultValue": "6.0.3",
+            "defaultValue": "6.2.1",
             "type": "string",
             "metadata": {
                 "description": "FortiOS version supported by FortiGate autoscale for Azure."
             },
             "allowedValues": [
-                "6.0.4",
-                "6.0.3"
+                "6.2.1",
+                "6.0.6"
             ]
         },
         "VnetNewOrExisting": {
@@ -265,7 +265,7 @@
         "osType": {
             "publisher": "Fortinet",
             "offer": "fortinet_fortigate-vm_v5",
-            "sku": "fortinet_fg-vm_payg",
+            "sku": "fortinet_fg-vm_payg_20190624",
             "version": "[parameters('fosversion')]"
         },
         "osType2": {
