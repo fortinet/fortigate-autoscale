@@ -37,6 +37,6 @@
     "mocha": "^5.2.0",
     "nyc": "^14.1.1",
     "prettier-eslint-cli": "^4.7.1",
-    "rimraf": "^2.6.2"
+    "rimraf": "^2.7.1"
   }
 }
