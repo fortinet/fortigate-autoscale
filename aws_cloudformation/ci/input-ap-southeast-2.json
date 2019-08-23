@@ -16,7 +16,7 @@
         "ParameterValue": "fgtASG"
     },
     {
-        "ParameterKey": "ExpireLifecycleEntry",
+        "ParameterKey": "LifecycleHookTimeout",
         "ParameterValue": "300"
     },
     {

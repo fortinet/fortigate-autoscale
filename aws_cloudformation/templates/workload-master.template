@@ -70,15 +70,14 @@
         },
         "FortiOSVersion": {
             "Type": "String",
-            "Default": "Latest (6.2.0)",
+            "Default": "Latest (6.2.1)",
             "AllowedValues": [
-                "Latest (6.2.0)",
-                "FortiOS 6.0.3",
-                "FortiOS 6.0.4",
-                "FortiOS 6.2.0"
+                "Latest (6.2.1)",
+                "FortiOS 6.2.1",
+                "FortiOS 6.0.6"
             ],
             "ConstraintDescription": "must be a valid FortiOS version from the selection.",
-            "Description": "Supported FortiOS versions."
+            "Description": "FortiOS versions."
         },
         "LifecycleHookTimeout": {
             "Type": "Number",
@@ -230,9 +229,18 @@
         },
         "UseLatestFortiOSVersion": {
             "Fn::Equals": [{
-                    "Ref": "FortiOSVersion"
-                },
-                "Latest (6.2.0)"
+                "Fn::Select": [
+                    0,
+                    {
+                    "Fn::Split": [
+                            " ",
+                            {
+                                "Ref": "FortiOSVersion"
+                            }
+                        ]
+                    }
+                ]},
+                "Latest"
             ]
         }
     },

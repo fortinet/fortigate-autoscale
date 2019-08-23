@@ -2,7 +2,6 @@
 **/dist
 **/local
 **/local*
-scripts/clean-code.js
 
 # npm
 **/node_modules

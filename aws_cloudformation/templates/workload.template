@@ -77,15 +77,14 @@
         },
         "FortiOSVersion": {
             "Type": "String",
-            "Default": "603",
+            "Default": "LATEST",
             "AllowedValues": [
                 "LATEST",
-                "620",
-                "604",
-                "603"
+                "621",
+                "606"
             ],
             "ConstraintDescription": "must be a valid FortiOS version from the selection.",
-            "Description": "Supported FortiOS versions."
+            "Description": "Supported FortiOS versions. The 'LATEST' version can be found in template parameter 'FortiGateKeyMap.FortiGateVersion' in the 'Mappings' section."
         },
         "LifecycleHookTimeout": {
             "Type": "Number",
@@ -229,65 +228,79 @@
     "Mappings": {
         "FortiGateKeyMap": {
             "FortiGateVersion": {
-                "LATEST": "FGTVM64PAYG620",
-                "603": "FGTVM64PAYG603",
-                "604": "FGTVM64PAYG604",
-                "620": "FGTVM64PAYG620"
+                "LATEST": "FGTVM64PAYG621",
+                "621": "FGTVM64PAYG621",
+                "606": "FGTVM64PAYG606"
             }
         },
         "AWSAMIRegionMap": {
             "AMI": {
-                "FGTVM64PAYG603": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0200 (6.0.3) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-09dba22e5db2d4fb5.4",
-                "FGTVM64PAYG604": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0231 (6.0.4) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-03aa5daa2a028ceba.4",
-                "FGTVM64PAYG620": "TODO: need to set correct info here."
+                "FGTVM64PAYG621": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0932 (6.2.1) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-094f6bfd5592431e0.4",
+                "FGTVM64PAYG606": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0272 (6.0.6) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-048fbaf13155f2abf.4"
             },
             "ap-northeast-1": {
-                "FGTVM64PAYG603": "ami-0bd9e6e0020928ef9"
+                "FGTVM64PAYG621": "ami-09cdcd4c2445e2c70",
+                "FGTVM64PAYG606": "ami-0760c962419fedf03"
             },
             "ap-northeast-2": {
-                "FGTVM64PAYG603": "ami-0a560b6c089c6310a"
+                "FGTVM64PAYG621": "ami-0a796272ef341a29d",
+                "FGTVM64PAYG606": "ami-0387943a776b4b60d"
             },
             "ap-southeast-1": {
-                "FGTVM64PAYG603": "ami-000c0166f49864e4a"
+                "FGTVM64PAYG621": "ami-02502caa43eb2d055",
+                "FGTVM64PAYG606": "ami-04d5de37af6752b20"
             },
             "ap-southeast-2": {
-                "FGTVM64PAYG603": "ami-0e3662b3f822e3be4"
+                "FGTVM64PAYG621": "ami-09c29aa6a848e77b9",
+                "FGTVM64PAYG606": "ami-03bdee3ae0c361cc0"
             },
             "ap-south-1": {
-                "FGTVM64PAYG603": "ami-0c5a28e0b56028d6d"
+                "FGTVM64PAYG621": "ami-0b71271bc53238423",
+                "FGTVM64PAYG606": "ami-067e008638637e71e"
             },
             "sa-east-1": {
-                "FGTVM64PAYG603": "ami-0424ffd602f0af643"
+                "FGTVM64PAYG621": "ami-034495a12fdb747ce",
+                "FGTVM64PAYG606": "ami-06d4b6df030dc5d92"
             },
             "eu-west-1": {
-                "FGTVM64PAYG603": "ami-0aeda1bdca1b205bd"
+                "FGTVM64PAYG621": "ami-0c14998b35a39578e",
+                "FGTVM64PAYG606": "ami-0fade92f8a2d2e2b2"
             },
             "eu-west-2": {
-                "FGTVM64PAYG603": "ami-0de7050ef166ab900"
+                "FGTVM64PAYG621": "ami-08cce3d57081f5137",
+                "FGTVM64PAYG606": "ami-0b1bed84cc40437e7"
             },
             "eu-west-3": {
-                "FGTVM64PAYG603": "ami-0ce86abfa74c76ad2"
+                "FGTVM64PAYG621": "ami-06dc0733eb79a0101",
+                "FGTVM64PAYG606": "ami-013e274b6219a609c"
             },
             "eu-central-1": {
-                "FGTVM64PAYG603": "ami-0af055c02be246473"
+                "FGTVM64PAYG621": "ami-0f670719612ad57cc",
+                "FGTVM64PAYG606": "ami-0e76e96a490a65635"
             },
             "ca-central-1": {
-                "FGTVM64PAYG603": "ami-0583f62d15a462f5c"
+                "FGTVM64PAYG621": "ami-06068c796e12ce93a",
+                "FGTVM64PAYG606": "ami-0a0e08538c0d5496b"
             },
             "us-east-1": {
-                "FGTVM64PAYG603": "ami-09e4f25ec992c94ab"
+                "FGTVM64PAYG621": "ami-0face455a14251c57",
+                "FGTVM64PAYG606": "ami-00cf45d0000a704da"
             },
             "us-east-2": {
-                "FGTVM64PAYG603": "ami-0a1f403f5e0cfa88e"
+                "FGTVM64PAYG621": "ami-07ca9dae55f42b1c3",
+                "FGTVM64PAYG606": "ami-0ec45e3bafb8c9a71"
             },
             "us-west-1": {
-                "FGTVM64PAYG603": "ami-057300bd7e60ea2b2"
+                "FGTVM64PAYG621": "ami-0c106aaaac4c4abd8",
+                "FGTVM64PAYG606": "ami-0454a9f438fdec4a6"
             },
             "us-west-2": {
-                "FGTVM64PAYG603": "ami-0ea3f14da73832fdc"
+                "FGTVM64PAYG621": "ami-0439b030915c59e67",
+                "FGTVM64PAYG606": "ami-0ac0683ebd9c5d321"
             },
             "us-gov-west-1": {
-                "FGTVM64PAYG603": "ami-ddf76dbc"
+                "FGTVM64PAYG621": "ami-6d00430c",
+                "FGTVM64PAYG606": "ami-4ce1a02d"
             }
         },
         "ProtocolPortMap": {
@@ -746,6 +759,23 @@
                         "Fn::GetAtt": [
                             "StackCreateDynamoDBTable",
                             "Outputs.NicAttachmentTableArn"
+                        ]
+                    },
+                    "FortiGateImageId": {
+                        "Fn::FindInMap": [
+                            "AWSAMIRegionMap",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            {
+                                "Fn::FindInMap": [
+                                    "FortiGateKeyMap",
+                                    "FortiGateVersion",
+                                    {
+                                        "Ref": "FortiOSVersion"
+                                    }
+                                ]
+                            }
                         ]
                     },
                     "VpcId": {
