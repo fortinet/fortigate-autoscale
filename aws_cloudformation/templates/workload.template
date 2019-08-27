@@ -254,7 +254,7 @@
         }
     },
     "Mappings": {
-        "FortiGateAutoScaleNameMap": {
+        "FortiGateKeyMap": {
             "FortiGateVersion": {
                 "LATEST": "FGTVM64PAYG621",
                 "621": "FGTVM64PAYG621",
