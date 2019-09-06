@@ -1,12 +1,12 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "FortiGate Autoscale Solution (with Hybrid Licensing model) [in a new VPC]. This template creates a new VPC and deploys the FortiGate Autoscale and related components into it. Please see the FortiGate Autoscale documentation for more details. **WARNING** You will be billed for the FortiGate On-Demand instances and related AWS resources if you create a stack from this template.",
+    "Description": "FortiGate Autoscale Solution [in a new VPC]. This template creates a new VPC and deploys the FortiGate Autoscale and related components into it. Please see the FortiGate Autoscale documentation for more details. **WARNING** You will be billed for the FortiGate On-Demand instances and related AWS resources if you create a stack from this template.",
     "Parameters": {
         "ResourceTagPrefix": {
             "Type": "String",
             "AllowedPattern": "[0-9a-zA-Z@.#-]+",
             "MaxLength": 50,
-            "ConstraintDescription": "Resource tag prefix can include numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 64.",
+            "ConstraintDescription": "Resource tag prefix can include numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 50.",
             "Description": "A prefix for tag key ResourceGroup on all resources. It's also used as the name prefix of all applicable resources. Can only contain numbers, lowercase letters, uppercase letters, ampersat(@) , hyphens (-), period (.), and hash (#). Max length is 50."
         },
         "CustomIdentifier": {
@@ -15,19 +15,19 @@
             "MaxLength": "10",
             "AllowedPattern": "[A-Za-z0-9]+",
             "ConstraintDescription": "must only contain uppercase and lowercase letters and numbers",
-            "Description": "An alternative name prefix. This shorter version of prefix is used on a resource that Resource tag prefix cannot apply to. Must be at most 10 characters long and only contain uppercase, lowercase letters, and numbers. Max length is 10."
+            "Description": "An alternative name prefix to be used on a resource that the “Resource tag prefix” cannot apply to. Can only contain numbers, lowercase letters, and uppercase letters. Max length is 10."
         },
         "S3BucketName": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
-            "Description": "S3 bucket name for the Deployment package. Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+            "Description": "S3 bucket name for the FortiGate Autoscale deployment package. This bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
         "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
-            "Description": "S3 key prefix for the deployment package. Key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
+            "Description": "S3 key prefix for the deployment package. Can contain numbers, lowercase letters, uppercase letters, hyphens (-), and forward slashes (/). If provided, it must end with a forward slash (/)."
         },
         "AvailabilityZones": {
             "Description": "The list of Availability Zones to use for the subnets in the VPC. The FortiGate Autoscale solution uses two Availability Zones from your list and preserves the logical order you specify.",
@@ -59,14 +59,14 @@
             "Default": "192.168.2.0/24",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
             "ConstraintDescription": "must be a valid CIDR block format.",
-            "Description": "The CIDR block for the private subnet located in Availability Zone 1 where it is protected by the FortiGates in public subnet in the same AZ."
+            "Description": "The CIDR block for the private subnet located in Availability Zone 1 where it is protected by the FortiGates in the public subnet of the same AZ."
         },
         "PrivateSubnet2Cidr": {
             "Type": "String",
             "Default": "192.168.3.0/24",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$",
             "ConstraintDescription": "must be a valid CIDR block format.",
-            "Description": "The CIDR block for the private subnet located in Availability Zone 1 where it is protected by the FortiGates in public subnet in the same AZ."
+            "Description": "The CIDR block for the private subnet located in Availability Zone 2 where it is protected by the FortiGates in the public subnet of the same AZ."
         },
         "FortiGateInstanceType": {
             "Type": "String",
@@ -80,17 +80,14 @@
                 "c5.9xlarge"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type.",
-            "Description": "Instance type to launch as FortiGate instances of PAYG and BYOL licensing models. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
+            "Description": "Instance type for the FortiGates in the Auto Scaling group. There are t2.small and compute-optimized instances such as c4 and c5 available with different vCPU sizes and bandwidths. For more information about instance types, see https://aws.amazon.com/ec2/instance-types/"
         },
         "FortiOSVersion": {
             "Type": "String",
-            "Default": "Latest (6.0.5)",
-            "AllowedValues": [
-                "Latest (6.0.5)",
-                "FortiOS 6.0.5"
-            ],
+            "Default": "6.2.1",
+            "AllowedValues": ["6.2.1", "6.0.6"],
             "ConstraintDescription": "must be a valid FortiOS version from the selection.",
-            "Description": "Supported FortiOS versions."
+            "Description": "FortiOS versions."
         },
         "LifecycleHookTimeout": {
             "Type": "Number",
@@ -98,7 +95,7 @@
             "MinValue": 60,
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 60 and 3600.",
-            "Description": "FortiGate instance lifecycle expiry entry (in seconds). Minimum is 60. Maximum is 3600."
+            "Description": "The amount of time (in seconds) that can elapse before the FortiGate Autoscale lifecycle hook times out. Minimum is 60. Maximum is 3600."
         },
         "FgtAsgCooldown": {
             "Type": "Number",
@@ -111,44 +108,44 @@
         "FgtAsgDesiredCapacityByol": {
             "Type": "Number",
             "Default": 2,
-            "MinValue": 2,
-            "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "The number of FortiGate instances the BYOL auto-scaling should have at any time, also called desired capacity. Must keep at least 2 FortiGates in the group for High Availability. Minimum is 2."
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 0.",
+            "Description": "The number of FortiGate instances the BYOL Auto Scaling group should have at any time. For High Availability, ensure there are at least 2 FortiGates in total in either BYOL or PAYG Auto Scaling groups. Minimum is 0."
         },
         "FgtAsgMinSizeByol": {
             "Type": "Number",
             "Default": 2,
-            "MinValue": 2,
-            "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "Minimum number of FortiGate instances in the BYOL auto-scaling. Minimum is 2."
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 0.",
+            "Description": "Minimum number of FortiGate instances in the BYOL Auto Scaling group. Minimum is 0."
         },
         "FgtAsgMaxSizeByol": {
             "Type": "Number",
             "Default": 2,
-            "MinValue": 2,
-            "ConstraintDescription": "must be a valid number not less than 2.",
-            "Description": "Maximum number of FortiGate instances in the BYOL auto-scaling. Minimum is 2."
+            "MinValue": 0,
+            "ConstraintDescription": "must be a valid number not less than 0.",
+            "Description": "Maximum number of FortiGate instances in the BYOL Auto Scaling group. Minimum is 0."
         },
         "FgtAsgDesiredCapacityPayg": {
             "Type": "Number",
             "Default": 0,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "The number of FortiGate instances the PAYG auto-scaling should have at any time, also called desired capacity."
+            "Description": "The number of FortiGate instances the PAYG Auto Scaling group should have at any time. For High Availability, ensure there are at least 2 FortiGates in total in either BYOL or PAYG Auto Scaling groups. Minimum is 0."
         },
         "FgtAsgMinSizePayg": {
             "Type": "Number",
             "Default": 0,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "Minimum number of FortiGate instances in the PAYG auto-scaling."
+            "Description": "Minimum number of FortiGate instances in the PAYG Auto Scaling group. Minimum is 0."
         },
         "FgtAsgMaxSizePayg": {
             "Type": "Number",
-            "Default": 6,
+            "Default": 0,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "Maximum number of FortiGate instances in the PAYG auto-scaling."
+            "Description": "Maximum number of FortiGate instances in the PAYG Auto Scaling group. Minimum is 0."
         },
         "FgtAsgHealthCheckGracePeriod": {
             "Type": "Number",
@@ -177,7 +174,7 @@
             "Type": "String",
             "NoEcho": true,
             "MaxLength": "128",
-            "Description": "A secret key for the FortiGate instances to securely communicate with each other. It can be of your choice of a string, such as numbers or letters or the combination of them. Max length 128."
+            "Description": "A secret key for the FortiGate-VM instances to securely communicate with each other. Must contain numbers and letters. Max length is 128."
         },
         "FortiGateAdminPort": {
             "Type": "Number",
@@ -185,7 +182,7 @@
             "MinValue": 1,
             "MaxValue": 65535,
             "ConstraintDescription": "must be a valid port number between 1 and 65535.",
-            "Description": "A port number for FortiGate administration. Minimum is 1. Maximum is 65535. Do not use: 443, 541, 514, 703 because these are FortiGate reserved ports."
+            "Description": "A port number for FortiGate administration. Minimum is 1. Maximum is 65535. Do not use the FortiGate reserved ports 443, 541, 514, or 703."
         },
         "FortiGateAdminCidr": {
             "Type": "String",
@@ -197,6 +194,14 @@
             "Type": "AWS::EC2::KeyPair::KeyName",
             "ConstraintDescription": "must specify an admin access key pair for FortiGate instances.",
             "Description": "Amazon EC2 Key Pair for admin access."
+        },
+        "MasterElectionTimeout": {
+            "Type": "Number",
+            "Default": 300,
+            "MinValue": 90,
+            "MaxValue": 3600,
+            "ConstraintDescription": "must be a valid number between 90 and 3600.",
+            "Description": "The amount of time (in seconds) for FortiGate master election to timeout. Minimum is 30. Maximum is 3600."
         },
         "HeartBeatInterval": {
             "Type": "Number",
@@ -218,16 +223,12 @@
             "Type": "Number",
             "Default": 2,
             "MinValue": 0,
-            "Description": "The maximum amount of time (in seconds) for network latency acceptable in FortiGate heartbeat arriving at the Autoscale handler. Minimum is 0."
+            "Description": "The maximum amount of time (in seconds) allowed for network latency of the FortiGate-VM heartbeat arriving at the Autoscale handler.. Minimum is 0."
         },
         "LoadBalancingTrafficProtocol": {
             "Type": "String",
             "Default": "HTTPS",
-            "AllowedValues": [
-                "HTTP",
-                "HTTPS",
-                "TCP"
-            ],
+            "AllowedValues": ["HTTP", "HTTPS", "TCP"],
             "ConstraintDescription": "value must be chosen from the provided options.",
             "Description": "Use this protocol to load balance traffic."
         },
@@ -268,52 +269,35 @@
         "InternalLoadBalancerDnsName": {
             "Type": "String",
             "Default": "",
-            "Description": "(Optional) DNS Name of the Elastic Load Balancer which is used in the private subnets. Specify if only you use your own one."
+            "Description": "Optional. Specify the DNS Name of an existing internal load balancer used to route traffic from FortiGate to targets in a specified target group. Leave it blank if you don't use an existing load balancer."
         },
         "GetLicenseGracePeriod": {
             "Type": "Number",
             "Default": 600,
             "MinValue": 300,
             "ConstraintDescription": "must be a valid number not less than 60.",
-            "Description": "The minimum time (in seconds) between a license is distributed and recycled to re-distribute. Minimum is 300."
-        },
-        "MasterElectionTimeout": {
-            "Type": "Number",
-            "Default": 300,
-            "MinValue": 90,
-            "MaxValue": 3600,
-            "ConstraintDescription": "must be a valid number between 90 and 3600.",
-            "Description": "The amount of time (in seconds) for FortiGate master election to timeout. Minimum is 30. Maximum is 3600."
+            "Description": "The minimum time (in seconds) permitted before a distributed license can be revoked from a non-responsive FortiGate and re-distributed. Minimum is 300."
         }
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
             ]
         },
         "HasResourceTagPrefix": {
-            "Fn::Not": [{
-                "Fn::Equals": [{
-                        "Ref": "ResourceTagPrefix"
-                    },
-                    ""
-                ]
-            }]
-        },
-        "UseLatestFortiOSVersion": {
-            "Fn::Equals": [{
-                    "Ref": "FortiOSVersion"
-                },
-                "Latest (6.0.5)"
-            ]
-        },
-        "UseLatestFortiOSVersion2": {
-            "Fn::Equals": [
-                "Latest (6.0.5)",
-                "Latest (6.0.5)"
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ResourceTagPrefix"
+                        },
+                        ""
+                    ]
+                }
             ]
         }
     },
@@ -352,7 +336,8 @@
                             {
                                 "Fn::Join": [
                                     "-",
-                                    [{
+                                    [
+                                        {
                                             "Ref": "ResourceTagPrefix"
                                         },
                                         {
@@ -412,11 +397,7 @@
                         "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/create-new-vpc.template",
                         {
                             "S3Region": {
-                                "Fn::If": [
-                                    "GovCloudCondition",
-                                    "s3-us-gov-west-1",
-                                    "s3"
-                                ]
+                                "Fn::If": ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
                             },
                             "S3BucketName": {
                                 "Ref": "S3BucketName"
@@ -446,7 +427,8 @@
                             {
                                 "Fn::Join": [
                                     "-",
-                                    [{
+                                    [
+                                        {
                                             "Ref": "ResourceTagPrefix"
                                         },
                                         {
@@ -527,70 +509,43 @@
                         ]
                     },
                     "VpcCidr": {
-                        "Fn::GetAtt": [
-                            "StackCreateNewVPC",
-                            "Outputs.VpcCidr"
-                        ]
+                        "Fn::GetAtt": ["StackCreateNewVPC", "Outputs.VpcCidr"]
                     },
                     "VpcId": {
-                        "Fn::GetAtt": [
-                            "StackCreateNewVPC",
-                            "Outputs.VpcId"
-                        ]
+                        "Fn::GetAtt": ["StackCreateNewVPC", "Outputs.VpcId"]
                     },
                     "PublicSubnet1": {
-                        "Fn::GetAtt": [
-                            "StackCreateNewVPC",
-                            "Outputs.PublicSubnet1Id"
-                        ]
+                        "Fn::GetAtt": ["StackCreateNewVPC", "Outputs.PublicSubnet1Id"]
                     },
                     "PublicSubnet2": {
-                        "Fn::GetAtt": [
-                            "StackCreateNewVPC",
-                            "Outputs.PublicSubnet2Id"
-                        ]
+                        "Fn::GetAtt": ["StackCreateNewVPC", "Outputs.PublicSubnet2Id"]
                     },
                     "PrivateSubnet1": {
-                        "Fn::GetAtt": [
-                            "StackCreateNewVPC",
-                            "Outputs.PrivateSubnet1Id"
-                        ]
+                        "Fn::GetAtt": ["StackCreateNewVPC", "Outputs.PrivateSubnet1Id"]
                     },
                     "PrivateSubnet2": {
-                        "Fn::GetAtt": [
-                            "StackCreateNewVPC",
-                            "Outputs.PrivateSubnet2Id"
-                        ]
+                        "Fn::GetAtt": ["StackCreateNewVPC", "Outputs.PrivateSubnet2Id"]
                     },
                     "PrivateSubnetRouteTable": {
-                        "Fn::GetAtt": [
-                            "StackCreateNewVPC",
-                            "Outputs.PrivateSubnetRouteTableId"
-                        ]
+                        "Fn::GetAtt": ["StackCreateNewVPC", "Outputs.PrivateSubnetRouteTableId"]
                     },
                     "FortiGateInstanceType": {
                         "Ref": "FortiGateInstanceType"
                     },
                     "FortiOSVersion": {
-                        "Fn::If": [
-                            "UseLatestFortiOSVersion",
-                            "LATEST",
+                        "Fn::Join": [
+                            "",
                             {
-                                "Fn::Join": [
-                                    "",
+                                "Fn::Split": [
+                                    ".",
                                     {
-                                        "Fn::Split": [
-                                            ".",
+                                        "Fn::Select": [
+                                            0,
                                             {
-                                                "Fn::Select": [
-                                                    1,
+                                                "Fn::Split": [
+                                                    " ",
                                                     {
-                                                        "Fn::Split": [
-                                                            " ",
-                                                            {
-                                                                "Ref": "FortiOSVersion"
-                                                            }
-                                                        ]
+                                                        "Ref": "FortiOSVersion"
                                                     }
                                                 ]
                                             }
@@ -679,14 +634,10 @@
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
-                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/hybrid-licensing-main.template",
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/autoscale-main.template",
                         {
                             "S3Region": {
-                                "Fn::If": [
-                                    "GovCloudCondition",
-                                    "s3-us-gov-west-1",
-                                    "s3"
-                                ]
+                                "Fn::If": ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
                             }
                         }
                     ]
@@ -697,14 +648,12 @@
     },
     "Metadata": {
         "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [{
+            "ParameterGroups": [
+                {
                     "Label": {
                         "default": "Resource tagging configuration"
                     },
-                    "Parameters": [
-                        "ResourceTagPrefix",
-                        "CustomIdentifier"
-                    ]
+                    "Parameters": ["ResourceTagPrefix", "CustomIdentifier"]
                 },
                 {
                     "Label": {
@@ -772,17 +721,15 @@
                     "Parameters": [
                         "HeartBeatInterval",
                         "HeartBeatLossCount",
-                        "HeartBeatDelayAllowance"
+                        "HeartBeatDelayAllowance",
+                        "MasterElectionTimeout"
                     ]
                 },
                 {
                     "Label": {
                         "default": "Deployment resources configuration"
                     },
-                    "Parameters": [
-                        "S3BucketName",
-                        "S3KeyPrefix"
-                    ]
+                    "Parameters": ["S3BucketName", "S3KeyPrefix"]
                 }
             ],
             "ParameterLabels": {
@@ -905,14 +852,15 @@
     },
     "Outputs": {
         "ResourceTagPrefix": {
-            "Description": "The value for Tag ResourceGroup on all resources deployed in this stack.",
+            "Description": "The value for Tag 'ResourceGroup' on all resources deployed in this stack.",
             "Value": {
                 "Fn::If": [
                     "HasResourceTagPrefix",
                     {
                         "Fn::Join": [
                             "-",
-                            [{
+                            [
+                                {
                                     "Ref": "ResourceTagPrefix"
                                 },
                                 {
@@ -968,60 +916,18 @@
             }
         },
         "CustomIdentifier": {
-            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
+            "Description": "The custom identifier specified for this stack. This is used as a resource name prefix on those resources that have strict naming requirement.",
             "Value": {
                 "Ref": "CustomIdentifier"
             }
         },
-        "UseLatestFortiOSVersion": {
-            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
-            "Value": {
-                "Fn::If": [
-                    "UseLatestFortiOSVersion",
-                "yes Latest (6.0.5)",
-                "no Latest (6.0.5)"
-                ]
-            }
-        },
         "FortiOSVersion": {
-            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
+            "Description": "The selected FortiOS versions.",
             "Value": {
                 "Ref": "FortiOSVersion"
             }
         },
-        "FortiOSVersion2": {
-            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
-            "Value": {
-                "Fn::If": [
-                    "UseLatestFortiOSVersion",
-                    "LATEST",
-                    {
-                        "Fn::Join": [
-                            "",
-                            {
-                                "Fn::Split": [
-                                    ".",
-                                    {
-                                        "Fn::Select": [
-                                            1,
-                                            {
-                                                "Fn::Split": [
-                                                    " ",
-                                                    {
-                                                        "Ref": "FortiOSVersion"
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        },
-        "UniqueID": {
+        "UniqueId": {
             "Description": "A random string as a unique ID for all resources in this deployment stack and nested stacks.",
             "Value": {
                 "Fn::Select": [
