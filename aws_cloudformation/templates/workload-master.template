@@ -77,7 +77,7 @@
                 "FortiOS 6.0.6"
             ],
             "ConstraintDescription": "must be a valid FortiOS version from the selection.",
-            "Description": "FortiOS versions."
+            "Description": "FortiOS version."
         },
         "LifecycleHookTimeout": {
             "Type": "Number",

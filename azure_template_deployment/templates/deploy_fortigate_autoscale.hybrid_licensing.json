@@ -131,7 +131,7 @@
         "BYOLInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "The number of FortiGate instances the BYOL virtual machine scale set should have at any time. For High Availability, ensure at least 2 FortiGates are in the group. Recommended value: 2."
+                "description": "The number of FortiGate instances the BYOL virtual machine scale set should have at any time. For High Availability, ensure there are at least 2 FortiGates in total in either BYOL or PAYG virtual machine scale set(s). Set to these value ranges for the specific use cases: = 0 for PAYG-only, > 0 for BYOL-only and Hybrid."
             },
             "defaultValue": 2,
             "minValue": 0
@@ -139,7 +139,7 @@
         "PAYGInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "The minimum number of FortiGate instances in the PAYG virtual machine scale set. Recommended value: 0."
+                "description": "The minimum number of FortiGate instances in the PAYG virtual machine scale set. It's strongly recommended that you keep at least 2 FortiGates in total in either BYOL or PAYG groups for High Availability. Set to these value ranges for the specific use cases: = 0 for BYOL-only, > 0 for PAYG-only, >= 0 for Hybrid."
             },
             "minValue": 0,
             "defaultValue": 0
@@ -147,7 +147,7 @@
         "MaxPAYGInstanceCount": {
             "type": "int",
             "metadata": {
-                "description": "The maximum number of FortiGate instances in the PAYG virtual machine scale set."
+                "description": "The maximum number of FortiGate instances in the PAYG virtual machine scale set. Set to these value ranges for the specific use cases: = 0 for BYOL-only, > 0 for PAYG-only, > 0 for Hybrid."
             },
             "minValue": 0,
             "defaultValue": 6
@@ -287,6 +287,7 @@
         "subnet4LoadBalancerIP": "[concat(substring(variables('subnet4Prefix'), 0, lastIndexOf(variables('subnet4Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
         "lpVmssName": "[concat(parameters('ResourceNamePrefix'), 'byol')]",
         "regVmssName": "[concat(parameters('ResourceNamePrefix'), 'payg')]",
+        "masterVmssName": "[if(equals(parameters('BYOLInstanceCount'), 0), variables('regVmssName'), variables('lpVmssName'))]",
         "publicIPAddressName": "[concat(variables('vNetName'), '-ext-lb-public-ip')]",
         "loadBalancerName": "[concat(parameters('ResourceNamePrefix'), '-external-load-balancer')]",
         "loadBalancer2Name": "[concat(parameters('ResourceNamePrefix'), '-internal-load-balancer')]",
@@ -330,20 +331,18 @@
         "routeTable1Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable1Name'))]",
         "routeTable2Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable2Name'))]",
         "routeTable3Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable3Name'))]",
-        "osType": {
+        "fgtvmImagePAYG": {
             "publisher": "Fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm_payg_20190624",
             "version": "[parameters('fosversion')]"
         },
-        "osType2": {
+        "fgtvmImageBYOL": {
             "publisher": "Fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm",
             "version": "[parameters('fosversion')]"
         },
-        "imageReference": "[variables('osType')]",
-        "imageReference2": "[variables('osType2')]",
         "funcappURL": "[concat('https://', variables('functionAppName'), '.azurewebsites.net')]",
         "LicenseEndPoints": "[concat(variables('funcappURL'), '/api/byol-license')]",
         "autoscaleEndPoints": "[concat(variables('funcappURL'), '/api/fgt-asg-handler')]",
@@ -973,7 +972,7 @@
                         },
                         {
                             "name": "MASTER_SCALING_GROUP_NAME",
-                            "value": "[variables('lpVmssName')]"
+                            "value": "[variables('masterVmssName')]"
                         },
                         {
                             "name": "PAYG_SCALING_GROUP_NAME",
@@ -1496,9 +1495,9 @@
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "plan": {
-                "name": "fortinet_fg-vm",
-                "publisher": "fortinet",
-                "product": "fortinet_fortigate-vm_v5"
+                "name": "[variables('fgtvmImageBYOL').sku]",
+                "publisher": "[variables('fgtvmImageBYOL').publisher]",
+                "product": "[variables('fgtvmImageBYOL').offer]"
             },
             "sku": {
                 "name": "[parameters('InstanceType')]",
@@ -1521,7 +1520,7 @@
                             "lun": 1,
                             "createOption": "Empty"
                         }],
-                        "imageReference": "[variables('imageReference2')]"
+                        "imageReference": "[variables('fgtvmImageBYOL')]"
                     },
                     "diagnosticsProfile": {
                         "bootDiagnostics": {
@@ -1755,9 +1754,9 @@
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "plan": {
-                "name": "fortinet_fg-vm_payg",
-                "publisher": "fortinet",
-                "product": "fortinet_fortigate-vm_v5"
+                "name": "[variables('fgtvmImagePAYG').sku]",
+                "publisher": "[variables('fgtvmImagePAYG').publisher]",
+                "product": "[variables('fgtvmImagePAYG').offer]"
             },
             "sku": {
                 "name": "[parameters('InstanceType')]",
@@ -1780,7 +1779,7 @@
                             "lun": 1,
                             "createOption": "Empty"
                         }],
-                        "imageReference": "[variables('imageReference')]"
+                        "imageReference": "[variables('fgtvmImagePAYG')]"
                     },
                     "diagnosticsProfile": {
                         "bootDiagnostics": {
