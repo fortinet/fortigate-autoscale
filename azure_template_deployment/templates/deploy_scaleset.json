@@ -207,7 +207,13 @@
         "vnetID": "[resourceId(variables('namingInfix'),'Microsoft.Network/virtualNetworks', parameters('VNetName'))]",
         "subnet2Ref": "[concat(variables('vnetID'),'/subnets/', parameters('Subnet2Name'))]",
         "routeTableId": "[resourceId('Microsoft.Network/routeTables',variables('routeTableName'))]",
-        "userdata": "[concat('{\"config-url\": \"', parameters('EndpointURL'), '/api/fgt-asg-handler', '\"}\n')]"
+        "userdata": "[concat('{\"config-url\": \"', parameters('EndpointURL'), '/api/fgt-asg-handler', '\"}\n')]",
+        "fgtvmImagePAYG": {
+            "publisher": "Fortinet",
+            "offer": "fortinet_fortigate-vm_v5",
+            "sku": "fortinet_fg-vm_payg_20190624",
+            "version": "[parameters('FOSVersion')]"
+        }
     },
     "resources": [{
             "type": "Microsoft.Network/routeTables",
@@ -457,9 +463,9 @@
             "apiVersion": "2017-03-30",
             "location": "[resourceGroup().location]",
             "plan": {
-                "name": "fortinet_fg-vm_payg",
-                "publisher": "fortinet",
-                "product": "fortinet_fortigate-vm_v5"
+                "name": "[variables('fgtvmImagePAYG').sku]",
+                "publisher": "[variables('fgtvmImagePAYG').publisher]",
+                "product": "[variables('fgtvmImagePAYG').offer]"
             },
             "properties": {
                 "overprovision": "false",
@@ -479,10 +485,10 @@
                             "createOption": "Empty"
                         }],
                         "imageReference": {
-                            "publisher": "Fortinet",
-                            "offer": "fortinet_fortigate-vm_v5",
-                            "sku": "fortinet_fg-vm_payg_20190624",
-                            "version": "[parameters('FOSVersion')]"
+                            "publisher": "[variables('fgtvmImagePAYG').publisher]",
+                            "offer": "[variables('fgtvmImagePAYG').offer]",
+                            "sku": "[variables('fgtvmImagePAYG').sku]",
+                            "version": "[variables('fgtvmImagePAYG').version]"
                         }
                     },
                     "osProfile": {
