@@ -31,12 +31,20 @@
         "ParameterValue": "192.168.2.0/24"
     },
     {
+        "ParameterKey": "PrivateSubnet1Cidr",
+        "ParameterValue": "192.168.3.0/24"
+    },
+    {
+        "ParameterKey": "PrivateSubnet2Cidr",
+        "ParameterValue": "192.168.4.0/24"
+    },
+    {
         "ParameterKey": "FortiGateInstanceType",
         "ParameterValue": "c5.large"
     },
     {
         "ParameterKey": "FortiOSVersion",
-        "ParameterValue": "Latest (6.2.0)"
+        "ParameterValue": "6.2.1"
     },
     {
         "ParameterKey": "LifecycleHookTimeout",
@@ -47,16 +55,28 @@
         "ParameterValue": 300
     },
     {
-        "ParameterKey": "FgtAsgDesiredCapacity",
+        "ParameterKey": "FgtAsgDesiredCapacityByol",
         "ParameterValue": 2
     },
     {
-        "ParameterKey": "FgtAsgMinSize",
+        "ParameterKey": "FgtAsgMinSizeByol",
         "ParameterValue": 2
     },
     {
-        "ParameterKey": "FgtAsgMaxSize",
-        "ParameterValue": 4
+        "ParameterKey": "FgtAsgMaxSizeByol",
+        "ParameterValue": 2
+    },
+    {
+        "ParameterKey": "FgtAsgDesiredCapacityPayg",
+        "ParameterValue": 0
+    },
+    {
+        "ParameterKey": "FgtAsgMinSizePayg",
+        "ParameterValue": 0
+    },
+    {
+        "ParameterKey": "FgtAsgMaxSizePayg",
+        "ParameterValue": 6
     },
     {
         "ParameterKey": "FgtAsgHealthCheckGracePeriod",
@@ -87,6 +107,10 @@
         "ParameterValue": "taskcat"
     },
     {
+        "ParameterKey": "MasterElectionTimeout",
+        "ParameterValue": 300
+    },
+    {
         "ParameterKey": "HeartBeatInterval",
         "ParameterValue": 30
     },
@@ -95,15 +119,35 @@
         "ParameterValue": 3
     },
     {
-        "ParameterKey": "TransitGatewaySupportOptions",
-        "ParameterValue": "create one"
+        "ParameterKey": "HeartBeatDelayAllowance",
+        "ParameterValue": 2
     },
     {
-        "ParameterKey": "TransitGatewayId",
+        "ParameterKey": "LoadBalancingTrafficProtocol",
+        "ParameterValue": "HTTPS"
+    },
+    {
+        "ParameterKey": "LoadBalancingTrafficPort",
+        "ParameterValue": 443
+    },
+    {
+        "ParameterKey": "LoadBalancingHealthCheckThreshold",
+        "ParameterValue": 3
+    },
+    {
+        "ParameterKey": "InternalLoadBalancingOptions",
+        "ParameterValue": "add a new internal load balancer"
+    },
+    {
+        "ParameterKey": "InternalTargetGroupHealthCheckPath",
+        "ParameterValue": "/"
+    },
+    {
+        "ParameterKey": "InternalLoadBalancerDnsName",
         "ParameterValue": ""
     },
     {
-        "ParameterKey": "BgpAsn",
-        "ParameterValue": 65000
+        "ParameterKey": "GetLicenseGracePeriod",
+        "ParameterValue": 600
     }
 ]
