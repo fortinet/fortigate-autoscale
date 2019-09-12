@@ -2548,7 +2548,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     async listNetworkInterfaces(status = null) {
-        logger.info('calling cleanUpAdditionalNics');
+        logger.info('calling listNetworkInterfaces');
         // RESOURCE_TAG_PREFIX
         let nics = await this.platform.listNetworkInterfaces({
             Filters: [{
@@ -2557,6 +2557,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }]
         });
         return Array.isArray(nics) && nics.filter(nic => {
+            logger.info(`nic (id: ${nic.NetworkInterfaceId}, status: ${nic.Status})`);
             return !status || nic.Status === status;
         });
     }
@@ -2565,12 +2566,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling cleanUpAdditionalNics');
         // list all nics with tag: {key: 'FortiGateAutoscaleNicAttachment', value:
         // RESOURCE_TAG_PREFIX
-        let nics = await this.platform.listNetworkInterfaces({
-            Filters: [{
-                Name: 'tag:FortiGateAutoscaleNicAttachment',
-                Values: [RESOURCE_TAG_PREFIX]
-            }]
-        });
+        let nics = await this.listNetworkInterfaces('available');
         let tasks = [];
         // delete them
         if (Array.isArray(nics) && nics.length > 0) {
@@ -2581,12 +2577,14 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             });
             try {
                 await Promise.all(tasks);
-                logger.info('called cleanUpAdditionalNics. no error.');
+                logger.info(`called cleanUpAdditionalNics. ${nics.length} nic deleted. no error.`);
                 return true;
             } catch (error) {
                 logger.error('calling cleanUpAdditionalNics. error > ', error);
                 return false;
             }
+        } else {
+            logger.info('called cleanUpAdditionalNics. 0 nic deleted. no error.');
         }
     }
 

@@ -61,11 +61,11 @@ exports.handler = async (event, context) => {
                     await autoscaleHandler.init();
                     if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
                         await autoscaleHandler.updateCapacity(
-                            autoscaleHandler.getSettings()['byol-auto-scaling-group-name'],
+                            autoscaleHandler.getSettings()['byol-scaling-group-name'],
                             params.desiredCapacity, params.minSize, params.maxSize);
                     }
                     await autoscaleHandler.updateCapacity(
-                        autoscaleHandler.getSettings()['payg-auto-scaling-group-name'],
+                        autoscaleHandler.getSettings()['payg-scaling-group-name'],
                         params.desiredCapacity, params.minSize, params.maxSize);
                     break;
                 case 'stopAutoscale':
@@ -94,7 +94,7 @@ exports.handler = async (event, context) => {
                         }
                         if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
                             tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                                autoscaleHandler.getSettings()['byol-auto-scaling-group-name']
+                                autoscaleHandler.getSettings()['byol-scaling-group-name']
                             ).then(byolGroupCheck => {
                                 logger.log(byolGroupCheck);
                                 return {
@@ -104,7 +104,7 @@ exports.handler = async (event, context) => {
                             }));
                         }
                         tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                            autoscaleHandler.getSettings()['payg-auto-scaling-group-name']
+                            autoscaleHandler.getSettings()['payg-scaling-group-name']
                         ).then(paygGroupCheck => {
                             logger.log(paygGroupCheck);
                             return {
