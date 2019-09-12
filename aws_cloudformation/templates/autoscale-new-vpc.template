@@ -142,7 +142,7 @@
         },
         "FgtAsgMaxSizePayg": {
             "Type": "Number",
-            "Default": 0,
+            "Default": 6,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
             "Description": "Maximum number of FortiGate instances in the PAYG Auto Scaling group. For specific use cases, set to 0 for BYOL-only, and > 0 for PAYG-only or hybrid licensing. Minimum is 0."
@@ -853,7 +853,7 @@
     },
     "Outputs": {
         "ResourceTagPrefix": {
-            "Description": "The value for Tag 'ResourceGroup' on all resources deployed in this stack.",
+            "Description": "The value for the Tag Key 'ResourceGroup' on all resources deployed in this stack.",
             "Value": {
                 "Fn::If": [
                     "HasResourceTagPrefix",
@@ -917,7 +917,7 @@
             }
         },
         "CustomIdentifier": {
-            "Description": "The custom identifier specified for this stack. This is used as a resource name prefix on those resources that have strict naming requirement.",
+            "Description": "The custom identifier specified for this stack. This is used as a resource name prefix on those resources that have a strict naming requirement.",
             "Value": {
                 "Ref": "CustomIdentifier"
             }

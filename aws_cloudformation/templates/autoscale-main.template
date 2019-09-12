@@ -127,7 +127,7 @@
         },
         "FgtAsgMaxSizePayg": {
             "Type": "Number",
-            "Default": 0,
+            "Default": 6,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
             "Description": "Maximum number of FortiGate instances in the PAYG Auto Scaling group. For specific use cases, set to 0 for BYOL-only, and > 0 for PAYG-only or hybrid licensing. Minimum is 0."

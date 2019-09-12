@@ -689,7 +689,7 @@
             }
         },
         "CustomIdentifier": {
-            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have strict naming requirement.",
+            "Description": "The custom identifier you specified. This is used as a resource name prefix on those resources that have a strict naming requirement.",
             "Value": {
                 "Ref": "CustomIdentifier"
             }
