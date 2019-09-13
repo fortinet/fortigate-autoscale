@@ -590,24 +590,6 @@
                     },
                     "HandlerScriptTimeout": 300,
                     "ServiceScriptTimeout": 900,
-                    "VpcId": {
-                        "Ref": "VpcId"
-                    },
-                    "FortiGatePskSecret": {
-                        "Ref": "FortiGatePskSecret"
-                    },
-                    "FortiGateAdminPort": {
-                        "Ref": "FortiGateAdminPort"
-                    },
-                    "LifecycleHookTimeout": {
-                        "Ref": "LifecycleHookTimeout"
-                    },
-                    "HeartBeatInterval": {
-                        "Ref": "HeartBeatInterval"
-                    },
-                    "HeartBeatLossCount": {
-                        "Ref": "HeartBeatLossCount"
-                    },
                     "CreateByolLicenseHandler": "yes"
                 },
                 "TemplateURL": {
@@ -826,9 +808,6 @@
                     },
                     "DbTableArn": {
                         "Fn::GetAtt": ["StackCreateDynamoDBTable", "Outputs.NicAttachmentTableArn"]
-                    },
-                    "VpcId": {
-                        "Ref": "VpcId"
                     }
                 },
                 "TemplateURL": {

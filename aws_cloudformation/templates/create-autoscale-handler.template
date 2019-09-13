@@ -53,47 +53,6 @@
             "Type": "String",
             "Description": "The ID of a VPC Endpoint to associate with the deployed API Gateway. This Endpoint ID is optional."
         },
-        "VpcId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "The existing VPC IDs where you deploy the Auto Scaling group and related resources. The VPC must have the option 'DNS hostnames' enabled."
-        },
-        "FortiGatePskSecret": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "A secret key for the FortiGate instances to securely communicate with each other. It can be of your choice of a string, such as numbers or letters or the combination of them. Max length 128."
-        },
-        "FortiGateAdminPort": {
-            "Type": "Number",
-            "Default": 8443,
-            "MinValue": 1,
-            "MaxValue": 65535,
-            "ConstraintDescription": "must be a valid port number between 1 and 65535.",
-            "Description": "A port number for FortiGate administration. Minimum is 1. Maximum is 65535. Do not use: 443, 541, 514, 703 because these are FortiGate reserved ports."
-        },
-        "LifecycleHookTimeout": {
-            "Type": "Number",
-            "Default": 400,
-            "MinValue": 60,
-            "MaxValue": 3600,
-            "ConstraintDescription": "must be a valid number between 60 and 3600.",
-            "Description": "The amount of time (in seconds) that can elapse before the FortiGate Autoscale lifecycle hook times out. Minimum is 60. Maximum is 3600."
-        },
-        "HeartBeatInterval": {
-            "Type": "Number",
-            "Default": 30,
-            "MinValue": 30,
-            "MaxValue": 90,
-            "ConstraintDescription": "must be a valid number between 30 and 90.",
-            "Description": "The amount of time (in seconds) for FortiGate to send a heartbeat to the Autoscale handler. Minimum is 30. Maximum is 90."
-        },
-        "HeartBeatLossCount": {
-            "Type": "Number",
-            "Default": 3,
-            "MinValue": 1,
-            "MaxValue": 65535,
-            "ConstraintDescription": "must be a valid number between 1 and 65535.",
-            "Description": "Number of consecutively lost heartbeats. When the Heartbeat loss count has been reached, the VM is deemed unhealthy and fail-over activities will commence."
-        },
         "CreateByolLicenseHandler": {
             "Type": "String",
             "Default": "no",
@@ -642,103 +601,11 @@
                 },
                 "Environment": {
                     "Variables": {
-                        "EXPIRE_LIFECYCLE_ENTRY": {
-                            "Ref": "LifecycleHookTimeout"
-                        },
-                        "API_GATEWAY_NAME": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-autoscale-api-gateway"
-                                ]
-                            ]
-                        },
-                        "API_GATEWAY_STAGE_NAME": "prod",
-                        "API_GATEWAY_RESOURCE_NAME": "fgt-asg-handler",
                         "RESOURCE_TAG_PREFIX": {
                             "Ref": "ResourceTagPrefix"
                         },
-                        "CUSTOM_ID": {
-                            "Ref": "ResourceTagPrefix"
-                        },
-                        "UNIQUE_ID": "",
-                        "AUTO_SCALING_GROUP_NAME": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "VPC_ID": {
-                            "Ref": "VpcId"
-                        },
-                        "STACK_ASSETS_S3_BUCKET_NAME": {
-                            "Ref": "S3BucketName"
-                        },
-                        "STACK_ASSETS_S3_KEY_PREFIX": {
-                            "Fn::Sub": [
-                                "${KeyPrefix}assets",
-                                {
-                                    "KeyPrefix": {
-                                        "Ref": "S3KeyPrefix"
-                                    }
-                                }
-                            ]
-                        },
-                        "REQUIRED_CONFIG_SET": "",
-                        "FORTIGATE_INTERNAL_ELB_DNS": "",
-                        "FORTIGATE_PSKSECRET": {
-                            "Ref": "FortiGatePskSecret"
-                        },
-                        "FORTIGATE_ADMIN_PORT": {
-                            "Ref": "FortiGateAdminPort"
-                        },
-                        "FORTIGATE_TRAFFIC_PORT": "",
-                        "FORTIGATE_SYNC_INTERFACE": "port1",
-                        "HEART_BEAT_INTERVAL": {
-                            "Ref": "HeartBeatInterval"
-                        },
-                        "HEART_BEAT_LOSS_COUNT": {
-                            "Ref": "HeartBeatLossCount"
-                        },
-                        "SCALING_GROUP_NAME_PAYG": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "SCALING_GROUP_NAME_BYOL": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "MASTER_SCALING_GROUP_NAME": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "ENABLE_SECOND_NIC": "true",
-                        "ENABLE_TGW_VPN": "false",
-                        "TGW_ID": ""
+                        "CUSTOM_ID": "",
+                        "UNIQUE_ID": ""
                     }
                 },
                 "Tags": [{
@@ -802,103 +669,11 @@
                 },
                 "Environment": {
                     "Variables": {
-                        "EXPIRE_LIFECYCLE_ENTRY": {
-                            "Ref": "LifecycleHookTimeout"
-                        },
-                        "API_GATEWAY_NAME": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-autoscale-api-gateway"
-                                ]
-                            ]
-                        },
-                        "API_GATEWAY_STAGE_NAME": "prod",
-                        "API_GATEWAY_RESOURCE_NAME": "fgt-asg-handler",
                         "RESOURCE_TAG_PREFIX": {
                             "Ref": "ResourceTagPrefix"
                         },
-                        "CUSTOM_ID": {
-                            "Ref": "CustomIdentifier"
-                        },
-                        "UNIQUE_ID": "",
-                        "AUTO_SCALING_GROUP_NAME": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "VPC_ID": {
-                            "Ref": "VpcId"
-                        },
-                        "STACK_ASSETS_S3_BUCKET_NAME": {
-                            "Ref": "S3BucketName"
-                        },
-                        "STACK_ASSETS_S3_KEY_PREFIX": {
-                            "Fn::Sub": [
-                                "${KeyPrefix}assets",
-                                {
-                                    "KeyPrefix": {
-                                        "Ref": "S3KeyPrefix"
-                                    }
-                                }
-                            ]
-                        },
-                        "REQUIRED_CONFIG_SET": "",
-                        "FORTIGATE_INTERNAL_ELB_DNS": "",
-                        "FORTIGATE_PSKSECRET": {
-                            "Ref": "FortiGatePskSecret"
-                        },
-                        "FORTIGATE_ADMIN_PORT": {
-                            "Ref": "FortiGateAdminPort"
-                        },
-                        "FORTIGATE_TRAFFIC_PORT": "",
-                        "FORTIGATE_SYNC_INTERFACE": "port1",
-                        "HEART_BEAT_INTERVAL": {
-                            "Ref": "HeartBeatInterval"
-                        },
-                        "HEART_BEAT_LOSS_COUNT": {
-                            "Ref": "HeartBeatLossCount"
-                        },
-                        "SCALING_GROUP_NAME_PAYG": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "SCALING_GROUP_NAME_BYOL": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "MASTER_SCALING_GROUP_NAME": {
-                            "Fn::Join": [
-                                "-",
-                                [{
-                                        "Ref": "ResourceTagPrefix"
-                                    },
-                                    "fortigate-auto-scaling-group"
-                                ]
-                            ]
-                        },
-                        "ENABLE_SECOND_NIC": "true",
-                        "ENABLE_TGW_VPN": "false",
-                        "TGW_ID": ""
+                        "CUSTOM_ID": "",
+                        "UNIQUE_ID": ""
                     }
                 },
                 "Tags": [{
@@ -992,15 +767,10 @@
                 },
                 "Environment": {
                     "Variables": {
-                        "EXPIRE_LIFECYCLE_ENTRY": {
-                            "Ref": "LifecycleHookTimeout"
-                        },
                         "RESOURCE_TAG_PREFIX": {
                             "Ref": "ResourceTagPrefix"
                         },
-                        "CUSTOM_ID": {
-                            "Ref": "ResourceTagPrefix"
-                        },
+                        "CUSTOM_ID": "",
                         "UNIQUE_ID": ""
                     }
                 },

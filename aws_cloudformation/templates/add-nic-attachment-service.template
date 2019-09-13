@@ -38,11 +38,6 @@
         "DbTableArn": {
             "Type": "String",
             "Description": "The ARN of the DynamoDB table which is used to keep tracks of nic attachment records."
-        },
-        "VpcId": {
-            "Default": "",
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "The existing VPC IDs where you deploy the Auto Scaling group and related resources. The VPC must have the option 'DNS hostnames' enabled."
         }
     },
     "Conditions": {
@@ -153,13 +148,7 @@
                 },
                 "Environment": {
                     "Variables": {
-                        "CUSTOM_ID": {
-                            "Ref": "ResourceTagPrefix"
-                        },
                         "UNIQUE_ID": "",
-                        "VPC_ID": {
-                            "Ref": "VpcId"
-                        },
                         "STACK_ID": {
                             "Ref": "AWS::StackId"
                         }
@@ -224,13 +213,7 @@
                 },
                 "Environment": {
                     "Variables": {
-                        "CUSTOM_ID": {
-                            "Ref": "ResourceTagPrefix"
-                        },
                         "UNIQUE_ID": "",
-                        "VPC_ID": {
-                            "Ref": "VpcId"
-                        },
                         "STACK_ID": {
                             "Ref": "AWS::StackId"
                         }

@@ -220,12 +220,20 @@ module.exports = class AutoscaleHandler {
             fazIp;
         if (baseConfig) {
             // check if other config set are required
-            let requiredConfigSet = this._settings['required-configset'] || [];
+            let requiredConfigSet = this._settings['required-configset'] || '';
             let configContent = '';
             // check if second nic is enabled, config for the second nic must be prepended to
             // base config
             if (this._settings['enable-second-nic'] === 'true') {
                 baseConfig = await this.getConfigSet('port2config') + baseConfig;
+            }
+            // if internal elb is enabled, require this 'httpsroutingpolicy' configset
+            if(this._settings['enable-internal-elb'] === 'true') {
+                // if not empty requiredConfigSet add the , delimiter
+                if(requiredConfigSet !== '') {
+                    requiredConfigSet += ','
+                }
+                requiredConfigSet += 'httpsroutingpolicy-yes'
             }
             for (let configset of requiredConfigSet.split(',')) {
                 let [name, selected] = configset.trim().split('-');
