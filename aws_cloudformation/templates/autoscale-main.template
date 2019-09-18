@@ -406,6 +406,12 @@
                 "FGTVM64BYOL621": "ami-0e7e6465d4df6d255",
                 "FGTVM64BYOL606": "ami-00d23bb3edbc94eb2"
             },
+            "eu-north-1": {
+                "FGTVM64PAYG621": "ami-34bf344a",
+                "FGTVM64PAYG606": "Ami-d39318ad",
+                "FGTVM64BYOL621": "ami-77bc3709",
+                "FGTVM64BYOL606": "ami-d79d16a9"
+            },
             "eu-west-1": {
                 "FGTVM64PAYG621": "ami-0c14998b35a39578e",
                 "FGTVM64PAYG606": "ami-0fade92f8a2d2e2b2",
