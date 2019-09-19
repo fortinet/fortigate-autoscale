@@ -241,7 +241,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let params = {
                 TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 Item: {
-                    scalingGroupName: this.scalingGroupName,
+                    scalingGroupName: this.masterScalingGroupName,
                     ip: candidateInstance.primaryPrivateIpAddress,
                     instanceId: candidateInstance.instanceId,
                     vpcId: candidateInstance.virtualNetworkId,
@@ -274,7 +274,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     '#PrimaryKeyName': 'scalingGroupName'
                 },
                 ExpressionAttributeValues: {
-                    ':primaryKeyValue': this.scalingGroupName
+                    ':primaryKeyValue': this.masterScalingGroupName
                 }
             },
             response = await docClient.scan(params).promise(),
