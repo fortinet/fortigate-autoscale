@@ -11,7 +11,7 @@
         "CosmosDBName": {
             "type": "string",
             "metadata": {
-                "description": "Name of the Cosmos DB that will be created. This field must be between 3 and 31 characters and can contain only lowercase letters, numbers and the '-' character."
+                "description": "Name of the Cosmos DB that will be created. This field must be between 3 and 31 characters and can only contain lowercase letters, numbers and the '-' character."
             }
         },
         "StorageAccountType": {

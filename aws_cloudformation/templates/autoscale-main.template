@@ -21,13 +21,13 @@
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Deployment resource S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
-            "Description": "Name of the S3 bucket that contains the FortiGate Autoscale deployment package. Can contain numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+            "Description": "Name of the S3 bucket that contains the FortiGate Autoscale deployment package. Can only contain numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
         },
         "S3KeyPrefix": {
             "Type": "String",
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Deployment package S3 key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
-            "Description": "Name of the S3 folder that stores the FortiGate Autoscale deployment resources. Can contain numbers, lowercase letters, uppercase letters, hyphens (-), and forward slashes (/). If provided, it must end with a forward slash (/)."
+            "Description": "Name of the S3 folder that stores the FortiGate Autoscale deployment resources. Can only contain numbers, lowercase letters, uppercase letters, hyphens (-), and forward slashes (/). If provided, it must end with a forward slash (/)."
         },
         "UniqueId": {
             "Type": "String",
@@ -95,42 +95,42 @@
             "Default": 2,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "The number of FortiGate instances the BYOL Auto Scaling group should have at any time. For High Availability, ensure there are at least 2 FortiGates in total in any or both of the Auto Scaling groups. For specific use cases, set to 0 for PAYG-only, and > 0 for BYOL-only or hybrid licensing. Minimum is 0."
+            "Description": "The number of FortiGate instances the BYOL Auto Scaling group should have at any time. For High Availability in BYOL-only and Hybrid use cases, ensure at least 2 FortiGates are in the group. For specific use cases, set to 0 for PAYG-only, and >= 2 for BYOL-only or hybrid licensing."
         },
         "FgtAsgMinSizeByol": {
             "Type": "Number",
             "Default": 2,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "Minimum number of FortiGate instances in the BYOL Auto Scaling group. For specific use cases, set to 0 for PAYG-only, and > 0 for BYOL-only or hybrid licensing. Minimum is 0."
+            "Description": "Minimum number of FortiGate instances in the BYOL Auto Scaling group. For specific use cases, set to 0 for PAYG-only, and >= 2 for BYOL-only or hybrid licensing."
         },
         "FgtAsgMaxSizeByol": {
             "Type": "Number",
             "Default": 2,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "Maximum number of FortiGate instances in the BYOL Auto Scaling group. For specific use cases, set to 0 for PAYG-only, and > 0 for BYOL-only or hybrid licensing. Minimum is 0."
+            "Description": "Maximum number of FortiGate instances in the BYOL Auto Scaling group. For specific use cases, set to 0 for PAYG-only, and >= 2 for BYOL-only or hybrid licensing. This number must be greater than or equal to the Minimum group size (BYOL)."
         },
         "FgtAsgDesiredCapacityPayg": {
             "Type": "Number",
             "Default": 0,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "The number of FortiGate instances the PAYG Auto Scaling group should have at any time. For High Availability, ensure there are at least 2 FortiGates in total in any or both of the Auto Scaling groups. For specific use cases, set to 0 for BYOL-only, > 0 for PAYG-only, and >= 0 for hybrid licensing. Minimum is 0."
+            "Description": "The number of FortiGate instances the PAYG Auto Scaling group should have at any time. For High Availability in a PAYG-only use case, ensure at least 2 FortiGates are in the group. For specific use cases, set to 0 for BYOL-only, >= 2 for PAYG-only, and >= 0 for hybrid licensing."
         },
         "FgtAsgMinSizePayg": {
             "Type": "Number",
             "Default": 0,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "Minimum number of FortiGate instances in the PAYG Auto Scaling group. For specific use cases, set to 0 for BYOL-only, > 0 for PAYG-only, and >= 0 for hybrid licensing. Minimum is 0."
+            "Description": "Minimum number of FortiGate instances in the PAYG Auto Scaling group. For specific use cases, set to 0 for BYOL-only, >= 2 for PAYG-only, and >= 0 for hybrid licensing."
         },
         "FgtAsgMaxSizePayg": {
             "Type": "Number",
             "Default": 6,
             "MinValue": 0,
             "ConstraintDescription": "must be a valid number not less than 0.",
-            "Description": "Maximum number of FortiGate instances in the PAYG Auto Scaling group. For specific use cases, set to 0 for BYOL-only, and > 0 for PAYG-only or hybrid licensing. Minimum is 0."
+            "Description": "Maximum number of FortiGate instances in the PAYG Auto Scaling group. For specific use cases, set to 0 for BYOL-only, >= 2 for PAYG-only, and >= 0 for hybrid licensing. This number must be greater than or equal to the Minimum group size (PAYG)."
         },
         "FgtAsgHealthCheckGracePeriod": {
             "Type": "Number",
@@ -159,7 +159,7 @@
             "Type": "String",
             "NoEcho": true,
             "MaxLength": "128",
-            "Description": "A secret key for the FortiGate-VM instances to securely communicate with each other. Must contain numbers and letters. Max length is 128."
+            "Description": "A secret key for the FortiGate instances to securely communicate with each other. Must contain numbers and letters and may contain special characters. Max length is 128."
         },
         "FortiGateAdminPort": {
             "Type": "Number",
@@ -194,7 +194,7 @@
             "MinValue": 30,
             "MaxValue": 90,
             "ConstraintDescription": "must be a valid number between 30 and 90.",
-            "Description": "The length of time (in seconds) that a FortiGate-VM waits between sending heartbeat requests to the Autoscale handler. Minimum is 30. Maximum is 90."
+            "Description": "The length of time (in seconds) that a FortiGate instance waits between sending heartbeat requests to the Autoscale handler. Minimum is 30. Maximum is 90."
         },
         "HeartBeatLossCount": {
             "Type": "Number",
