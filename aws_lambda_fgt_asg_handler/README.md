@@ -47,10 +47,10 @@ This AWS Lambda function requires the policies listed below.
 | s3:GetObject | Allow | Contents of the **assets** folder for a particular solution in an S3 Bucket, as specified by the **STACK_ASSETS_S3_KEY_PREFIX**.<br>ARN example: arn:aws:s3:::***STACK_ASSETS_S3_BUCKET_NAME***/***STACK_ASSETS_S3_KEY_PREFIX***/assets/configset/* |
 ## Scope and Limits
 This Lambda function is intended for use as a component of the FortiGate Autoscale solution for AWS.
-For more information, please refer to the project [README](https://github.com/fortinet/fortigate-autoscale/blob/master/README.md).
+For more information, please refer to the project [README](https://github.com/fortinet/fortigate-autoscale/blob/1.0/README.md).
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
 For direct issues, please refer to the [Issues](https://github.com/fortinet/fortigate-autoscale/issues) tab of this GitHub project.
 For other questions related to this project, contact [github@fortinet.com](mailto:github@fortinet.com).
 ## License
-[License](https://github.com/fortinet/fortigate-autoscale/blob/master/LICENSE) © Fortinet Technologies. All rights reserved.
+[License](https://github.com/fortinet/fortigate-autoscale/blob/1.0/LICENSE) © Fortinet Technologies. All rights reserved.

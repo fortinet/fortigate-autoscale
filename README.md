@@ -11,11 +11,16 @@ This project is organized in separate node modules:
 
 The project also contains a deployment script which can generate packages for each cloud service's *serverless* implementation.
 
+## Notice
+The module version 1.0 will not receive any more feature updates. It is recommended to to use the 2.0 template.
+
 ## Supported Platforms
 This project supports autoscaling for the cloud platforms listed below. The version tag in parentheses refers to the autoscale module version included in this project.
 
   * Amazon AWS Lambda (1.0.0)
   * Microsoft Azure (1.0.0)
+
+FortiGate Autoscale supports On-Demand (PAYG) instances. Bring Your Own License (BYOL) instance support is available in the version 2.0 module.
 
 ## Deployment Packages
 To generate local deployment packages:
@@ -33,10 +38,12 @@ Deployment packages as well as source code will be available in the **dist** dir
 | fortigate-autoscale-azure-funcapp.zip | Source code for the FortiGate Autoscale handler - Azure function.|
 | fortigate-autoscale-azure-template-deployment.zip | Azure template. Use this to deploy the solution on the Azure platform.|
 
-Installation Guides are available from the Fortinet Document Library:
+Installation Guides are available in the *docs* directory:
 
-  * [ FortiGate / FortiOS Deploying Auto Scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
-  * [ FortiGate / FortiOS Deploying Auto Scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
+  * [Deploying Auto Scaling on Azure](https://github.com/fortinet/fortigate-autoscale/blob/1.0/docs/deploying-auto-scaling-on-azure-1.0.pdf)
+  * [Deploying Auto Scaling on AWS](https://github.com/fortinet/fortigate-autoscale/blob/1.0/docs/deploying-auto-scaling-on-aws-1.0.pdf)
+
+These documents are no longer maintained as the 1.0 template has been replaced by the 2.0 template.
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
@@ -44,4 +51,4 @@ For direct issues, please refer to the [Issues](https://github.com/fortinet/fort
 For other questions related to this project, contact [github@fortinet.com](mailto:github@fortinet.com).
 
 ## License
-[License](https://github.com/fortinet/fortigate-autoscale/blob/master/LICENSE) © Fortinet Technologies. All rights reserved.
+[License](https://github.com/fortinet/fortigate-autoscale/blob/1.0/LICENSE) © Fortinet Technologies. All rights reserved.

@@ -11,7 +11,7 @@ Additional documentation is available here: [AWS Lambda Function Code](https://d
 This is an asynchronous call of the **send** function.
 
 ## Copyright
-Please see the notice statement here: [Copyright notice](https://github.com/fortinet/fortigate-autoscale/blob/master/aws_cfn_response/NOTICE)
+Please see the notice statement here: [Copyright notice](https://github.com/fortinet/fortigate-autoscale/blob/1.0/aws_cfn_response/NOTICE)
 
 ## License
-[License](https://github.com/fortinet/fortigate-autoscale/blob/master/LICENSE) © Fortinet Technologies. All rights reserved.
+[License](https://github.com/fortinet/fortigate-autoscale/blob/1.0/LICENSE) © Fortinet Technologies. All rights reserved.
