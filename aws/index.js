@@ -34,7 +34,8 @@ const
     MINIMUM_REQUIRED_DB_TABLE_KEYS = ['FORTIGATEAUTOSCALE', 'FORTIGATEMASTERELECTION',
         'LIFECYCLEITEM', 'SETTINGS'],
     moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
-    settingItems = AutoScaleCore.settingItems;
+    settingItems = AutoScaleCore.settingItems,
+    AWS_LIFECYCLE_HOOK_DEFAULT_TIMEOUT = 3600000;
 let logger = new AutoScaleCore.DefaultLogger(console);
 
 /**
@@ -188,8 +189,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 let remove = async item => {
                     return await this.removeLifecycleItem(item);
                 };
+                let lifecycleHookTimeout =
+                    !Number.isNaN(this._settings['lifecycle-hook-timeout']) ?
+                        Number(this._settings['lifecycle-hook-timeout']) * 1000 :
+                        AWS_LIFECYCLE_HOOK_DEFAULT_TIMEOUT;
                 items.forEach(item => {
-                    if (Date.now() - item.timestamp > this._settings['lifecycle-hook-timeout']) {
+                    if (Date.now() - item.timestamp > lifecycleHookTimeout) {
                         awaitAll.push(remove(item));
                         itemToRemove.push(item);
                     }
@@ -1894,7 +1899,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 break;
             case 'EC2 Instance-terminate Lifecycle Action':
                 if (event.detail.LifecycleTransition === 'autoscaling:EC2_INSTANCE_TERMINATING') {
-
                     await this.platform.cleanUpDbLifeCycleActions();
                     result = await this.handleTerminatingInstanceHook(event);
                 }
