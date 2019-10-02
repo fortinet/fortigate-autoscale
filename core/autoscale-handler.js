@@ -228,12 +228,12 @@ module.exports = class AutoscaleHandler {
                 baseConfig = await this.getConfigSet('port2config') + baseConfig;
             }
             // if internal elb is enabled, require this 'httpsroutingpolicy' configset
-            if(this._settings['enable-internal-elb'] === 'true') {
+            if (this._settings['enable-internal-elb'] === 'true') {
                 // if not empty requiredConfigSet add the , delimiter
-                if(requiredConfigSet !== '') {
-                    requiredConfigSet += ','
+                if (requiredConfigSet !== '') {
+                    requiredConfigSet += ',';
                 }
-                requiredConfigSet += 'httpsroutingpolicy-yes'
+                requiredConfigSet += 'httpsroutingpolicy-yes';
             }
             for (let configset of requiredConfigSet.split(',')) {
                 let [name, selected] = configset.trim().split('-');
@@ -877,15 +877,14 @@ module.exports = class AutoscaleHandler {
      */
     async getMasterInfo() {
         this.logger.info('calling getMasterInfo');
-        let instanceId;
         try {
             this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            instanceId = this._masterRecord && this._masterRecord.instanceId;
         } catch (ex) {
             this.logger.error(ex);
         }
         return this._masterRecord && await this.platform.describeInstance({
-            instanceId: instanceId
+            instanceId: this._masterRecord.instanceId,
+            scalingGroupName: this._masterRecord.scalingGroupName
         });
     }
 
@@ -1341,7 +1340,8 @@ module.exports = class AutoscaleHandler {
             if (this._masterInfo) {
                 // TODO: master health check should not depend on the current hb
                 this._masterHealthCheck = await this.platform.getInstanceHealthCheck({
-                    instanceId: this._masterInfo.instanceId
+                    instanceId: this._masterInfo.instanceId,
+                    scalingGroupName: this._masterInfo.scalingGroupName
                 });
             }
         }
