@@ -10,6 +10,8 @@
         },
         "CosmosDBName": {
             "type": "string",
+            "minLength": 3,
+            "maxLength": 31,
             "metadata": {
                 "description": "Name of the Cosmos DB that will be created. This field must be between 3 and 31 characters and can contain only lowercase letters, numbers and the '-' character."
             }
@@ -107,10 +109,10 @@
     "resources": [{
             "apiVersion": "2015-04-08",
             "type": "Microsoft.DocumentDb/databaseAccounts",
-            "name": "[parameters('CosmosDBName')]",
+            "name": "[toLower(parameters('CosmosDBName'))]",
             "location": "[variables('location')]",
             "properties": {
-                "name": "[parameters('CosmosDBName')]",
+                "name": "[toLower(parameters('CosmosDBName'))]",
                 "databaseAccountOfferType": "Standard"
             }
         },
@@ -161,7 +163,7 @@
             "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-                "[resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosmosDBName'))]",
+                "[resourceId('Microsoft.DocumentDb/databaseAccounts', toLower(parameters('CosmosDBName')))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {
@@ -209,7 +211,7 @@
                         },
                         {
                             "name": "SCALESET_DB_ACCOUNT",
-                            "value": "[parameters('CosmosDBName')]"
+                            "value": "[toLower(parameters('CosmosDBName'))]"
                         },
                         {
                             "name": "SCALING_GROUP_NAME_PAYG",
@@ -233,7 +235,7 @@
                         },
                         {
                             "name": "REST_API_MASTER_KEY",
-                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', parameters('CosmosDBName')), '2015-04-08').primaryMasterKey]"
+                            "value": "[listKeys(resourceId('Microsoft.DocumentDb/databaseAccounts', toLower(parameters('CosmosDBName'))), '2015-04-08').primaryMasterKey]"
                         },
                         {
                             "name": "REQUIRED_CONFIG_SET",
