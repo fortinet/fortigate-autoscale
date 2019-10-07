@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.9",
+    "contentVersion": "1.0.0.10",
     "parameters": {
         "ResourceNamePrefix": {
             "type": "string",
@@ -888,7 +888,7 @@
                         },
                         {
                             "name": "ENABLE_INTERNAL_ELB",
-                            "value": "true"
+                            "value": "false"
                         },
                         {
                             "name": "ENABLE_SECOND_NIC",
