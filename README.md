@@ -26,7 +26,8 @@ FortiGate Autoscale supports On-Demand (PAYG) instances. Bring Your Own License 
 To generate local deployment packages:
 
   1. Clone this project.
-  2. Run `npm run build` at the project root directory.
+  2. Checkout the 1.0 branch.
+  3. Run `npm run build` at the project root directory.
 
 Deployment packages as well as source code will be available in the **dist** directory.
 
