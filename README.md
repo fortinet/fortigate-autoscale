@@ -16,17 +16,11 @@ This project supports autoscaling for the cloud platforms listed below:
 * Amazon AWS
 * Microsoft Azure
 
-> **Note:** The current GA release is version 1.0.x and supports On-Demand (PAYG) instances only. Version 2.0.0-beta includes support for Azure hybrid licensing and has been released as a preview.
-
 ## Deployment packages
+
 To generate local deployment packages:
 
-  1. From the [project release page](https://github.com/fortinet/fortigate-autoscale/releases), download the source code (.zip or .tar.gz) for the version you wish to install.
-   * *Version 1.0.x* is the current GA release and supports On-Demand (PAYG) instances only
-     > Use this version to deploy FortiGate Autoscale for AWS and FortiGate Autoscale for Azure (PAYG instances).
-   * *Version 2.0.0-beta* includes includes support for Azure hybrid licensing and has been released as a preview.
-     > Use this version to deploy FortiGate Autoscale for Azure (hybrid licensing).
-
+  1. From the [project release page](https://github.com/fortinet/fortigate-autoscale/releases), download the source code (.zip or .tar.gz) for the latest 2.0 version.
   2. Extract the source code.
   3. Run `npm run build` at the project root directory.
 
