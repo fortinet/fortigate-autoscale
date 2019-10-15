@@ -941,6 +941,7 @@
                                             "frontendPort": 0,
                                             "backendPort": 0,
                                             "loadDistribution": "SourceIP",
+                                            "enableFloatingIP": true,
                                             "probe": {
                                                 "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/probes/tcpProbe')]"
                                             }
@@ -959,6 +960,7 @@
                                             "frontendPort": 0,
                                             "backendPort": 0,
                                             "loadDistribution": "SourceIP",
+                                            "enableFloatingIP": true,
                                             "probe": {
                                                 "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/probes/tcpProbe')]"
                                             }
@@ -977,6 +979,7 @@
                                             "frontendPort": 0,
                                             "backendPort": 0,
                                             "loadDistribution": "SourceIP",
+                                            "enableFloatingIP": true,
                                             "probe": {
                                                 "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/probes/tcpProbe')]"
                                             }
@@ -1087,6 +1090,7 @@
                                             "frontendPort": 80,
                                             "backendPort": 80,
                                             "loadDistribution": "SourceIP",
+                                            "enableFloatingIP": true,
                                             "probe": {
                                                 "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')), '/probes/tcpProbe')]"
                                             }
@@ -1105,6 +1109,7 @@
                                             "frontendPort": 443,
                                             "backendPort": 443,
                                             "loadDistribution": "SourceIP",
+                                            "enableFloatingIP": true,
                                             "probe": {
                                                 "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')), '/probes/tcpProbe')]"
                                             }
@@ -1126,7 +1131,7 @@
                         },
                         {
                             "type": "Microsoft.Compute/virtualMachineScaleSets",
-                            "apiVersion": "2019-03-01",
+                            "apiVersion": "2019-07-01",
                             "name": "[variables('vmssNameBYOL')]",
                             "location": "[variables('location')]",
                             "dependsOn": [
@@ -1182,6 +1187,7 @@
                                                 "name": "[concat(variables('vmssNameBYOL'),'-nic-subnet1')]",
                                                 "properties": {
                                                     "primary": true,
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet1IPConfigName')]",
@@ -1332,7 +1338,7 @@
                             "type": "Microsoft.Compute/virtualMachineScaleSets",
                             "name": "[variables('vmssNamePAYG')]",
                             "location": "[variables('location')]",
-                            "apiVersion": "2019-03-01",
+                            "apiVersion": "2019-07-01",
                             "dependsOn": [
                                 "[concat('Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'))]",
                                 "[concat('Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'))]",
@@ -1388,6 +1394,7 @@
                                                 "name": "[concat(variables('vmssNamePAYG'),'-nic-subnet1')]",
                                                 "properties": {
                                                     "primary": true,
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet1IPConfigName')]",
