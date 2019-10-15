@@ -1178,7 +1178,7 @@
                                     "osProfile": {
                                         "computerNamePrefix": "[variables('vmssNameBYOL')]",
                                         "adminUsername": "[parameters('adminUsername')]",
-                                        "customData": "[base64(variables('userdataBYOL'))]",
+                                        "customData": "[base64(concat('{\"license-url\": \"', variables('LicenseEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'byol-license'), '2016-08-01').key, '\",\"config-url\": \"', variables('autoscaleEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'fgt-asg-handler'), '2016-08-01').key, '\"}\n'))]",
                                         "adminPassword": "[parameters('adminPassword')]"
                                     },
                                     "networkProfile": {
@@ -1320,7 +1320,7 @@
                             "properties": {
                                 "name": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-payg')]",
                                 "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  variables('vNetResourceGroupName'), '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('vmssNamePAYG'))]",
-                                "enabled": true,
+                                "enabled": false,
                                 "profiles": [
                                     {
                                         "name": "[concat(variables('uniqueResourceNamePrefix'),'-deployed-profile')]",
@@ -1384,7 +1384,7 @@
                                     "evictionPolicy": "delete",
                                     "osProfile": {
                                         "computerNamePrefix": "[variables('vmssNamePAYG')]",
-                                        "customData": "[base64(variables('userdataPAYG'))]",
+                                        "customData": "[base64(concat('{\"config-url\": \"', variables('autoscaleEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'fgt-asg-handler'), '2016-08-01').key, '\"}\n'))]",
                                         "adminUsername": "[parameters('adminUsername')]",
                                         "adminPassword": "[parameters('adminPassword')]"
                                     },
@@ -1911,6 +1911,10 @@
                         {
                             "name": "AzureWebJobsStorage",
                             "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountId'), '2019-04-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "AzureWebJobsSecretStorageType",
+                            "value": "Files"
                         },
                         {
                             "name": "[if(variables('enableAzureAppInsights'), 'APPINSIGHTS_INSTRUMENTATIONKEY', 'DEPLOYED_APPINSIGHTS')]",
