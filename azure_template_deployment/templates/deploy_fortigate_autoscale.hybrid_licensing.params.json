@@ -1,41 +1,59 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
-    "contentVersion": "1.0.0.8",
+    "contentVersion": "1.0.0.11",
     "parameters": {
       "ResourceNamePrefix": {
         "value": ""
       },
-      "StorageAccountType": {
-        "value": "Standard_LRS"
+      "VnetDeploymentMethod": {
+        "value": "create new vnet in the same resource group"
       },
-      "RestAppID": {
+      "VnetResourceGroupName": {
         "value": ""
-      },
-      "RestAppSecret": {
-        "value": ""
-      },
-      "VnetNewOrExisting": {
-        "value": "new"
       },
       "VNetName": {
         "value": ""
       },
-      "SubnetAddressPrefix": {
+      "VnetAddressSpace": {
         "value": "10.0.0.0/16"
       },
-      "Subnet1Prefix": {
+      "Subnet1Name": {
+        "value": ""
+      },
+      "Subnet1AddressRange": {
         "value": "10.0.0.0/24"
       },
-      "Subnet2Prefix": {
+      "Subnet2Name": {
+        "value": ""
+      },
+      "Subnet2AddressRange": {
         "value": "10.0.1.0/24"
       },
-      "Subnet3Prefix": {
+      "Subnet3Name": {
+        "value": ""
+      },
+      "Subnet3AddressRange": {
         "value": "10.0.2.0/24"
       },
-      "Subnet4Prefix": {
+      "Subnet4Name": {
+        "value": ""
+      },
+      "Subnet4AddressRange": {
         "value": "10.0.3.0/24"
       },
-      "InstanceType": {
+      "NetworkSecurityGroupName": {
+        "value": ""
+      },
+      "FrontendIPDeploymentMethod": {
+        "value": "create new public IP address"
+      },
+      "FrontendIPName": {
+        "value": ""
+      },
+      "LoadBalancerIP": {
+        "value": "10"
+      },
+       "InstanceType": {
         "value": "Standard_F4"
       },
       "FOSVersion": {
@@ -50,10 +68,28 @@
       "AdminPassword": {
         "value": ""
       },
+      "StorageAccountType": {
+        "value": "Standard_LRS"
+      },
+      "RestAppID": {
+        "value": ""
+      },
+      "RestAppSecret": {
+        "value": ""
+      },
       "BYOLInstanceCount": {
         "value": 2
       },
+      "MinBYOLInstanceCount": {
+        "value": 2
+      },
+      "MaxBYOLInstanceCount": {
+        "value": 2
+      },
       "PAYGInstanceCount": {
+        "value": 0
+      },
+      "MinPAYGInstanceCount": {
         "value": 0
       },
       "MaxPAYGInstanceCount": {
@@ -66,25 +102,19 @@
         "value": 20
       },
       "MasterElectionTimeout": {
-        "value": 300
+        "value": 90
       },
       "GetLicenseGracePeriod": {
         "value": 600
       },
-      "PublicIPNewOrExisting": {
-        "value": "new"
-      },
-      "LoadBalancerIP": {
-        "value": "10"
-      },
       "HeartBeatInterval": {
-        "value": 30
+        "value": 60
       },
       "HeartBeatLossCount": {
         "value": 3
       },
       "HeartBeatDelayAllowance": {
-        "value": 2
+        "value": 30
       },
       "ScriptTimeout": {
         "value": 230
