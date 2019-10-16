@@ -275,9 +275,9 @@
         },
         "HeartBeatInterval": {
             "type": "int",
-            "defaultValue": 30,
+            "defaultValue": 60,
             "minValue": 30,
-            "maxValue": 90,
+            "maxValue": 120,
             "metadata": {
                 "description": "The amount of time (in seconds) for FortiGate to send a heartbeat to the Autoscale handler. Minimum is 30. Maximum is 90."
             }
@@ -292,10 +292,10 @@
         },
         "HeartBeatDelayAllowance": {
             "type": "int",
-            "defaultValue": 2,
-            "minValue": 0,
+            "defaultValue": 30,
+            "minValue": 30,
             "metadata": {
-                "description": "The maximum amount of time (in seconds) allowed for network latency of the FortiGate heartbeat arriving at the Autoscale handler. Minimum is 0."
+                "description": "The maximum amount of time (in seconds) allowed for network latency of the FortiGate heartbeat arriving at the Autoscale handler. Minimum is 30."
             }
         },
         "ScriptTimeout": {
