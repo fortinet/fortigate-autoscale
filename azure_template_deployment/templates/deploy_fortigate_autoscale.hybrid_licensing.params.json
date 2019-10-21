@@ -6,7 +6,7 @@
         "value": ""
       },
       "VnetDeploymentMethod": {
-        "value": "create new vnet in the same resource group"
+        "value": "create a new VNet in the Autoscale resource group"
       },
       "VnetResourceGroupName": {
         "value": ""
