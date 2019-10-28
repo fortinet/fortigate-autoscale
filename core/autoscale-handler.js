@@ -911,7 +911,8 @@ module.exports = class AutoscaleHandler {
             return await this.platform.putMasterRecord(candidateInstance, 'pending', 'new');
         } catch (ex) {
             this.logger.warn('exception while putMasterElectionVote',
-                JSON.stringify(candidateInstance), JSON.stringify(purgeMasterRecord), ex.stack);
+                JSON.stringify(candidateInstance), JSON.stringify(purgeMasterRecord),
+                ex instanceof Error ? { message: ex.message, stack: ex.stack } : ex);
             return false;
         }
     }
@@ -1285,7 +1286,10 @@ module.exports = class AutoscaleHandler {
                     .setSettingItem(keyName, value, description, jsonEncoded, editable)
                     .catch(error => {
                         this.logger.error(`failed to save setting for key: ${keyName}. ` +
-                            `Error: ${JSON.stringify(error)}`);
+                            `Error: ${JSON.stringify(
+                                error instanceof Error ? {
+                                    message: error.message, stack: error.stack } : error
+                            )}`);
                         errorTasks.push({key: keyName, value: value});
                     }));
             }
@@ -1376,7 +1380,9 @@ module.exports = class AutoscaleHandler {
             let result = await Promise.all(asyncTasks);
             return !!result;
         } catch (error) {
-            this.logger.error('called purgeMaster > error: ', JSON.stringify(error));
+            this.logger.error('called purgeMaster > error: ', JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            ));
             return false;
         }
     }
@@ -1447,7 +1453,10 @@ module.exports = class AutoscaleHandler {
                             .catch(error => {
                                 logger.error('cannot remove license file ' +
                                     `(${licenseRecord.fileName}) from stock. ` +
-                                    `error: ${JSON.stringify(error)}`);
+                                    `error: ${JSON.stringify(
+                                        error instanceof Error ? {
+                                            message: error.message, stack: error.stack } : error
+                                    )}`);
                                 return false;
                             }));
                     });
@@ -1469,7 +1478,10 @@ module.exports = class AutoscaleHandler {
                                 .catch(error => {
                                     logger.error('cannot get the content of license file ' +
                                         `(${licenseItem.fileName}). ` +
-                                        `error: ${JSON.stringify(error)}`);
+                                        `error: ${JSON.stringify(
+                                            error instanceof Error ? {
+                                                message: error.message, stack: error.stack } : error
+                                        )}`);
                                     return null;
                                 }));
                         } else {
@@ -1502,7 +1514,10 @@ module.exports = class AutoscaleHandler {
                                 .catch(error => {
                                     logger.error('cannot add license file ' +
                                         `(${licenseItem.fileName}) to stock. ` +
-                                        `error: ${JSON.stringify(error)}`);
+                                        `error: ${JSON.stringify(
+                                            error instanceof Error ? {
+                                                message: error.message, stack: error.stack } : error
+                                        )}`);
                                     logger.error(error);
                                 }));
                             return null;

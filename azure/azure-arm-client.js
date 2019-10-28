@@ -135,7 +135,8 @@ class VirtualMachineScaleSetApiClient {
                     break;
                 }
             } catch (error) {
-                logger.warn(`getVirtualMachineByIp > error querying for networkInterface: ${JSON.stringify(error)}`); // eslint-disable-line max-len
+                // eslint-disable-next-line max-len
+                logger.warn(`getVirtualMachineByIp > error querying for networkInterface: ${JSON.stringify(error instanceof Error ? { message: error.message, stack: error.stack } : error)}`);
             }
         }
         logger.info('called getVirtualMachineByIp.');
@@ -781,13 +782,15 @@ function AzureArmGet(url) {
         }, function(error, response, body) {
             // TODO: handle error.
             if (error) {
-                logger.warn(`called AzureArmGet but returned unknown error ${JSON.stringify(error)}`); // eslint-disable-line max-len
+                // eslint-disable-next-line max-len
+                logger.warn(`called AzureArmGet but returned unknown error ${JSON.stringify(error instanceof Error ? { message: error.message, stack: error.stack } : error)}`);
                 reject(error);
             } else {
                 if (response.statusCode === 200) {
                     resolve(body);
                 } else {
-                    logger.warn(`called AzureArmGet but returned error (code: ${response.statusCode}) ${response.body}`); // eslint-disable-line max-len
+                    // eslint-disable-next-line max-len
+                    logger.warn(`called AzureArmGet but returned error (code: ${response.statusCode}) ${response.body}`);
                     reject(response);
                 }
             }

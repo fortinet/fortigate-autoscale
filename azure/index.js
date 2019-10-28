@@ -260,7 +260,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return !!await dbClient.createDocument(DATABASE_NAME, TABLE.TableName,
                 document, TABLE.KeySchema[0].AttributeName, method === 'replace');
         } catch (error) {
-            logger.warn('error occurs in putMasterRecord:', JSON.stringify(error));
+            logger.warn('error occurs in putMasterRecord:', JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            ));
             return false;
         }
     }
@@ -436,7 +438,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             };
         } catch (error) {
             logger.info('called getInstanceHealthCheck with error. ' +
-                `error: ${JSON.stringify(error)}`);
+                `error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`);
             return null;
         }
     }
@@ -475,7 +479,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return !!result;
         } catch (error) {
             logger.info('called updateInstanceHealthCheck with error. ' +
-                `error: ${JSON.stringify(error)}`);
+                `error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`);
             return Promise.reject(error);
         }
     }
@@ -626,7 +632,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             this._settings = formattedItems;
             return keyFilter && filteredItems || formattedItems;
         } catch (error) {
-            logger.warn(`getSettingItems > error: ${JSON.stringify(error)}`);
+            logger.warn(`getSettingItems > error: ${JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            )}`);
             return {};
         }
     }
@@ -1016,7 +1024,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 return false;
             }
         } catch (error) {
-            logger.error(`Called updateLicenseStock: error >, ${JSON.stringify(error)}`);
+            logger.error(`Called updateLicenseStock: error >, ${JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            )}`);
             throw error;
         }
     }
@@ -1028,7 +1038,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return await dbClient.deleteDocument(DATABASE_NAME,
                 TABLE.TableName, licenseItem.checksum, true);
         } catch (error) {
-            logger.error(`Called deleteLicenseStock: error >, ${JSON.stringify(error)}`);
+            logger.error(`Called deleteLicenseStock: error >, ${JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            )}`);
             throw error;
         }
     }
