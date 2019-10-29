@@ -171,6 +171,12 @@ class CosmosDbApiClient {
             }, function(error, response) {
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 200) {
                     resolve(response);
                 } else {
@@ -207,6 +213,12 @@ class CosmosDbApiClient {
             }, function(error, response) {
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 201 || response.statusCode === 409) {
                     resolve(response);
                 } else {
@@ -239,6 +251,12 @@ class CosmosDbApiClient {
             }, function(error, response) {
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 200) {
                     resolve(response);
                 } else {
@@ -284,6 +302,12 @@ class CosmosDbApiClient {
             }, function(error, response) {
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 201 || response.statusCode === 409) {
                     resolve(response);
                 } else {
@@ -371,6 +395,12 @@ class CosmosDbApiClient {
             }, function(error, response) { // eslint-disable-line no-unused-vars
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 200) {
                     try {
                         let res = JSON.parse(response.body);
@@ -450,6 +480,12 @@ class CosmosDbApiClient {
                     logger.warn('called azureApiCosmosDbQuery > unknown error: ' +
                     `${JSON.stringify(response)}`);
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 200) {
                     logger.info(`azureApiCosmosDbQuery: ${resourcePath} retrieved.`);
                     try {
@@ -516,6 +552,12 @@ class CosmosDbApiClient {
             }, function(error, response, body) {
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 200) {
                     resolve(body);
                 } else if (response.statusCode === 201) {
@@ -563,6 +605,12 @@ class CosmosDbApiClient {
             }, function(error, response, body) {
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 200) {
                     resolve(body);
                 } else {
@@ -607,6 +655,12 @@ class CosmosDbApiClient {
             }, function(error, response, body) {
                 if (error) {
                     reject(error);
+                } else if (response.statusCode === 403) {
+                    reject({
+                        statusCode: 403,
+                        message: response.body && response.body.message ?
+                            response.body.message : 'Access Forbidden.'
+                    });
                 } else if (response.statusCode === 204) {
                     resolve(body);
                 } else {
