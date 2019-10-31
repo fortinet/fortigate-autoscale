@@ -121,7 +121,9 @@ exports.deleteService = async () => {
         }
         // await deleteTable(dbTables.NICATTACHMENT);
     } catch (error) {
-        logger.warn(`error occurred in deleting table: ${JSON.stringify(error)}`);
+        logger.warn(`error occurred in deleting table: ${JSON.stringify(
+            error instanceof Error ? { message: error.message, stack: error.stack } : error
+        )}`);
     }
 };
 

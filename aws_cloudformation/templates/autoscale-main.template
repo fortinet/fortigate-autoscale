@@ -860,7 +860,7 @@
                                     "Ref": "PrivateSubnet1"
                                 },
                                 {
-                                    "Ref": "PublicSubnet2"
+                                    "Ref": "PrivateSubnet2"
                                 }
                             ]
                         ]
