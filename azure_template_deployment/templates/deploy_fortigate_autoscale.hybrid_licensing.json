@@ -1517,7 +1517,8 @@
                         },
                         {
                             "dependsOn": [
-                                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('vmssNamePAYG'))]"
+                                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('vmssNamePAYG'))]",
+                                "[concat('Microsoft.Insights/autoscaleSettings/', variables('uniqueResourceNamePrefix'),'-autoscale-byol')]"
                             ],
                             "type": "Microsoft.Insights/autoscaleSettings",
                             "apiVersion": "2015-04-01",
