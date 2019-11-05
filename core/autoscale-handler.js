@@ -155,32 +155,34 @@ module.exports = class AutoscaleHandler {
         this.logger.info('calling init [Autoscale handler initialization]');
         // do the cloud platform initialization
         const success = this.platform.initialized || await this.platform.init();
-        // ensure that the settings are saved properly.
-        // check settings availability
+        if (success) {
+            // ensure that the settings are saved properly.
+            // check settings availability
 
-        // if there's limitation for a platform that it cannot save settings to db during
-        // deployment. the deployment template must create a service function that takes all
-        // deployment settings as its environment variables. The CloudPlatform class must
-        // invoke this service function to store all settings to db. and also create a flag
-        // setting item 'deployment-settings-saved' with value set to 'true'.
-        // from then on, it can load item from db.
-        // if this process cannot be done during the deployment, it must be done once here in the
-        // init function of the platform-specific autoscale-handler.
-        // by doing so, catch the error 'Deployment settings not saved.' and handle it.
-        this.logger.info('checking deployment setting items');
-        await this.loadSettings();
-        if (!this._settings || this._settings &&
+            // if there's limitation for a platform that it cannot save settings to db during
+            // deployment. the deployment template must create a service function that takes all
+            // deployment settings as its environment variables. The CloudPlatform class must
+            // invoke this service function to store all settings to db. and also create a flag
+            // setting item 'deployment-settings-saved' with value set to 'true'.
+            // from then on, it can load item from db.
+            // if this process cannot be done during the deployment, it must be done once here in
+            // the init function of the platform-specific autoscale-handler.
+            // by doing so, catch the error 'Deployment settings not saved.' and handle it.
+            this.logger.info('checking deployment setting items');
+            await this.loadSettings();
+            if (!this._settings || this._settings &&
             this._settings['deployment-settings-saved'] !== 'true') {
             // in the init function of each platform autoscale-handler, this error must be caught
             // and provide addtional handling code to save the settings
-            throw new Error('Deployment settings not saved.');
-        }
+                throw new Error('Deployment settings not saved.');
+            }
 
-        // set scaling group names for master and self
-        this.setScalingGroup(
+            // set scaling group names for master and self
+            this.setScalingGroup(
             this._settings['master-scaling-group-name'],
             this._settings['master-scaling-group-name']
-        );
+            );
+        }
         return success;
     }
 
@@ -909,7 +911,8 @@ module.exports = class AutoscaleHandler {
             return await this.platform.putMasterRecord(candidateInstance, 'pending', 'new');
         } catch (ex) {
             this.logger.warn('exception while putMasterElectionVote',
-                JSON.stringify(candidateInstance), JSON.stringify(purgeMasterRecord), ex.stack);
+                JSON.stringify(candidateInstance), JSON.stringify(purgeMasterRecord),
+                ex instanceof Error ? { message: ex.message, stack: ex.stack } : ex);
             return false;
         }
     }
@@ -1283,7 +1286,10 @@ module.exports = class AutoscaleHandler {
                     .setSettingItem(keyName, value, description, jsonEncoded, editable)
                     .catch(error => {
                         this.logger.error(`failed to save setting for key: ${keyName}. ` +
-                            `Error: ${JSON.stringify(error)}`);
+                            `Error: ${JSON.stringify(
+                                error instanceof Error ? {
+                                    message: error.message, stack: error.stack } : error
+                            )}`);
                         errorTasks.push({key: keyName, value: value});
                     }));
             }
@@ -1374,7 +1380,9 @@ module.exports = class AutoscaleHandler {
             let result = await Promise.all(asyncTasks);
             return !!result;
         } catch (error) {
-            this.logger.error('called purgeMaster > error: ', JSON.stringify(error));
+            this.logger.error('called purgeMaster > error: ', JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            ));
             return false;
         }
     }
@@ -1445,7 +1453,10 @@ module.exports = class AutoscaleHandler {
                             .catch(error => {
                                 logger.error('cannot remove license file ' +
                                     `(${licenseRecord.fileName}) from stock. ` +
-                                    `error: ${JSON.stringify(error)}`);
+                                    `error: ${JSON.stringify(
+                                        error instanceof Error ? {
+                                            message: error.message, stack: error.stack } : error
+                                    )}`);
                                 return false;
                             }));
                     });
@@ -1467,7 +1478,10 @@ module.exports = class AutoscaleHandler {
                                 .catch(error => {
                                     logger.error('cannot get the content of license file ' +
                                         `(${licenseItem.fileName}). ` +
-                                        `error: ${JSON.stringify(error)}`);
+                                        `error: ${JSON.stringify(
+                                            error instanceof Error ? {
+                                                message: error.message, stack: error.stack } : error
+                                        )}`);
                                     return null;
                                 }));
                         } else {
@@ -1500,7 +1514,10 @@ module.exports = class AutoscaleHandler {
                                 .catch(error => {
                                     logger.error('cannot add license file ' +
                                         `(${licenseItem.fileName}) to stock. ` +
-                                        `error: ${JSON.stringify(error)}`);
+                                        `error: ${JSON.stringify(
+                                            error instanceof Error ? {
+                                                message: error.message, stack: error.stack } : error
+                                        )}`);
                                     logger.error(error);
                                 }));
                             return null;
