@@ -25,7 +25,7 @@
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description": "Name of the resource group that contains the VNet and related network components. This resource group must be in the same region as the Autoscale resource group."
+                "description": "Name of the resource group that contains the VNet and related network components. Required if the VNet is not in the Autoscale resource group. For details refer to the description for the parameter VNet Deployment Method. This resource group must be in the same region as the Autoscale resource group."
             }
         },
         "VnetName": {
@@ -286,6 +286,7 @@
             "maxValue": 120,
             "metadata": {
                 "description": "The length of time (in seconds) that the FortiGate waits between sending heartbeat requests to the Autoscale handler function. Minimum is 30. Maximum is 120."
+            }
         },
         "HeartBeatLossCount": {
             "type": "int",
@@ -1516,7 +1517,8 @@
                         },
                         {
                             "dependsOn": [
-                                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('vmssNamePAYG'))]"
+                                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('vmssNamePAYG'))]",
+                                "[concat('Microsoft.Insights/autoscaleSettings/', variables('uniqueResourceNamePrefix'),'-autoscale-byol')]"
                             ],
                             "type": "Microsoft.Insights/autoscaleSettings",
                             "apiVersion": "2015-04-01",
