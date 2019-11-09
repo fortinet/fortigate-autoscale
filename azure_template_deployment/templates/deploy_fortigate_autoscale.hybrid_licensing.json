@@ -399,10 +399,12 @@
         "subnet2LoadBalancerIP": "[concat(substring(variables('subnet2Prefix'), 0, lastIndexOf(variables('subnet2Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
         "subnet3LoadBalancerIP": "[concat(substring(variables('subnet3Prefix'), 0, lastIndexOf(variables('subnet3Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
         "subnet4LoadBalancerIP": "[concat(substring(variables('subnet4Prefix'), 0, lastIndexOf(variables('subnet4Prefix'), '.')),'.', parameters('LoadBalancerIP'))]",
-        "networkSecurityGroupName": "[if(and(variables('ifCreateVNet'), empty(parameters('NetworkSecurityGroupName'))), concat(parameters('ResourceNamePrefix'), '-network-security-group'), parameters('NetworkSecurityGroupName'))]",
+        "networkSecurityGroupName": "[if(and(variables('ifCreateVNet'), empty(parameters('NetworkSecurityGroupName'))), concat(parameters('ResourceNamePrefix'), '-network-security-group'), if(empty(parameters('NetworkSecurityGroupName')), 'not-applicable', parameters('NetworkSecurityGroupName')))]",
         "networkSecurityGroupId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/networkSecurityGroups/', variables('networkSecurityGroupName'))]",
         "vmssNameBYOL": "[concat(parameters('ResourceNamePrefix'), 'byol')]",
         "vmssNamePAYG": "[concat(parameters('ResourceNamePrefix'), 'payg')]",
+        "autoscaleSettingsNameBYOL": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-byol')]",
+        "autoscaleSettingsNamePAYG": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-payg')]",
         "ifPAYGOnly": "[equals(parameters('BYOLInstanceCount'), 0)]",
         "ifBYOLOnly": "[and(not(equals(parameters('MaxBYOLInstanceCount'), 0)), not(equals(parameters('MaxBYOLInstanceCount'), 0)), equals(parameters('MinPAYGInstanceCount'), 0), equals(parameters('MaxPAYGInstanceCount'), 0))]",
         "licensingModel": "[if(variables('ifPAYGOnly'), 'paygonly', if(variables('ifBYOLOnly'), 'byolonly', 'hybrid'))]",
@@ -633,7 +635,16 @@
                     }
                 ]
             }
-        }
+        },
+        "cmdDeleteAutoscaleComponents": "[concat('az account set -s ', subscription().subscriptionId, ';', 'az group delete -y -n ', variables('resourceGroupName'), ';')]",
+        "cmdDeleteVNet": "[if(variables('ifCreateVNetInSameRSG'), '', concat('az network vnet delete -g ', variables('vNetResourceGroupName'),' -n ', variables('vNetName'), ';'))]",
+        "cmdDeleteVMSS": "[if(variables('ifCreateVNetInSameRSG'), '', concat('az vmss delete -g ', variables('vNetResourceGroupName'),' -n ', variables('vmssNameBYOL'), ';', 'az vmss delete -g ', variables('vNetResourceGroupName'),' -n ', variables('vmssNamePAYG'), ';'))]",
+        "cmdDeleteLBS": "[if(variables('ifCreateVNetInSameRSG'), '', concat('az network lb delete -g ', variables('vNetResourceGroupName'),' -n ', variables('externalLoadBalancerName'), ';', 'az network lb delete -g ', variables('vNetResourceGroupName'),' -n ', variables('internalLoadBalancerName'), ';'))]",
+        "cmdDeletePublicIP": "[if(or(variables('ifCreateVNetInSameRSG'), not(variables('ifCreateNewPublicIP'))), '', concat('az network public-ip delete -g ', variables('vNetResourceGroupName'), ' -n ', variables('publicIPAddressName'), ';'))]",
+        "cmdDeleteAutoscaleSettings": "[if(variables('ifCreateVNetInSameRSG'), '', concat('az monitor autoscale delete -g ', variables('vNetResourceGroupName'), ' -n ', variables('autoscaleSettingsNameBYOL'), ';', 'az monitor autoscale delete -g ', variables('vNetResourceGroupName'), ' -n ', variables('autoscaleSettingsNamePAYG'), ';'))]",
+        "cmdDeleteVNetRelatedComponents": "[concat('az account set -s ', subscription().subscriptionId, ';', variables('cmdDeleteAutoscaleSettings'), variables('cmdDeleteVMSS'), variables('cmdDeleteLBS'), variables('cmdDeletePublicIP'), if(variables('ifCreateVNet'), variables('cmdDeleteVNet'), ''))]",
+        "cmdDeleteAutoscale": "[concat(variables('cmdDeleteVNetRelatedComponents'), variables('cmdDeleteAutoscaleComponents'))]",
+        "cmdVNetCleanUp": "[concat('az account set -s ', subscription().subscriptionId, ';', variables('cmdDeleteAutoscaleSettings'))]"
     },
     "resources": [
         {
@@ -666,7 +677,7 @@
         },
         {
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+                "[variables('storageAccountName')]"
             ],
             "apiVersion": "2018-05-01",
             "name": "VNetRelatedResources",
@@ -931,7 +942,7 @@
                                 "name": "Standard"
                             },
                             "dependsOn": [
-                                "[concat('Microsoft.Network/virtualNetworks/', variables('vNetName'))]"
+                                "[variables('vNetName')]"
                             ],
                             "properties": {
                                 "frontendIPConfigurations": [
@@ -1185,9 +1196,9 @@
                             "name": "[variables('vmssNameBYOL')]",
                             "location": "[variables('location')]",
                             "dependsOn": [
-                                "[resourceId('Microsoft.Network/loadBalancers', variables('externalLoadBalancerName'))]",
-                                "[resourceId('Microsoft.Network/loadBalancers', variables('internalLoadBalancerName'))]",
-                                "[resourceId('Microsoft.Network/virtualNetworks', variables('vNetName'))]"
+                                "[variables('externalLoadBalancerName')]",
+                                "[variables('internalLoadBalancerName')]",
+                                "[variables('vNetName')]"
                             ],
                             "plan": {
                                 "name": "[variables('fgtvmImageBYOL').sku]",
@@ -1340,9 +1351,9 @@
                             "location": "[variables('location')]",
                             "apiVersion": "2019-07-01",
                             "dependsOn": [
-                                "[resourceId('Microsoft.Network/loadBalancers', variables('externalLoadBalancerName'))]",
-                                "[resourceId('Microsoft.Network/loadBalancers', variables('internalLoadBalancerName'))]",
-                                "[resourceId('Microsoft.Network/virtualNetworks', variables('vNetName'))]"
+                                "[variables('externalLoadBalancerName')]",
+                                "[variables('internalLoadBalancerName')]",
+                                "[variables('vNetName')]"
                             ],
                             "plan": {
                                 "name": "[variables('fgtvmImagePAYG').sku]",
@@ -1497,10 +1508,10 @@
                             ],
                             "type": "Microsoft.Insights/autoscaleSettings",
                             "apiVersion": "2015-04-01",
-                            "name": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-byol')]",
+                            "name": "[variables('autoscaleSettingsNameBYOL')]",
                             "location": "[variables('location')]",
                             "properties": {
-                                "name": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-byol')]",
+                                "name": "[variables('autoscaleSettingsNameBYOL')]",
                                 "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  variables('vNetResourceGroupName'), '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('vmssNameBYOL'))]",
                                 "enabled": false,
                                 "profiles": [
@@ -1523,10 +1534,10 @@
                             ],
                             "type": "Microsoft.Insights/autoscaleSettings",
                             "apiVersion": "2015-04-01",
-                            "name": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-payg')]",
+                            "name": "[variables('autoscaleSettingsNamePAYG')]",
                             "location": "[variables('location')]",
                             "properties": {
-                                "name": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-payg')]",
+                                "name": "[variables('autoscaleSettingsNamePAYG')]",
                                 "targetResourceUri": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/',  variables('vNetResourceGroupName'), '/providers/Microsoft.Compute/virtualMachineScaleSets/', variables('vmssNamePAYG'))]",
                                 "enabled": false,
                                 "profiles": [
@@ -1561,7 +1572,7 @@
             "type": "Microsoft.DocumentDB/databaseAccounts/apis/databases",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'))]",
             "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts/', variables('databaseAccountName'))]"
+                "[variables('databaseAccountName')]"
             ],
             "properties": {
                 "resource": {
@@ -1940,9 +1951,9 @@
         },
         {
             "dependsOn": [
-                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-                "[resourceId('Microsoft.DocumentDb/databaseAccounts', variables('databaseAccountName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[variables('hostingPlanName')]",
+                "[variables('databaseAccountName')]",
+                "[variables('storageAccountName')]",
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
             "apiVersion": "2018-11-01",
@@ -2236,8 +2247,8 @@
         },
         {
             "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'VNetRelatedResources')]",
-                "[resourceId('Microsoft.DocumentDb/databaseAccounts', variables('databaseAccountName'))]",
+                "VNetRelatedResources",
+                "[variables('databaseAccountName')]",
                 "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
             ],
             "apiVersion": "2018-05-01",
@@ -2273,8 +2284,8 @@
         },
         {
             "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'VNetRelatedResources')]",
-                "[resourceId('Microsoft.DocumentDb/databaseAccounts', variables('databaseAccountName'))]"
+                "VNetRelatedResources",
+                "[variables('databaseAccountName')]"
             ],
             "apiVersion": "2018-05-01",
             "name": "SetupDBAccessRestrictions",
@@ -2330,10 +2341,6 @@
             "type": "string",
             "value": "[variables('storageAccountName')]"
         },
-        "storageAccountAccessKey": {
-            "type": "string",
-            "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-04-01').keys[0].value]"
-        },
         "configsetAssetKeyPrefix": {
             "type": "string",
             "value": "[variables('configsetAssetKeyPrefix')]"
@@ -2344,7 +2351,11 @@
         },
         "byolAutoscaleSettingsName": {
             "type": "string",
-            "value": "[concat(variables('uniqueResourceNamePrefix'),'-autoscale-byol')]"
+            "value": "[variables('autoscaleSettingsNameBYOL')]"
+        },
+        "paygAutoscaleSettingsName": {
+            "type": "string",
+            "value": "[variables('autoscaleSettingsNamePAYG')]"
         },
         "paygScaleSetName": {
             "type": "string",
@@ -2381,6 +2392,14 @@
         "fgtLicensingModel": {
             "type": "string",
             "value": "[variables('licensingModelName')]"
+        },
+        "cmdDeleteAutoscale": {
+            "type": "string",
+            "value": "[variables('cmdDeleteAutoscale')]"
+        },
+        "cmdVNetCleanUp": {
+            "type": "string",
+            "value": "[variables('cmdVNetCleanUp')]"
         }
     }
 }
