@@ -332,13 +332,13 @@
         "routeTable2Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable2Name'))]",
         "routeTable3Id": "[resourceId('Microsoft.Network/routeTables',variables('routeTable3Name'))]",
         "fgtvmImagePAYG": {
-            "publisher": "Fortinet",
+            "publisher": "fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm_payg_20190624",
             "version": "[parameters('fosversion')]"
         },
         "fgtvmImageBYOL": {
-            "publisher": "Fortinet",
+            "publisher": "fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm",
             "version": "[parameters('fosversion')]"
