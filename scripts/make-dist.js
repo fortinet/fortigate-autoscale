@@ -653,6 +653,20 @@ async function makeDistAll() {
     await makeDistAwsCloudFormation();
 }
 
+async function unzipAWSArtifacts() {
+    let pm = Packman.spawn(),
+        rDirDist = path.resolve(REAL_PROJECT_ROOT, './dist'),
+        rDirDistAWS = path.resolve(REAL_PROJECT_ROOT, './distAWS'),
+        allDistFiles = await fs.readdirSync(rDirDist);
+    // create distAWS dir
+    await pm.makeDir(rDirDistAWS);
+    for (let file of allDistFiles) {
+        if (file.includes('aws')) {
+            await pm.unzipSafe(file, rDirDist, rDirDistAWS);
+        }
+    }
+}
+
 let scrptName = process.argv[ARGV_PROCESS_PACKAGING_SCRIPT_NAME] || 'default';
 // make distribution package
 switch (scrptName.toLowerCase()) {
@@ -685,6 +699,9 @@ switch (scrptName.toLowerCase()) {
         break;
     case 'all':
         makeDistAll();
+        break;
+    case 'unzip-aws-artifacts':
+        unzipAWSArtifacts();
         break;
     default:
         console.warn('( ͡° ͜ʖ ͡°) Usage: please use one of these commands:');

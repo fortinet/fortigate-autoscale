@@ -245,6 +245,17 @@ class Packman {
         return path.resolve(des, fileName);
     }
 
+    async unzipSafe(fileName, src, des, cwd = process.cwd(), options = {}) {
+        let file = src + '/' + fileName,
+            desFolder = '',
+            realPath = path.resolve(des);
+        if (realPath.indexOf(process.cwd()) !== 0) {
+            des = path.resolve(await this.makeTempDir(), des);
+        }
+        desFolder = des + '/' + fileName.replace('.zip', '');
+        await this.execCmd(`unzip -o -d ${desFolder} ${file}`, cwd, options);
+    }
+
 
     async npmInstallLocal(location, args = [], options = {}, cachePath = null,
     pacache = {}) {
