@@ -22,10 +22,10 @@ deploy:
     secret_access_key:
       secure: WeVm/zbfk+kPX6ExlAv0tmJbGeFug8CXP6fIciyBoliGa3l13CY7zkPkUOuuAb2aBDEPstGGtxpcZWeTyuzgvnJfbtED/hoJzZnKoA6MmVoD/pnAicJbLPKQKAkTqCpRfcQalYo+sWwwYmQH7b42RATSuWEi7WvrPiDg+wAl8EpV3N3HYpeECRshlcnLaOpY8W5jlKhaX9nIb2XvjhXVd7hcK8QVuTeVu0/nWJv3PbZTujOq4v+7k+US2eSyPGOU+k//g4CxwBOdKRn2L/QXkwNRKrs/kyaDkWlnstLDwEi/rK4ARBMHqBO1RuHAae+psUH7l7soQkzAglf9YBotEsTIUHsXfDcc/QmkIEcWlR2rODs2Ef2lHkb6GoL61EoofKkGm/rFo+47XujAdS+lDRTuPJqIz6OBnq4QNMHVo18Ok6Zz3s36+U02iFLRFWzaTw/dINE7MZBk0k9iM7n4SMsGEx0PkHKhdcI9+2uGosW8EYnmH5D12y029XH2+0JiaLe5jJW7PUTJQx+/pMXAN1zxPCaRLO+Bqr3CEuRZDv2V+YjP4aSbHzneAnhSYHE0/Vb+JUJ0C5zoow8PpzHztbnV8WV7uK7MVb2rFwMe6qom2jeAZhoqLJ3z40d+EV/2FRc/F0ntoLkjSgbcFViB+JAKuyPplvJG9AkLtn4bUdA=
     region: us-west-2
-    bucket: fortigate-autoscale-aws
+    bucket: fortinet-github-aws-release-artifacts
     acl: public_read
     skip_cleanup: true
     local_dir: distAWS
-    upload-dir: $TRAVIS_BRANCH
+    upload-dir: fortigate-autoscale/$TRAVIS_BRANCH
     on:
       all_branches: true
