@@ -445,13 +445,13 @@
         "intRouteTable2Id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/routeTables/',variables('intRouteTable2Name'))]",
         "intRouteTable3Id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/routeTables/',variables('intRouteTable3Name'))]",
         "fgtvmImagePAYG": {
-            "publisher": "Fortinet",
+            "publisher": "fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm_payg_20190624",
             "version": "[parameters('fosversion')]"
         },
         "fgtvmImageBYOL": {
-            "publisher": "Fortinet",
+            "publisher": "fortinet",
             "offer": "fortinet_fortigate-vm_v5",
             "sku": "fortinet_fg-vm",
             "version": "[parameters('fosversion')]"
