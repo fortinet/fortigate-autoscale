@@ -1,5 +1,6 @@
 # project-specific
 **/dist
+**/distAWS
 **/local
 **/local*
 
