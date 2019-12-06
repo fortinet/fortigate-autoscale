@@ -993,10 +993,10 @@
                                         "name": "[concat(variables('internalLoadBalancerName'), '-rule-subnet2')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/frontendIPConfigurations/', variables('intLBFrontendIPConfigNameSubnet2'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/frontendIPConfigurations/', variables('intLBFrontendIPConfigNameSubnet2'))]"
                                             },
                                             "backendAddressPool": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet2'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet2'))]"
                                             },
                                             "protocol": "All",
                                             "frontendPort": 0,
@@ -1004,7 +1004,7 @@
                                             "loadDistribution": "SourceIP",
                                             "enableFloatingIP": true,
                                             "probe": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/probes/tcpProbe')]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/probes/tcpProbe')]"
                                             }
                                         }
                                     },
@@ -1012,10 +1012,10 @@
                                         "name": "[concat(variables('internalLoadBalancerName'), '-rule-subnet3')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/frontendIPConfigurations/',variables('intLBFrontendIPConfigNameSubnet3'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/frontendIPConfigurations/',variables('intLBFrontendIPConfigNameSubnet3'))]"
                                             },
                                             "backendAddressPool": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet3'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet3'))]"
                                             },
                                             "protocol": "All",
                                             "frontendPort": 0,
@@ -1023,7 +1023,7 @@
                                             "loadDistribution": "SourceIP",
                                             "enableFloatingIP": true,
                                             "probe": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/probes/tcpProbe')]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/probes/tcpProbe')]"
                                             }
                                         }
                                     },
@@ -1031,10 +1031,10 @@
                                         "name": "[concat(variables('internalLoadBalancerName'), '-rule-subnet4')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/frontendIPConfigurations/', variables('intLBFrontendIPConfigNameSubnet4'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/frontendIPConfigurations/', variables('intLBFrontendIPConfigNameSubnet4'))]"
                                             },
                                             "backendAddressPool": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet4'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet4'))]"
                                             },
                                             "protocol": "All",
                                             "frontendPort": 0,
@@ -1042,7 +1042,7 @@
                                             "loadDistribution": "SourceIP",
                                             "enableFloatingIP": true,
                                             "probe": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('internalLoadBalancerName')), '/probes/tcpProbe')]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('internalLoadBalancerName'), '/probes/tcpProbe')]"
                                             }
                                         }
                                     }
@@ -1092,7 +1092,7 @@
                                         "name": "[variables('extLBInboundNatPoolSSH')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')),'/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
                                             },
                                             "protocol": "Tcp",
                                             "frontendPortRangeStart": "[variables('extLBFrontendPortRangeStartSSH')]",
@@ -1104,7 +1104,7 @@
                                         "name": "[variables('extLBInboundNatPoolHTTPS')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')),'/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
                                             },
                                             "protocol": "Tcp",
                                             "frontendPortRangeStart": "[variables('extLBFrontendPortRangeStartHTTPS')]",
@@ -1116,7 +1116,7 @@
                                         "name": "[variables('intLBInboundNatPoolSSH')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')),'/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
                                             },
                                             "protocol": "Tcp",
                                             "frontendPortRangeStart": "[variables('intLBFrontendPortRangeStartSSH')]",
@@ -1128,7 +1128,7 @@
                                         "name": "[variables('intLBInboundNatPoolHTTPS')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')),'/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
                                             },
                                             "protocol": "Tcp",
                                             "frontendPortRangeStart": "[variables('intLBFrontendPortRangeStartHTTPS')]",
@@ -1142,10 +1142,10 @@
                                         "name": "[concat(variables('externalLoadBalancerName'), '-rule-http')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')),'/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
                                             },
                                             "backendAddressPool": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet1'))]"
                                             },
                                             "protocol": "Tcp",
                                             "frontendPort": 80,
@@ -1153,7 +1153,7 @@
                                             "loadDistribution": "SourceIP",
                                             "enableFloatingIP": true,
                                             "probe": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')), '/probes/tcpProbe')]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/probes/tcpProbe')]"
                                             }
                                         }
                                     },
@@ -1161,10 +1161,10 @@
                                         "name": "[concat(variables('externalLoadBalancerName'), '-rule-https')]",
                                         "properties": {
                                             "frontendIPConfiguration": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')),'/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/frontendIPConfigurations/', variables('extLBFrontendIPConfigNameSubnet1'))]"
                                             },
                                             "backendAddressPool": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet1'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/backendAddressPools/',variables('loadBalancerBackendIPPoolNameSubnet1'))]"
                                             },
                                             "protocol": "Tcp",
                                             "frontendPort": 443,
@@ -1172,7 +1172,7 @@
                                             "loadDistribution": "SourceIP",
                                             "enableFloatingIP": true,
                                             "probe": {
-                                                "id": "[concat(resourceId(variables('vNetResourceGroupName'), 'Microsoft.Network/loadBalancers', variables('externalLoadBalancerName')), '/probes/tcpProbe')]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/loadBalancers/', variables('externalLoadBalancerName'), '/probes/tcpProbe')]"
                                             }
                                         }
                                     }
