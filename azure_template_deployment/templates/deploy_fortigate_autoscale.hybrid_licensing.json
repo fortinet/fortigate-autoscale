@@ -149,8 +149,7 @@
                 "description": "FortiOS version supported by FortiGate Autoscale for Azure."
             },
             "allowedValues": [
-                "6.2.3",
-                "6.0.8"
+                "6.2.3"
             ]
         },
         "FortiGatePSKSecret": {
