@@ -78,7 +78,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                         } else {
                             error = e;
                             logger.info('called checkDatabaseAvailability. DB > error:');
-                            logger.error(e);
+                            logger.error(JSON.stringify(e));
                         }
                     }
                 }
@@ -119,7 +119,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 } catch (error) {
                     logger.error(error);
                     logger.warn('some tables are missing, script stops running.');
-                    return false;
+                    throw error;
                 }
             },
             initBlobStorage = async function() {
@@ -128,17 +128,20 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 }
                 return await Promise.resolve(true);
             };
-
+        let dbCheckPassed = true;
         await Promise.all([
             initBlobStorage(),
-            initDB(),
+            initDB().catch(() => {
+                dbCheckPassed = false;
+            }),
             armClient.authWithServicePrincipal(process.env.REST_APP_ID,
                 process.env.REST_APP_SECRET, process.env.TENANT_ID)
         ]).catch(error => {
             throw error;
         });
-        this._initialized = true; // mark this platform class instance is initialized.
-        return true;
+        // mark this platform class instance is initialized.
+        this._initialized = dbCheckPassed && true;
+        return this._initialized;
     }
 
     async checkCollectionsAvailability(collections = []) {
@@ -257,7 +260,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return !!await dbClient.createDocument(DATABASE_NAME, TABLE.TableName,
                 document, TABLE.KeySchema[0].AttributeName, method === 'replace');
         } catch (error) {
-            logger.warn('error occurs in putMasterRecord:', JSON.stringify(error));
+            logger.warn('error occurs in putMasterRecord:', JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            ));
             return false;
         }
     }
@@ -433,7 +438,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             };
         } catch (error) {
             logger.info('called getInstanceHealthCheck with error. ' +
-                `error: ${JSON.stringify(error)}`);
+                `error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`);
             return null;
         }
     }
@@ -472,7 +479,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return !!result;
         } catch (error) {
             logger.info('called updateInstanceHealthCheck with error. ' +
-                `error: ${JSON.stringify(error)}`);
+                `error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`);
             return Promise.reject(error);
         }
     }
@@ -623,7 +632,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             this._settings = formattedItems;
             return keyFilter && filteredItems || formattedItems;
         } catch (error) {
-            logger.warn(`getSettingItems > error: ${JSON.stringify(error)}`);
+            logger.warn(`getSettingItems > error: ${JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            )}`);
             return {};
         }
     }
@@ -1013,7 +1024,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 return false;
             }
         } catch (error) {
-            logger.error(`Called updateLicenseStock: error >, ${JSON.stringify(error)}`);
+            logger.error(`Called updateLicenseStock: error >, ${JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            )}`);
             throw error;
         }
     }
@@ -1025,7 +1038,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             return await dbClient.deleteDocument(DATABASE_NAME,
                 TABLE.TableName, licenseItem.checksum, true);
         } catch (error) {
-            logger.error(`Called deleteLicenseStock: error >, ${JSON.stringify(error)}`);
+            logger.error(`Called deleteLicenseStock: error >, ${JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            )}`);
             throw error;
         }
     }
@@ -1066,31 +1081,34 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async init() {
         // for Azure, initialize the platform first. then save settings to db before continue
         // to the rest of AutoscaleHandler initialization
-        await this.platform.init();
-        await this.loadSettings();
-        if (!(this._settings && Object.keys(this._settings).length > 0)) {
-            await this.saveSettings();
-        }
-        let success = await super.init();
-        // check other required tables existence
-        let requiredDbTableNames = this._settings['required-db-table'] &&
-            this._settings['required-db-table'].split(',').map(tableName => tableName.trim()) || [];
-        let otherRequiredTableEntries = Object.entries(DB).filter(entry => {
-            return !MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(entry[0]) &&
-                requiredDbTableNames.includes(entry[1].TableName);
-        }).map(otherRequiredTableEntry => {
-            return otherRequiredTableEntry[1].TableName;
-        });
         let errors = [];
-        let platform = this.platform;
-        if (otherRequiredTableEntries.length > 0) {
-            logger.info('checking other required db table.');
-            await platform.checkCollectionsAvailability(otherRequiredTableEntries)
-                .then(missingCollections => platform.createCollections(missingCollections))
-                .catch(err => {
-                    logger.error(err);
-                    errors.push(err);
-                });
+        let success = this.platform.initialized || await this.platform.init();
+        if (success) {
+            await this.loadSettings();
+            if (!(this._settings && Object.keys(this._settings).length > 0)) {
+                await this.saveSettings();
+            }
+            success = await super.init();
+            // check other required tables existence
+            let requiredDbTableNames = this._settings['required-db-table'] &&
+                this._settings['required-db-table'].split(',')
+                .map(tableName => tableName.trim()) || [];
+            let otherRequiredTableEntries = Object.entries(DB).filter(entry => {
+                return !MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(entry[0]) &&
+                    requiredDbTableNames.includes(entry[1].TableName);
+            }).map(otherRequiredTableEntry => {
+                return otherRequiredTableEntry[1].TableName;
+            });
+            let platform = this.platform;
+            if (otherRequiredTableEntries.length > 0) {
+                logger.info('checking other required db table.');
+                await platform.checkCollectionsAvailability(otherRequiredTableEntries)
+                    .then(missingCollections => platform.createCollections(missingCollections))
+                    .catch(err => {
+                        logger.error(err);
+                        errors.push(err);
+                    });
+            }
         }
         logger.info('called init [Autoscale handler initialization]');
         return success && errors.length === 0;
