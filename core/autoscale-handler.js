@@ -517,6 +517,8 @@ module.exports = class AutoscaleHandler {
             isMaster = false,
             lifecycleShouldAbandon = false;
 
+        let masterChanged = false;
+
         parameters.instanceId = instanceId;
         parameters.scalingGroupName = this.scalingGroupName;
         // get selfinstance
@@ -540,20 +542,23 @@ module.exports = class AutoscaleHandler {
         // get master instance monitoring
         await this.retrieveMaster();
 
-        // if this instance is the master, skip checking master election
-        if (
-            this._masterInfo &&
-            this._selfInstance.instanceId === this._masterInfo.instanceId &&
-            this.scalingGroupName === this.masterScalingGroupName
-        ) {
+        // get the current master instance info for comparisons later
+        let masterInstanceId = this._masterRecord && this._masterRecord.instanceId || null;
+        let masterElectionVote = this._masterRecord && this._masterRecord.voteState || null;
+
+        if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
+            this.scalingGroupName === this.masterScalingGroupName) {
+            // this instance is the current master, skip checking master election
             // use master health check result as self health check result
             isMaster = true;
             this._selfHealthCheck = this._masterHealthCheck;
         } else if (this._selfHealthCheck && !this._selfHealthCheck.healthy) {
+            // this instance isn't the current master
             // if this instance is unhealth, skip master election check
-        } else if (
-            !(this._masterInfo && this._masterHealthCheck && this._masterHealthCheck.healthy)
-        ) {
+
+        } else if (!(this._masterInfo && this._masterHealthCheck &&
+            this._masterHealthCheck.healthy)) {
+            // this instance isn't the current master
             // if no master or master is unhealthy, try to run a master election or check if a
             // master election is running then wait for it to end
             // promiseEmitter to handle the master election process by periodically check:
@@ -562,32 +567,31 @@ module.exports = class AutoscaleHandler {
             let promiseEmitter = this.checkMasterElection.bind(this),
                 // validator set a condition to determine if the fgt needs to keep waiting or not.
                 validator = masterInfo => {
-                    // if i am the new master, don't wait, continue to finalize the election.
-                    // should return yes to end the waiting.
-                    if (
-                        masterInfo &&
+                    // i am the new master, don't wait, continue to finalize the election.
+                    // should return true to end the waiting.
+                    if (masterInfo &&
                         masterInfo.primaryPrivateIpAddress ===
                             this._selfInstance.primaryPrivateIpAddress
                     ) {
                         isMaster = true;
                         return true;
                     } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+                        // i am not the new master
                         // if no wait for master election, I could become a headless instance
-                        // may allow any non master instance to come up without master.
+                        // may allow any instance of slave role to come up without master.
                         // They will receive the new master ip on one of their following
                         // heartbeat sync callback
                         if (this._settings['master-election-no-wait'] === 'true') {
                             return true;
                         } else {
-                            // if i am not the new master, and the new master hasn't come up to
-                            // finalize the election, I should keep on waiting.
+                            // the new master hasn't come up to finalize the election,
+                            // I should keep on waiting.
                             // should return false to continue.
                             this._masterRecord = null; // clear the master record cache
                             return false;
                         }
                     } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
-                        // if i am not the new master, and the master election is final, then no
-                        // need to wait.
+                        // if the master election is final, then no need to wait.
                         // should return true to end the waiting.
                         return true;
                     } else {
@@ -689,9 +693,43 @@ module.exports = class AutoscaleHandler {
                     await this.platform.removeMasterRecord();
                     this._masterRecord = null;
                     lifecycleShouldAbandon = true;
+                } else {
+                    this._masterRecord = null;
+                    await this.retrieveMaster();
+                    // update tags
+                    await this.platform.updateHAAPRoleTag(this._selfInstance.instanceId);
                 }
             }
         }
+
+        // check whether master has changed or not
+        let currentMasterInstanceId = this._masterRecord && this._masterRecord.instanceId || null;
+        let currentMasterElectionVote = this._masterRecord && this._masterRecord.voteState || null;
+
+        // no master (election done) before, but have a master (election done) now
+        // or
+        // had a pending master (election pending) before, but now master election is done
+        // no matter the master id has changed or not.
+        if (masterElectionVote !== 'done' && currentMasterElectionVote === 'done') {
+            masterChanged = true;
+        }
+
+        // had a master (election done) before, have a master (election done) now,
+        // but they have different instance id
+        if (masterElectionVote === 'done' && currentMasterElectionVote === 'done' &&
+            masterInstanceId !== currentMasterInstanceId) {
+            masterChanged = true;
+        }
+
+        // if master has changed and this is the new master,
+        // update master/slave tags
+        if (masterChanged && isMaster) {
+            await this.platform.updateHAAPRoleTag(this._selfInstance.instanceId);
+        }
+
+        this.logger.info(`currentMasterInstanceId: ${currentMasterInstanceId}, ` +
+            `currentMasterElectionVote: ${currentMasterElectionVote}, ` +
+            `masterChanged: ${masterChanged}`);
 
         // if no self healthcheck record found, this instance not under monitor. It's about the
         // time to add it to monitor. should make sure its all lifecycle actions are complete

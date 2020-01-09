@@ -1844,6 +1844,50 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
+    async updateHAAPRoleTag(masterInstanceId) {
+        logger.info('calling updateHAAPRoleTag');
+        // query instances in the scaling groups (BYOL and PAYG)
+        let params = {Filters: []};
+        params.Filters.push({
+            Name: 'tag:ResourceGroup',
+            Values: [this._settings['resource-tag-prefix']]
+        });
+        const tagMaster = {
+            Key: 'AutoscaleRole',
+            Value: 'master'
+        };
+        try {
+            const instances = await ec2.describeInstances(params).promise();
+            let masterInstances = [];
+            instances.Reservations.forEach(resv => {
+                const resvInstances = resv.Instances.filter(resvInstance => {
+                    // return true if it contains a tag key: AutoscaleRole and value: master
+                    return resvInstance.Tags.filter(tag =>
+                        tag.Key === 'AutoscaleRole' && tag.Value === 'master').length > 0;
+                });
+                masterInstances = [...masterInstances, ...resvInstances];
+            });
+            logger.log(JSON.stringify(masterInstances));
+            // remove the master tag from existing instances
+            let deleteParams = { Resources: [], Tags: [tagMaster]};
+            masterInstances.forEach(masterInstance => {
+                deleteParams.Resources.push(masterInstance.InstanceId);
+            });
+            await ec2.deleteTags(deleteParams).promise();
+            // add the master tag to the one with id === masterInstanceId
+            await ec2.createTags({ Resources: [masterInstanceId], Tags: [tagMaster]}).promise();
+            logger.info('called updateHAAPRoleTag');
+            return true;
+        } catch (error) {
+            logger.error(error);
+            logger.info('called updateHAAPRoleTag');
+            return false;
+        }
+    }
+    // end of awsPlatform class
+}
+
+    /** @override */
     async getLicenseFileContent(fileName) {
         const blob = await this.getBlobFromStorage({
             storageName: this._settings['asset-storage-name'],
