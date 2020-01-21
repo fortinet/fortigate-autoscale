@@ -850,7 +850,7 @@ function authWithServicePrincipal(app_id, app_secret, tenant_id) {
 
 
 function getAuthorizationTokenUsingMasterKey(verb, resourceType, resourceId, date, _masterKey) {
-    var key = new Buffer(_masterKey, 'base64');
+    var key = Buffer.from(_masterKey, 'base64');
 
     var text = `${(verb || '').toLowerCase()}\n${
         (resourceType || '').toLowerCase()}\n${
@@ -858,7 +858,7 @@ function getAuthorizationTokenUsingMasterKey(verb, resourceType, resourceId, dat
         date.toLowerCase()}\n` +
         '' + '\n';
 
-    var body = new Buffer(text, 'utf8');
+    var body = Buffer.from(text, 'utf8');
     var signature = crypto.createHmac('sha256', key).update(body).digest('base64');
 
     var MasterToken = 'master';
