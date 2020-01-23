@@ -13,15 +13,15 @@
   "dependencies": {
     "azure-storage": "^2.10.3",
     "fortigate-autoscale-core": "file:../core",
-    "ms-rest-azure": "^2.6.0",
-    "request": "^2.87.0"
+    "ms-rest-azure": "^3.0.0",
+    "request": "^2.88.0"
   },
   "devDependencies": {
-    "eslint": "^5.11.0",
-    "eslint-plugin-mocha": "^5.2.0",
-    "mocha": "^5.2.0",
-    "nyc": "^14.1.1",
-    "pack-zip": "^0.2.2"
+    "eslint": "^6.8.0",
+    "eslint-plugin-json": "^2.0.1",
+    "eslint-plugin-mocha": "^6.2.2",
+    "mocha": "^7.0.0",
+    "nyc": "^15.0.0"
   },
   "bundledDependencies": [
     "fortigate-autoscale-core"
