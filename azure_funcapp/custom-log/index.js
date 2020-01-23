@@ -19,8 +19,10 @@ ftgtAutoscaleAzure.initModule();
 module.exports = async function(context, req) {
     context.log(`Incoming request: ${JSON.stringify(req)}`);
     await ftgtAutoscaleAzure.handleListCustomLog(context, req);
-    if (process.env.FUNCTIONS_EXTENSION_VERSION &&
-        process.env.FUNCTIONS_EXTENSION_VERSION === '~1') {
+    if (
+        process.env.FUNCTIONS_EXTENSION_VERSION &&
+        process.env.FUNCTIONS_EXTENSION_VERSION === '~1'
+    ) {
         context.done();
     }
 };

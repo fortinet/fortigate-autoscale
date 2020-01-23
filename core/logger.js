@@ -73,8 +73,9 @@ module.exports = class Logger {
     enQueue(level, args) {
         let item = {
             level: level,
-            timestamp: Date.now() + (new Date()).getTimezoneOffset() * 60000, // GMT time in ms
-            arguments: []};
+            timestamp: Date.now() + new Date().getTimezoneOffset() * 60000, // GMT time in ms
+            arguments: []
+        };
         item.arguments = Array.prototype.slice.call(args).map(arg => {
             return arg && arg.toString ? arg.toString() : arg;
         });

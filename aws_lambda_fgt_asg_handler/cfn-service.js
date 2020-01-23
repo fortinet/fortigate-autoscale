@@ -62,11 +62,17 @@ exports.handler = async (event, context) => {
                     if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
                         await autoscaleHandler.updateCapacity(
                             autoscaleHandler.getSettings()['byol-scaling-group-name'],
-                            params.desiredCapacity, params.minSize, params.maxSize);
+                            params.desiredCapacity,
+                            params.minSize,
+                            params.maxSize
+                        );
                     }
                     await autoscaleHandler.updateCapacity(
                         autoscaleHandler.getSettings()['payg-scaling-group-name'],
-                        params.desiredCapacity, params.minSize, params.maxSize);
+                        params.desiredCapacity,
+                        params.minSize,
+                        params.maxSize
+                    );
                     break;
                 case 'stopAutoscale':
                     // do not need to respond to the stop service type while resource is creating
@@ -84,34 +90,43 @@ exports.handler = async (event, context) => {
                         let tasks = [];
                         // check if all additional nics are detached and removed
                         if (autoscaleHandler.getSettings()['enable-second-nic'] === 'true') {
-                            tasks.push(autoscaleHandler.checkNicStatus('in-use')
-                                .then(nics => {
+                            tasks.push(
+                                autoscaleHandler.checkNicStatus('in-use').then(nics => {
                                     return {
                                         checkName: 'nicStatusCheck',
                                         result: !nics || nics.length === 0
                                     };
-                                }));
+                                })
+                            );
                         }
                         if (autoscaleHandler.getSettings()['enable-hybrid-licensing'] === 'true') {
-                            tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                                autoscaleHandler.getSettings()['byol-scaling-group-name']
-                            ).then(byolGroupCheck => {
-                                logger.log(byolGroupCheck);
-                                return {
-                                    checkName: 'byolGroupCheck',
-                                    result: !byolGroupCheck || byolGroupCheck === 'stopped'
-                                };
-                            }));
+                            tasks.push(
+                                autoscaleHandler
+                                    .checkAutoScalingGroupState(
+                                        autoscaleHandler.getSettings()['byol-scaling-group-name']
+                                    )
+                                    .then(byolGroupCheck => {
+                                        logger.log(byolGroupCheck);
+                                        return {
+                                            checkName: 'byolGroupCheck',
+                                            result: !byolGroupCheck || byolGroupCheck === 'stopped'
+                                        };
+                                    })
+                            );
                         }
-                        tasks.push(autoscaleHandler.checkAutoScalingGroupState(
-                            autoscaleHandler.getSettings()['payg-scaling-group-name']
-                        ).then(paygGroupCheck => {
-                            logger.log(paygGroupCheck);
-                            return {
-                                checkName: 'paygGroupCheck',
-                                result: !paygGroupCheck || paygGroupCheck === 'stopped'
-                            };
-                        }));
+                        tasks.push(
+                            autoscaleHandler
+                                .checkAutoScalingGroupState(
+                                    autoscaleHandler.getSettings()['payg-scaling-group-name']
+                                )
+                                .then(paygGroupCheck => {
+                                    logger.log(paygGroupCheck);
+                                    return {
+                                        checkName: 'paygGroupCheck',
+                                        result: !paygGroupCheck || paygGroupCheck === 'stopped'
+                                    };
+                                })
+                        );
                         return Promise.all(tasks);
                     },
                     validator = resultArray => {
@@ -125,18 +140,26 @@ exports.handler = async (event, context) => {
                         if (Date.now() < scriptExecutionExpireTime - 5000) {
                             return false;
                         }
-                        throw new Error('cannot wait for auto scaling group status because ' +
-                            'script execution is about to expire');
+                        throw new Error(
+                            'cannot wait for auto scaling group status because ' +
+                                'script execution is about to expire'
+                        );
                     };
                 await autoscaleHandler.init();
                 // this may take a significantly long time to wait for its fully stop
                 await autoscaleHandler.stop();
                 try {
                     await autoscaleHandler.AutoScaleCore.Functions.waitFor(
-                        promiseEmitter, validator, 5000, counter);
+                        promiseEmitter,
+                        validator,
+                        5000,
+                        counter
+                    );
                 } catch (error) {
-                    logger.warn('error occurs while waiting for fully stop the auto scaling group',
-                        error);
+                    logger.warn(
+                        'error occurs while waiting for fully stop the auto scaling group',
+                        error
+                    );
                     throw error;
                 }
                 // clean up

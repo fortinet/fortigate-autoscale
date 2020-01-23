@@ -18,8 +18,10 @@ ftgtAutoscaleAzure.initModule();
  */
 module.exports = async function(context, req) {
     await ftgtAutoscaleAzure.handle(context, req);
-    if (process.env.FUNCTIONS_EXTENSION_VERSION &&
-        process.env.FUNCTIONS_EXTENSION_VERSION === '~1') {
+    if (
+        process.env.FUNCTIONS_EXTENSION_VERSION &&
+        process.env.FUNCTIONS_EXTENSION_VERSION === '~1'
+    ) {
         context.done();
     }
 };

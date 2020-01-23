@@ -6,8 +6,15 @@ Author: Fortinet
 * A license record class.
 */
 module.exports = class LicenseRecord {
-    constructor(checksum, algorithm, fileName, blobKey,
-            instanceId = null, scalingGroupName = null, assignedTime = null) {
+    constructor(
+        checksum,
+        algorithm,
+        fileName,
+        blobKey,
+        instanceId = null,
+        scalingGroupName = null,
+        assignedTime = null
+    ) {
         this._checksum = checksum;
         this._algorithm = algorithm;
         this._fileName = fileName;
@@ -61,15 +68,21 @@ module.exports = class LicenseRecord {
 
     updateUsage(instanceId, scalingGroupName, assignTime = null) {
         this._instanceId = instanceId;
-        this._scalingGroupName = instanceId && scalingGroupName || null;
+        this._scalingGroupName = (instanceId && scalingGroupName) || null;
         this.assignedTime = instanceId && (assignTime || Date.now());
     }
 
     static fromDb(data) {
         if (data && data.checksum && data.algorithm && data.fileName && data.blobKey) {
-            return new LicenseRecord(data.checksum, data.algorithm,
-                data.fileName, data.blobKey,
-                data.instanceId, data.scalingGroupName, data.assignTime);
+            return new LicenseRecord(
+                data.checksum,
+                data.algorithm,
+                data.fileName,
+                data.blobKey,
+                data.instanceId,
+                data.scalingGroupName,
+                data.assignTime
+            );
         } else {
             return null;
         }

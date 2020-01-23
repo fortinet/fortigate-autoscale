@@ -24,8 +24,7 @@ AWS.config.update({
     region: process.env.AWS_REGION
 });
 
-const
-    RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '';
+const RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '';
 
 let logger;
 
@@ -49,8 +48,10 @@ exports.handler = async (event, context, callback) => {
     process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + context.getRemainingTimeInMillis();
     logger = new ftgtAutoscaleAws.AutoScaleCore.DefaultLogger(console);
     const handler = new ftgtAutoscaleAws.AwsAutoscaleHandler();
-    if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
-        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+    if (
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true'
+    ) {
         logger.outputQueue = true;
         if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
             logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
@@ -60,8 +61,11 @@ exports.handler = async (event, context, callback) => {
     ftgtAutoscaleAws.initModule();
     await handler.init();
     let result;
-    if (!event.pskSecret || !handler._settings ||
-            handler._settings['deployment-settings-saved'] !== 'true') {
+    if (
+        !event.pskSecret ||
+        !handler._settings ||
+        handler._settings['deployment-settings-saved'] !== 'true'
+    ) {
         callback(null, proxyResponse(403, 'Unauthorized access.'));
         return;
     }

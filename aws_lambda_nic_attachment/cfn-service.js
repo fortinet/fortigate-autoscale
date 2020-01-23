@@ -27,8 +27,7 @@ exports.handler = async (event, context) => {
     console.log(`Script time out in : ${context.getRemainingTimeInMillis() - 500} ms`);
     timer = setTimeout(timeout, context.getRemainingTimeInMillis() - 500);
     try {
-        const
-            nicAttachment = require('./index'),
+        const nicAttachment = require('./index'),
             logger = new nicAttachment.ftgtAutoscaleAws.AutoScaleCore.DefaultLogger(console);
 
         logger.info('requested event:', event);

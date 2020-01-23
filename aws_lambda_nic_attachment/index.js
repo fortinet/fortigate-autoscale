@@ -24,8 +24,7 @@ AWS.config.update({
     region: process.env.AWS_REGION
 });
 
-const
-    dynamodb = new AWS.DynamoDB(),
+const dynamodb = new AWS.DynamoDB(),
     docClient = new AWS.DynamoDB.DocumentClient(),
     RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX ? process.env.RESOURCE_TAG_PREFIX : '',
     dbTables = ftgtAutoscaleAws.AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
@@ -39,9 +38,7 @@ async function createTable(schema) {
         await tableExists(schema);
         logger.info(`no need to create table (${schema.TableName})`);
         return true;
-    } catch (error) {
-
-    }
+    } catch (error) {}
     try {
         logger.info(`creating table (${schema.TableName})...`);
         let promiseEmitter = () => {
@@ -108,22 +105,27 @@ exports.updateService = async () => {
  */
 exports.deleteService = async () => {
     try {
-        const
-            platform = new ftgtAutoscaleAws.AwsPlatform(),
-            response = await docClient.scan({
-                TableName: dbTables.NICATTACHMENT.TableName
-            }).promise(),
+        const platform = new ftgtAutoscaleAws.AwsPlatform(),
+            response = await docClient
+                .scan({
+                    TableName: dbTables.NICATTACHMENT.TableName
+                })
+                .promise(),
             items = response.Items;
         if (Array.isArray(items) && items.length) {
-            await Promise.all(items.map(item => {
-                return platform.detachNetworkInterface(item);
-            }));
+            await Promise.all(
+                items.map(item => {
+                    return platform.detachNetworkInterface(item);
+                })
+            );
         }
         // await deleteTable(dbTables.NICATTACHMENT);
     } catch (error) {
-        logger.warn(`error occurred in deleting table: ${JSON.stringify(
-            error instanceof Error ? { message: error.message, stack: error.stack } : error
-        )}`);
+        logger.warn(
+            `error occurred in deleting table: ${JSON.stringify(
+                error instanceof Error ? { message: error.message, stack: error.stack } : error
+            )}`
+        );
     }
 };
 

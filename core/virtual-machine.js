@@ -10,9 +10,7 @@ Author: Fortinet
 
 exports = module.exports;
 
-class NetworkInterface {
-
-}
+class NetworkInterface {}
 
 class VirtualMachine {
     constructor(instanceId, platform, vmData) {
@@ -79,9 +77,11 @@ class VirtualMachine {
                     for (let ipConfiguration of networkInterface.properties.ipConfigurations) {
                         if (ipConfiguration.properties.primary) {
                             let matchVPC = ipConfiguration.properties.subnet.id.match(
-                                new RegExp('(?<=virtualNetworks/).*(?=/subnets)')),
+                                    new RegExp('(?<=virtualNetworks/).*(?=/subnets)')
+                                ),
                                 matchSubnet = ipConfiguration.properties.subnet.id.match(
-                                    new RegExp('(?<=subnets/).*'));
+                                    new RegExp('(?<=subnets/).*')
+                                );
                             return {
                                 vpcId: Array.isArray(matchVPC) && matchVPC[0],
                                 subnetId: Array.isArray(matchSubnet) && matchSubnet[0],
@@ -91,10 +91,12 @@ class VirtualMachine {
                     }
                 }
             }
-            return {vpcId: null, subnetId: null, ipv4: null};
+            return { vpcId: null, subnetId: null, ipv4: null };
         };
-        if (vm.properties.networkProfile &&
-            Array.isArray(vm.properties.networkProfile.networkInterfaces)) {
+        if (
+            vm.properties.networkProfile &&
+            Array.isArray(vm.properties.networkProfile.networkInterfaces)
+        ) {
             virtualMachine._networkInterfaces = [...vm.properties.networkProfile.networkInterfaces];
             let { vpcId, subnetId, ipv4 } = retrieveNetworkInformation();
             virtualMachine._virtualNetworkId = vpcId;
