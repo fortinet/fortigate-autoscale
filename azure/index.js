@@ -24,9 +24,9 @@ const settingItems = AutoScaleCore.settingItems;
 const SCRIPT_TIMEOUT =
     isNaN(process.env.SCRIPT_TIMEOUT) ||
     parseInt(process.env.SCRIPT_TIMEOUT) <= 0 ||
-    parseInt(process.env.SCRIPT_TIMEOUT) > 2000 ?
-        200000 :
-        parseInt(process.env.SCRIPT_TIMEOUT) * 1000; // script timeout need to set as env var
+    parseInt(process.env.SCRIPT_TIMEOUT) > 2000
+        ? 200000
+        : parseInt(process.env.SCRIPT_TIMEOUT) * 1000; // script timeout need to set as env var
 
 var logger = new AutoScaleCore.DefaultLogger();
 var dbClient, computeClient, storageClient;
@@ -428,9 +428,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             // is compensated.
             scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
             interval =
-                heartBeatInterval && !isNaN(heartBeatInterval) ?
-                    heartBeatInterval :
-                    healthCheckRecord.heartBeatInterval;
+                heartBeatInterval && !isNaN(heartBeatInterval)
+                    ? heartBeatInterval
+                    : healthCheckRecord.heartBeatInterval;
             heartBeatDelays = scriptExecutionStartTime - healthCheckRecord.nextHeartBeatTime;
             // The the inevitable-fail-to-sync time is defined as:
             // the maximum amount of time for an instance to be able to sync without being
@@ -512,9 +512,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called getInstanceHealthCheck with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             return null;
@@ -570,9 +570,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called updateInstanceHealthCheck with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             return Promise.reject(error);
@@ -966,9 +966,9 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                         if (regMatches) {
                             nTime = AutoScaleCore.Functions.toGmtTime(regMatches[2]);
                             nTime = nTime && new Date(nTime.getTime() + timeZoneOffset * 3600000);
-                            let timeString = nTime ?
-                                nTime.toUTCString() :
-                                `unknown ${regMatches[2]}`;
+                            let timeString = nTime
+                                ? nTime.toUTCString()
+                                : `unknown ${regMatches[2]}`;
                             item.logContent = item.logContent.replace(
                                 new RegExp(regMatches[1], 'g'),
                                 `[time]${timeString}${timeZoneOffset}[/time]`
@@ -1278,9 +1278,9 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 'Content-Type': 'text/plain'
             },
             body:
-                typeof res.toString === 'function' && res.toString() !== '[object Object]' ?
-                    res.toString() :
-                    JSON.stringify(res)
+                typeof res.toString === 'function' && res.toString() !== '[object Object]'
+                    ? res.toString()
+                    : JSON.stringify(res)
         };
     }
     /** @override */

@@ -189,9 +189,9 @@ module.exports = class AutoscaleHandler {
 
     async getConfigSet(configName) {
         try {
-            let keyPrefix = this._settings['asset-storage-key-prefix'] ?
-                path.join(this._settings['asset-storage-key-prefix'], 'configset') :
-                'configset';
+            let keyPrefix = this._settings['asset-storage-key-prefix']
+                ? path.join(this._settings['asset-storage-key-prefix'], 'configset')
+                : 'configset';
             const parameters = {
                 storageName: this._settings['asset-storage-name'],
                 keyPrefix: keyPrefix,
@@ -718,9 +718,9 @@ module.exports = class AutoscaleHandler {
             }
             await this.addInstanceToMonitor(this._selfInstance, interval, masterIp);
             let logMessagMasterIp =
-                !masterIp && this._settings['master-election-no-wait'] === 'true' ?
-                    ' without master ip)' :
-                    ` master-ip: ${masterIp})`;
+                !masterIp && this._settings['master-election-no-wait'] === 'true'
+                    ? ' without master ip)'
+                    : ` master-ip: ${masterIp})`;
             this.logger.info(
                 `instance (id:${this._selfInstance.instanceId}, ` +
                     `${logMessagMasterIp} is added to monitor at timestamp: ${Date.now()}.`
@@ -743,11 +743,11 @@ module.exports = class AutoscaleHandler {
                     false
                 );
             }
-            return masterIp ?
-                {
-                    'master-ip': this._masterInfo.primaryPrivateIpAddress
-                } :
-                '';
+            return masterIp
+                ? {
+                      'master-ip': this._masterInfo.primaryPrivateIpAddress
+                  }
+                : '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
             // this instance is already in monitor. if the master has changed (i.e.: the current
             // master is different from the one this instance is holding), and the new master
@@ -758,9 +758,9 @@ module.exports = class AutoscaleHandler {
             // keep the calling instance 'in-sync'. don't update its master-ip.
 
             masterIp =
-                this._masterInfo && this._masterHealthCheck && this._masterHealthCheck.healthy ?
-                    this._masterInfo.primaryPrivateIpAddress :
-                    this._selfHealthCheck.masterIp;
+                this._masterInfo && this._masterHealthCheck && this._masterHealthCheck.healthy
+                    ? this._masterInfo.primaryPrivateIpAddress
+                    : this._selfHealthCheck.masterIp;
             let now = Date.now();
             await this.platform.updateInstanceHealthCheck(
                 this._selfHealthCheck,
@@ -777,11 +777,11 @@ module.exports = class AutoscaleHandler {
                     `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
                     `syncState: ${this._selfHealthCheck.syncState}, master-ip: ${masterIp}).`
             );
-            return masterIp && this._selfHealthCheck && this._selfHealthCheck.masterIp !== masterIp ?
-                {
-                    'master-ip': this._masterInfo.primaryPrivateIpAddress
-                } :
-                '';
+            return masterIp && this._selfHealthCheck && this._selfHealthCheck.masterIp !== masterIp
+                ? {
+                      'master-ip': this._masterInfo.primaryPrivateIpAddress
+                  }
+                : '';
         } else {
             this.logger.info(
                 'instance is unhealthy. need to remove it. healthcheck record:',
@@ -905,9 +905,9 @@ module.exports = class AutoscaleHandler {
             this._baseConfig += config;
         }
         const setMasterIp =
-            !parameters.masterIp && parameters.allowHeadless ?
-                '' :
-                `\n    set master-ip ${parameters.masterIp}`;
+            !parameters.masterIp && parameters.allowHeadless
+                ? ''
+                : `\n    set master-ip ${parameters.masterIp}`;
         return await this._baseConfig
             .replace(new RegExp('set role master', 'gm'), `set role slave${setMasterIp}`)
             .replace(new RegExp('{CALLBACK_URL}', 'gm'), parameters.callbackUrl);
@@ -1434,12 +1434,12 @@ module.exports = class AutoscaleHandler {
                             this.logger.error(
                                 `failed to save setting for key: ${keyName}. ` +
                                     `Error: ${JSON.stringify(
-                                        error instanceof Error ?
-                                            {
-                                                message: error.message,
-                                                stack: error.stack
-                                            } :
-                                            error
+                                        error instanceof Error
+                                            ? {
+                                                  message: error.message,
+                                                  stack: error.stack
+                                              }
+                                            : error
                                     )}`
                             );
                             errorTasks.push({ key: keyName, value: value });
@@ -1626,12 +1626,12 @@ module.exports = class AutoscaleHandler {
                                         'cannot remove license file ' +
                                             `(${licenseRecord.fileName}) from stock. ` +
                                             `error: ${JSON.stringify(
-                                                error instanceof Error ?
-                                                    {
-                                                        message: error.message,
-                                                        stack: error.stack
-                                                    } :
-                                                    error
+                                                error instanceof Error
+                                                    ? {
+                                                          message: error.message,
+                                                          stack: error.stack
+                                                      }
+                                                    : error
                                             )}`
                                     );
                                     return false;
@@ -1662,12 +1662,12 @@ module.exports = class AutoscaleHandler {
                                             'cannot get the content of license file ' +
                                                 `(${licenseItem.fileName}). ` +
                                                 `error: ${JSON.stringify(
-                                                    error instanceof Error ?
-                                                        {
-                                                            message: error.message,
-                                                            stack: error.stack
-                                                        } :
-                                                        error
+                                                    error instanceof Error
+                                                        ? {
+                                                              message: error.message,
+                                                              stack: error.stack
+                                                          }
+                                                        : error
                                                 )}`
                                         );
                                         return null;
@@ -1715,12 +1715,12 @@ module.exports = class AutoscaleHandler {
                                             'cannot add license file ' +
                                                 `(${licenseItem.fileName}) to stock. ` +
                                                 `error: ${JSON.stringify(
-                                                    error instanceof Error ?
-                                                        {
-                                                            message: error.message,
-                                                            stack: error.stack
-                                                        } :
-                                                        error
+                                                    error instanceof Error
+                                                        ? {
+                                                              message: error.message,
+                                                              stack: error.stack
+                                                          }
+                                                        : error
                                                 )}`
                                         );
                                         logger.error(error);

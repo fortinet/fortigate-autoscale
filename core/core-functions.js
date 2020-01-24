@@ -199,9 +199,9 @@ const waitFor = async (promiseEmitter, validator, interval = 5000, counter = nul
             message = error.message;
         } else {
             message =
-                error && typeof error.toString === 'function' ?
-                    error.toString() :
-                    JSON.stringify(error);
+                error && typeof error.toString === 'function'
+                    ? error.toString()
+                    : JSON.stringify(error);
         }
         return Promise.reject(`failed to wait due to error: ${message}`);
     }
@@ -238,9 +238,9 @@ function configSetResourceFinder(resObject, nodePath) {
             return false;
         } else {
             ref =
-                Array.isArray(ref[nodeName]) && ref[nodeName].length > 0 ?
-                    ref[nodeName][0] :
-                    ref[nodeName];
+                Array.isArray(ref[nodeName]) && ref[nodeName].length > 0
+                    ? ref[nodeName][0]
+                    : ref[nodeName];
         }
     });
     return ref;

@@ -10,7 +10,7 @@ const ARGV_PROCESS_PACKAGING_SCRIPT_NAME = 2;
 const REAL_PROJECT_ROOT = path.resolve(__dirname, '../');
 const REAL_PROJECT_DIRNAME = path.parse(path.resolve(__dirname, '../')).base;
 
-async function makeDistAWSLambdaFgtAsgHandler(options = {saveToDist: 'zip', keepTemp: false}) {
+async function makeDistAWSLambdaFgtAsgHandler(options = { saveToDist: 'zip', keepTemp: false }) {
     console.info('Making distribution zip package for: AWS FortiGate Autoscale Handler function');
     let pm = Packman.spawn(),
         packageName = options.packageName ? options.packageName : 'fgt_asg_handler',
@@ -36,27 +36,55 @@ async function makeDistAWSLambdaFgtAsgHandler(options = {saveToDist: 'zip', keep
     await pm.makeDir(rTempDirSrc);
     await pm.makeDir(rDirDist);
     // copy lambda module to temp dir
-    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, ['node_modules', 'local*', 'test',
-        '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // create library dir on funcapp
     await pm.makeDir(rTempDirSrcLib);
     // copy core module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // copy aws module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install aws as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcAws.replace(rTempDirSrcLambda, '.')]);
+    await pm.npmInstallAt(rTempDirSrcLambda, [
+        '--save',
+        rTempDirSrcAws.replace(rTempDirSrcLambda, '.')
+    ]);
     // TODO: the following two function calls should be removed once async-cfn-response module is
     // published to npm
     // copy aws_cfn_response module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCfnResponse, rTempDirSrcCfnResponse,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCfnResponse, rTempDirSrcCfnResponse, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install aws_cfn_response as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcCfnResponse.replace(rTempDirSrcLambda, '.')]);
+    await pm.npmInstallAt(rTempDirSrcLambda, [
+        '--save',
+        rTempDirSrcCfnResponse.replace(rTempDirSrcLambda, '.')
+    ]);
 
     // read package info of module lambda
     packageInfo = pm.readPackageJsonAt(rTempDirSrcLambda);
@@ -108,7 +136,7 @@ async function makeDistAWSLambdaFgtAsgHandler(options = {saveToDist: 'zip', keep
     };
 }
 
-async function makeDistAWSLambdaFazHandler(options = {saveToDist: 'zip', keepTemp: false}) {
+async function makeDistAWSLambdaFazHandler(options = { saveToDist: 'zip', keepTemp: false }) {
     console.info('Making distribution zip package for: AWS Lambda FAZ Handler function');
     let pm = Packman.spawn(),
         packageName = options.packageName ? options.packageName : 'aws_lambda_faz_handler',
@@ -134,27 +162,55 @@ async function makeDistAWSLambdaFazHandler(options = {saveToDist: 'zip', keepTem
     await pm.makeDir(rTempDirSrc);
     await pm.makeDir(rDirDist);
     // copy lambda module to temp dir
-    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, ['node_modules', 'local*', 'test',
-        '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // create library dir on funcapp
     await pm.makeDir(rTempDirSrcLib);
     // copy core module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // copy aws module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install aws as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcAws.replace(rTempDirSrcLambda, '.')]);
+    await pm.npmInstallAt(rTempDirSrcLambda, [
+        '--save',
+        rTempDirSrcAws.replace(rTempDirSrcLambda, '.')
+    ]);
     // TODO: the following two function calls should be removed once async-cfn-response module is
     // published to npm
     // copy aws_cfn_response module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCfnResponse, rTempDirSrcCfnResponse,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCfnResponse, rTempDirSrcCfnResponse, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install aws_cfn_response as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcCfnResponse.replace(rTempDirSrcLambda, '.')]);
+    await pm.npmInstallAt(rTempDirSrcLambda, [
+        '--save',
+        rTempDirSrcCfnResponse.replace(rTempDirSrcLambda, '.')
+    ]);
 
     // read package info of module lambda
     packageInfo = pm.readPackageJsonAt(rTempDirSrcLambda);
@@ -163,7 +219,7 @@ async function makeDistAWSLambdaFazHandler(options = {saveToDist: 'zip', keepTem
     zipFileName = options.packageName ? `${packageName}.zip` : `${packageInfo.name}.zip`;
     // if only make zip file distribution file
     if (options && options.saveToDist === 'zip') {
-    // zip
+        // zip
         zipFilePath = await pm.zipSafe(zipFileName, rTempDirSrcLambda, ['*.git*', '*.vsc*']);
         // copy the zip file to distribution directory
         await pm.copy(zipFilePath, rDirDist);
@@ -206,7 +262,7 @@ async function makeDistAWSLambdaFazHandler(options = {saveToDist: 'zip', keepTem
     };
 }
 
-async function makeDistAWSLambdaNicAttachment(options = {saveToDist: 'zip', keepTemp: false}) {
+async function makeDistAWSLambdaNicAttachment(options = { saveToDist: 'zip', keepTemp: false }) {
     console.info('Making distribution zip package for: AWS Lambda Nic attachment function');
     let pm = Packman.spawn(),
         packageName = options.packageName ? options.packageName : 'aws_lambda_nic_attachment',
@@ -232,27 +288,55 @@ async function makeDistAWSLambdaNicAttachment(options = {saveToDist: 'zip', keep
     await pm.makeDir(rTempDirSrc);
     await pm.makeDir(rDirDist);
     // copy lambda module to temp dir
-    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, ['node_modules', 'local*', 'test',
-        '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // create library dir on funcapp
     await pm.makeDir(rTempDirSrcLib);
     // copy core module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // copy aws module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install aws as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcAws.replace(rTempDirSrcLambda, '.')]);
+    await pm.npmInstallAt(rTempDirSrcLambda, [
+        '--save',
+        rTempDirSrcAws.replace(rTempDirSrcLambda, '.')
+    ]);
     // TODO: the following two function calls should be removed once async-cfn-response module is
     // published to npm
     // copy aws_cfn_response module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCfnResponse, rTempDirSrcCfnResponse,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCfnResponse, rTempDirSrcCfnResponse, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install aws_cfn_response as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcCfnResponse.replace(rTempDirSrcLambda, '.')]);
+    await pm.npmInstallAt(rTempDirSrcLambda, [
+        '--save',
+        rTempDirSrcCfnResponse.replace(rTempDirSrcLambda, '.')
+    ]);
 
     // read package info of module lambda
     packageInfo = pm.readPackageJsonAt(rTempDirSrcLambda);
@@ -261,7 +345,7 @@ async function makeDistAWSLambdaNicAttachment(options = {saveToDist: 'zip', keep
     zipFileName = options.packageName ? `${packageName}.zip` : `${packageInfo.name}.zip`;
     // if only make zip file distribution file
     if (options && options.saveToDist === 'zip') {
-    // zip
+        // zip
         zipFilePath = await pm.zipSafe(zipFileName, rTempDirSrcLambda, ['*.git*', '*.vsc*']);
         // copy the zip file to distribution directory
         await pm.copy(zipFilePath, rDirDist);
@@ -304,9 +388,10 @@ async function makeDistAWSLambdaNicAttachment(options = {saveToDist: 'zip', keep
     };
 }
 
-async function makeDistAWSLambdaTgwVpnHandler(options = {saveToDist: 'zip', keepTemp: false}) {
-    console.info('Making distribution zip package for: ' +
-        'AWS Lambda Transit Gateway VPN handler function');
+async function makeDistAWSLambdaTgwVpnHandler(options = { saveToDist: 'zip', keepTemp: false }) {
+    console.info(
+        'Making distribution zip package for: ' + 'AWS Lambda Transit Gateway VPN handler function'
+    );
     let pm = Packman.spawn(),
         packageName = options.packageName ? options.packageName : 'aws_lambda_tgw_vpn_handler',
         rTempDir = await pm.makeTempDir(),
@@ -329,19 +414,39 @@ async function makeDistAWSLambdaTgwVpnHandler(options = {saveToDist: 'zip', keep
     await pm.makeDir(rTempDirSrc);
     await pm.makeDir(rDirDist);
     // copy lambda module to temp dir
-    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, ['node_modules', 'local*', 'test',
-        '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcLambda, rTempDirSrcLambda, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // create library dir on funcapp
     await pm.makeDir(rTempDirSrcLib);
     // copy core module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // copy aws module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws,
-        ['node_modules', 'local*', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcAws, rTempDirSrcAws, [
+        'node_modules',
+        'local*',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install aws as dependency
-    await pm.npmInstallAt(rTempDirSrcLambda,
-        ['--save', rTempDirSrcAws.replace(rTempDirSrcLambda, '.')]);
+    await pm.npmInstallAt(rTempDirSrcLambda, [
+        '--save',
+        rTempDirSrcAws.replace(rTempDirSrcLambda, '.')
+    ]);
     // TODO: the following two function calls should be removed once async-cfn-response module is
     // published to npm
 
@@ -352,7 +457,7 @@ async function makeDistAWSLambdaTgwVpnHandler(options = {saveToDist: 'zip', keep
     zipFileName = options.packageName ? `${packageName}.zip` : `${packageInfo.name}.zip`;
     // if only make zip file distribution file
     if (options && options.saveToDist === 'zip') {
-    // zip
+        // zip
         zipFilePath = await pm.zipSafe(zipFileName, rTempDirSrcLambda, ['*.git*', '*.vsc*']);
         // copy the zip file to distribution directory
         await pm.copy(zipFilePath, rDirDist);
@@ -395,24 +500,32 @@ async function makeDistAWSLambdaTgwVpnHandler(options = {saveToDist: 'zip', keep
     };
 }
 
-async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart: false,
-    fazhandler: true}) {
+async function makeDistAwsCloudFormation(
+    options = { excludeList: [], quickstart: false, fazhandler: true }
+) {
     // create the aws cloud formation package
     console.info('Making distribution zip package for: AWS Cloud Formation');
     // create the aws lambda pacakge (directory)
     let pm = Packman.spawn(),
-        fgtAsgHandlerTempDist =
-            await makeDistAWSLambdaFgtAsgHandler({saveToDist: 'none',
-                packageName: 'fgt-asg-handler', keepTemp: true}),
-        nicAttachmentTempDist = await makeDistAWSLambdaNicAttachment({saveToDist: 'none',
-            packageName: 'nic-attachment', keepTemp: true}),
-        tgwVpnHandlerTempDist = await makeDistAWSLambdaTgwVpnHandler({saveToDist: 'none',
-            packageName: 'tgw-vpn-handler', keepTemp: true}),
+        fgtAsgHandlerTempDist = await makeDistAWSLambdaFgtAsgHandler({
+            saveToDist: 'none',
+            packageName: 'fgt-asg-handler',
+            keepTemp: true
+        }),
+        nicAttachmentTempDist = await makeDistAWSLambdaNicAttachment({
+            saveToDist: 'none',
+            packageName: 'nic-attachment',
+            keepTemp: true
+        }),
+        tgwVpnHandlerTempDist = await makeDistAWSLambdaTgwVpnHandler({
+            saveToDist: 'none',
+            packageName: 'tgw-vpn-handler',
+            keepTemp: true
+        }),
         rTempDir = await pm.makeTempDir(), // create temp folder
         rTempDirCloudFormation = path.resolve(rTempDir, 'aws_cloudformation'),
         rTempDirFunctionPackages = path.resolve(rTempDirCloudFormation, 'functions', 'packages'),
-        rTempDirFunctionSources =
-            path.resolve(rTempDirCloudFormation, 'functions', 'source'),
+        rTempDirFunctionSources = path.resolve(rTempDirCloudFormation, 'functions', 'source'),
         rDirSrcCloudFormation = path.resolve(REAL_PROJECT_ROOT, './aws_cloudformation'),
         rDirDist = path.resolve(REAL_PROJECT_ROOT, 'dist'),
         rTempDirPackage,
@@ -425,12 +538,15 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
         excludeList = excludeList.concat(options.excludeList);
     }
     if (options.quickstart) {
-        excludeList = excludeList.concat(['LICENSE', 'README.md', 'NOTICE.txt',
-            'deploy_autoscale.sh']);
+        excludeList = excludeList.concat([
+            'LICENSE',
+            'README.md',
+            'NOTICE.txt',
+            'deploy_autoscale.sh'
+        ]);
     }
     // copy aws cloud formation to temp dir
-    await pm.copyAndDelete(rDirSrcCloudFormation, rTempDirCloudFormation,
-        excludeList);
+    await pm.copyAndDelete(rDirSrcCloudFormation, rTempDirCloudFormation, excludeList);
 
     // create /functions/packages & source folder
     await pm.makeDir(rTempDirFunctionPackages);
@@ -448,8 +564,9 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     if (saveSource) {
         rTempDirPackage = path.resolve(rTempDirFunctionSources, fgtAsgHandlerTempDist.packageName);
         await pm.makeDir(rTempDirPackage);
-        await pm.moveSafe(fgtAsgHandlerTempDist.sourceDir, rTempDirPackage,
-            {moveSourceFiles: saveSource});
+        await pm.moveSafe(fgtAsgHandlerTempDist.sourceDir, rTempDirPackage, {
+            moveSourceFiles: saveSource
+        });
     }
     // remove the temp file
     await fgtAsgHandlerTempDist.removeTempDir();
@@ -463,8 +580,9 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     if (saveSource) {
         rTempDirPackage = path.resolve(rTempDirFunctionSources, nicAttachmentTempDist.packageName);
         await pm.makeDir(rTempDirPackage);
-        await pm.moveSafe(nicAttachmentTempDist.sourceDir, rTempDirPackage,
-            {moveSourceFiles: saveSource});
+        await pm.moveSafe(nicAttachmentTempDist.sourceDir, rTempDirPackage, {
+            moveSourceFiles: saveSource
+        });
     }
     // remove the temp file
     nicAttachmentTempDist.removeTempDir();
@@ -478,17 +596,20 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
     if (saveSource) {
         rTempDirPackage = path.resolve(rTempDirFunctionSources, tgwVpnHandlerTempDist.packageName);
         await pm.makeDir(rTempDirPackage);
-        await pm.moveSafe(tgwVpnHandlerTempDist.sourceDir, rTempDirPackage,
-            {moveSourceFiles: saveSource});
+        await pm.moveSafe(tgwVpnHandlerTempDist.sourceDir, rTempDirPackage, {
+            moveSourceFiles: saveSource
+        });
     }
     // remove the temp file
     tgwVpnHandlerTempDist.removeTempDir();
 
     // faz-handler
     if (options.fazhandler) {
-        let fazHandlerTempDist =
-        await makeDistAWSLambdaFazHandler({saveToDist: 'none',
-            packageName: 'faz-handler', keepTemp: true});
+        let fazHandlerTempDist = await makeDistAWSLambdaFazHandler({
+            saveToDist: 'none',
+            packageName: 'faz-handler',
+            keepTemp: true
+        });
 
         // remove aws-quickstart unwanted files
         await pm.remove(excludeList, fazHandlerTempDist.sourceDir);
@@ -499,16 +620,18 @@ async function makeDistAwsCloudFormation(options = {excludeList: [], quickstart:
         if (saveSource) {
             rTempDirPackage = path.resolve(rTempDirFunctionSources, fazHandlerTempDist.packageName);
             await pm.makeDir(rTempDirPackage);
-            await pm.moveSafe(fazHandlerTempDist.sourceDir, rTempDirPackage,
-                {moveSourceFiles: saveSource});
+            await pm.moveSafe(fazHandlerTempDist.sourceDir, rTempDirPackage, {
+                moveSourceFiles: saveSource
+            });
         }
         // remove the temp file
         fazHandlerTempDist.removeTempDir();
     }
 
     // zip the aws cloud formation dir
-    zipFileName = options.quickstart ? 'fortigate-autoscale-aws-quickstart.zip' :
-        'fortigate-autoscale-aws-cloudformation.zip';
+    zipFileName = options.quickstart
+        ? 'fortigate-autoscale-aws-quickstart.zip'
+        : 'fortigate-autoscale-aws-cloudformation.zip';
     zipFilePath = await pm.zipSafe(zipFileName, rTempDirCloudFormation);
     // copy the zip file to dist
     await pm.moveSafe(zipFilePath, rDirDist);
@@ -539,32 +662,55 @@ async function makeDistAzureFuncApp() {
     await pm.makeDir(rTempDirSrc);
     await pm.makeDir(rDirDist);
     // copy funcapp module to temp dir
-    await pm.copyAndDelete(rDirSrcFuncapp, rTempDirSrcFuncApp, ['node_modules', 'local', 'test',
-        '.nyc_output', '.vscode', 'bin', 'obj',
-        '*.csproj', 'proxies.json', 'host.json', 'local.settings.json', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcFuncapp, rTempDirSrcFuncApp, [
+        'node_modules',
+        'local',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'bin',
+        'obj',
+        '*.csproj',
+        'proxies.json',
+        'host.json',
+        'local.settings.json',
+        'package-lock.json'
+    ]);
     // create library dir on funcapp
     await pm.makeDir(rTempDirSrcLib);
     // copy core module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore,
-        ['node_modules', 'local', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcCore, rTempDirSrcCore, [
+        'node_modules',
+        'local',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // copy azure module to temp dir and remove unnecessary files
-    await pm.copyAndDelete(rDirSrcAzure, rTempDirSrcAzure,
-        ['node_modules', 'local', 'test', '.nyc_output', '.vscode', 'package-lock.json']);
+    await pm.copyAndDelete(rDirSrcAzure, rTempDirSrcAzure, [
+        'node_modules',
+        'local',
+        'test',
+        '.nyc_output',
+        '.vscode',
+        'package-lock.json'
+    ]);
     // install azure as dependency
-
-
 
     // await npmInstallLocal(rTempDirSrcFuncApp,
     //     [], {noSymlink: true}, rTempDirSrcLib);
-    await pm.npmInstallAt(rTempDirSrcFuncApp,
-        ['--save', rTempDirSrcAzure.replace(rTempDirSrcFuncApp, '.')], {noSymlink: true});
+    await pm.npmInstallAt(
+        rTempDirSrcFuncApp,
+        ['--save', rTempDirSrcAzure.replace(rTempDirSrcFuncApp, '.')],
+        { noSymlink: true }
+    );
     // read package info of module funcapp
     packageInfo = pm.readPackageJsonAt(rTempDirSrcFuncApp);
     zipFileName = `${packageInfo.name}.zip`;
     saveAsFile = path.resolve(rDirDist, zipFileName);
     // zip
-    zipFilePath =
-        await pm.zipSafe(zipFileName, rTempDirSrcFuncApp, ['*.git*', '*.vsc*']);
+    zipFilePath = await pm.zipSafe(zipFileName, rTempDirSrcFuncApp, ['*.git*', '*.vsc*']);
     // move it to dist directory
     await pm.moveSafe(zipFilePath, rDirDist);
     await pm.removeTempDir();
@@ -590,9 +736,18 @@ async function makeDistProject() {
     await pm.makeDir(realTmpSrcDir);
     // copy all files from project root to temp src dir,
     // excluding some files not need to distribute
-    await pm.copyAndDelete(REAL_PROJECT_ROOT, realTmpSrcDir, ['node_modules', 'dist', 'local',
-        '.nyc_output', '.vscode', '.tmp', '*.git', 'package-lock.json', '*workspace*',
-        '*local.settings.json*']);
+    await pm.copyAndDelete(REAL_PROJECT_ROOT, realTmpSrcDir, [
+        'node_modules',
+        'dist',
+        'local',
+        '.nyc_output',
+        '.vscode',
+        '.tmp',
+        '*.git',
+        'package-lock.json',
+        '*workspace*',
+        '*local.settings.json*'
+    ]);
     // change the temp src dir to autoscale
     realTmpSrcDir = path.join(realTmpSrcDir, REAL_PROJECT_DIRNAME);
     // read the package and determine the distribution zip file name
@@ -627,8 +782,7 @@ async function makeDistAzureTemplateDeployment() {
         rDistZipFuncapp;
 
     // copy azure quick start to temp dir
-    await pm.copyAndDelete(rDirSrcTemplateDeployment, rTempDirTemplateDeployment,
-        ['local*']);
+    await pm.copyAndDelete(rDirSrcTemplateDeployment, rTempDirTemplateDeployment, ['local*']);
     // read package info of azure funcapp module
     packageInfo = pm.readPackageJsonAt(rDirSrcFuncapp);
     zipFileName = `${packageInfo.name}.zip`;
@@ -689,10 +843,10 @@ switch (scrptName.toLowerCase()) {
         makeDistAWSLambdaTgwVpnHandler();
         break;
     case 'aws-cloudformation':
-        makeDistAwsCloudFormation({quickstart: false, fazhandler: false});
+        makeDistAwsCloudFormation({ quickstart: false, fazhandler: false });
         break;
     case 'aws-quickstart-special':
-        makeDistAwsCloudFormation({quickstart: true, fazhandler: false});
+        makeDistAwsCloudFormation({ quickstart: true, fazhandler: false });
         break;
     case 'project':
         makeDistProject();

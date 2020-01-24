@@ -215,9 +215,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 let remove = async item => {
                     return await this.removeLifecycleItem(item);
                 };
-                let lifecycleHookTimeout = !Number.isNaN(this._settings['lifecycle-hook-timeout']) ?
-                    Number(this._settings['lifecycle-hook-timeout']) * 1000 :
-                    AWS_LIFECYCLE_HOOK_DEFAULT_TIMEOUT;
+                let lifecycleHookTimeout = !Number.isNaN(this._settings['lifecycle-hook-timeout'])
+                    ? Number(this._settings['lifecycle-hook-timeout']) * 1000
+                    : AWS_LIFECYCLE_HOOK_DEFAULT_TIMEOUT;
                 items.forEach(item => {
                     if (Date.now() - item.timestamp > lifecycleHookTimeout) {
                         awaitAll.push(remove(item));
@@ -400,9 +400,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             // is compensated.
             scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
             interval =
-                heartBeatInterval && !isNaN(heartBeatInterval) ?
-                    heartBeatInterval :
-                    healthCheckRecord.heartBeatInterval;
+                heartBeatInterval && !isNaN(heartBeatInterval)
+                    ? heartBeatInterval
+                    : healthCheckRecord.heartBeatInterval;
             heartBeatDelays = scriptExecutionStartTime - healthCheckRecord.nextHeartBeatTime;
             // The the inevitable-fail-to-sync time is defined as:
             // the maximum amount of time for an instance to be able to sync without being
@@ -484,9 +484,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called getInstanceHealthCheck with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             return null;
@@ -541,9 +541,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called updateInstanceHealthCheck with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             return Promise.reject(error);
@@ -803,9 +803,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.warn(
                 'called describeNetworkInterface. ' +
                     `failed.(error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )})`
             );
             return false;
@@ -821,9 +821,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.warn(
                 'called listNetworkInterfaces. ' +
                     `failed.(error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )})`
             );
             return false;
@@ -1400,12 +1400,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                                 logger.warn(
                                     'error in describeTransitGatewayAttachments ' +
                                         `>${JSON.stringify(
-                                            error instanceof Error ?
-                                                {
-                                                    message: error.message,
-                                                    stack: error.stack
-                                                } :
-                                                error
+                                            error instanceof Error
+                                                ? {
+                                                      message: error.message,
+                                                      stack: error.stack
+                                                  }
+                                                : error
                                         )}`
                                 );
                             });
@@ -1455,12 +1455,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         data = null;
                         logger.error(
                             JSON.stringify(
-                                error instanceof Error ?
-                                    {
-                                        message: error.message,
-                                        stack: error.stack
-                                    } :
-                                    error
+                                error instanceof Error
+                                    ? {
+                                          message: error.message,
+                                          stack: error.stack
+                                      }
+                                    : error
                             )
                         );
                         logger.error(
@@ -1834,9 +1834,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called setVmInfoCache with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             return Promise.reject(error);
@@ -1947,9 +1947,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called updateLicenseUsage with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             return false;
@@ -2005,9 +2005,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called updateLicenseStock with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             throw error;
@@ -2032,9 +2032,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 'called deleteLicenseStock with error. ' +
                     `error: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
             );
             throw error;
@@ -3328,12 +3328,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     logger.warn(
                         'error in describeTransitGatewayAttachments ' +
                             `>${JSON.stringify(
-                                error instanceof Error ?
-                                    {
-                                        message: error.message,
-                                        stack: error.stack
-                                    } :
-                                    error
+                                error instanceof Error
+                                    ? {
+                                          message: error.message,
+                                          stack: error.stack
+                                      }
+                                    : error
                             )}`
                     );
                 });

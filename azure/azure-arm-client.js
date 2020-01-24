@@ -145,9 +145,9 @@ class VirtualMachineScaleSetApiClient {
                 // eslint-disable-next-line max-len
                 logger.warn(
                     `getVirtualMachineByIp > error querying for networkInterface: ${JSON.stringify(
-                        error instanceof Error ?
-                            { message: error.message, stack: error.stack } :
-                            error
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
                     )}`
                 );
             }
@@ -190,9 +190,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 200) {
                         resolve(response);
@@ -236,9 +236,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 201 || response.statusCode === 409) {
                         resolve(response);
@@ -284,9 +284,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 200) {
                         resolve(response);
@@ -345,9 +345,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 201 || response.statusCode === 409) {
                         resolve(response);
@@ -458,9 +458,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 200) {
                         try {
@@ -559,9 +559,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 200) {
                         logger.info(`azureApiCosmosDbQuery: ${resourcePath} retrieved.`);
@@ -649,9 +649,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 200) {
                         resolve(body);
@@ -712,9 +712,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 200) {
                         resolve(body);
@@ -772,9 +772,9 @@ class CosmosDbApiClient {
                         reject({
                             statusCode: 403,
                             message:
-                                response.body && response.body.message ?
-                                    response.body.message :
-                                    'Access Forbidden.'
+                                response.body && response.body.message
+                                    ? response.body.message
+                                    : 'Access Forbidden.'
                         });
                     } else if (response.statusCode === 204) {
                         resolve(body);
@@ -907,9 +907,9 @@ function AzureArmGet(url) {
                     // eslint-disable-next-line max-len
                     logger.warn(
                         `called AzureArmGet but returned unknown error ${JSON.stringify(
-                            error instanceof Error ?
-                                { message: error.message, stack: error.stack } :
-                                error
+                            error instanceof Error
+                                ? { message: error.message, stack: error.stack }
+                                : error
                         )}`
                     );
                     reject(error);
