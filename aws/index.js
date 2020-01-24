@@ -21,8 +21,7 @@ AWS.config.apiVersions = {
     elbv2: '2015-12-01'
 };
 
-const
-    autoScaling = new AWS.AutoScaling(),
+const autoScaling = new AWS.AutoScaling(),
     dynamodb = new AWS.DynamoDB(),
     docClient = new AWS.DynamoDB.DocumentClient(),
     ec2 = new AWS.EC2(),
@@ -31,8 +30,12 @@ const
     elbv2 = new AWS.ELBv2(),
     RESOURCE_TAG_PREFIX = process.env.RESOURCE_TAG_PREFIX || '',
     DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX),
-    MINIMUM_REQUIRED_DB_TABLE_KEYS = ['FORTIGATEAUTOSCALE', 'FORTIGATEMASTERELECTION',
-        'LIFECYCLEITEM', 'SETTINGS'],
+    MINIMUM_REQUIRED_DB_TABLE_KEYS = [
+        'FORTIGATEAUTOSCALE',
+        'FORTIGATEMASTERELECTION',
+        'LIFECYCLEITEM',
+        'SETTINGS'
+    ],
     moduleId = AutoScaleCore.Functions.uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`)),
     settingItems = AutoScaleCore.settingItems,
     AWS_LIFECYCLE_HOOK_DEFAULT_TIMEOUT = 3600000;
@@ -43,7 +46,10 @@ let logger = new AutoScaleCore.DefaultLogger(console);
  */
 class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async init() {
-        let attempts = 0, maxAttempts = 3, done = false, errors;
+        let attempts = 0,
+            maxAttempts = 3,
+            done = false,
+            errors;
         // these tables are minimum required tables for the autoscale.
         let tableEntries = Object.entries(DB).filter(tableEntry => {
             return MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(tableEntry[0]);
@@ -51,8 +57,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         while (attempts < maxAttempts) {
             errors = [];
             attempts++;
-            await Promise.all(tableEntries.map(
-                entry => this.tableExists(entry[1]).catch(err => errors.push(err)))
+            await Promise.all(
+                tableEntries.map(entry => this.tableExists(entry[1]).catch(err => errors.push(err)))
             );
             errors.forEach(err => logger.error(err));
             if (errors.length === 0) {
@@ -70,9 +76,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
     async createTable(schema) {
         try {
-            await dynamodb.describeTable({
-                TableName: schema.TableName
-            }).promise();
+            await dynamodb
+                .describeTable({
+                    TableName: schema.TableName
+                })
+                .promise();
             logger.log(`table ${schema.TableName} exists, no need to create.`);
         } catch (ex) {
             try {
@@ -80,37 +88,48 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 await dynamodb.createTable(schema).promise();
             } catch (error) {
                 logger.error(`table ${schema.TableName} not created!`);
-                logger.error('error:', JSON.stringify(
-                    ex instanceof Error ? { message: ex.message, stack: ex.stack } : ex
-                ), ex);
+                logger.error(
+                    'error:',
+                    JSON.stringify(
+                        ex instanceof Error ? { message: ex.message, stack: ex.stack } : ex
+                    ),
+                    ex
+                );
                 throw new Error(`table ${schema.TableName} not created!`);
             }
         }
-        await dynamodb.waitFor('tableExists', {
-            TableName: schema.TableName
-        }).promise();
+        await dynamodb
+            .waitFor('tableExists', {
+                TableName: schema.TableName
+            })
+            .promise();
     }
 
     async tableExists(schema) {
         try {
-            await dynamodb.describeTable({
-                TableName: schema.TableName
-            }).promise();
+            await dynamodb
+                .describeTable({
+                    TableName: schema.TableName
+                })
+                .promise();
             logger.log('found table', schema.TableName);
             return true;
         } catch (ex) {
             logger.error(`table ${schema.TableName} not exists!`);
-            logger.error('error:', JSON.stringify(
-                ex instanceof Error ? { message: ex.message, stack: ex.stack } : ex
-            ), ex);
+            logger.error(
+                'error:',
+                JSON.stringify(ex instanceof Error ? { message: ex.message, stack: ex.stack } : ex),
+                ex
+            );
             throw new Error(`table ${schema.TableName} not exists!`);
         }
     }
 
     async createTables() {
         let errors = [];
-        await Promise.all(Object.values(DB).map(table =>
-            this.createTable(table).catch(err => errors.push(err))));
+        await Promise.all(
+            Object.values(DB).map(table => this.createTable(table).catch(err => errors.push(err)))
+        );
         errors.forEach(err => logger.error(err));
         return errors.length === 0;
     }
@@ -136,8 +155,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called getLifecycleItems. No pending lifecycle action.');
             return [];
         }
-        logger.info('called getLifecycleItems. ' +
-            `[${items.length}] pending lifecycle action. response: ${JSON.stringify(items)}`);
+        logger.info(
+            'called getLifecycleItems. ' +
+                `[${items.length}] pending lifecycle action. response: ${JSON.stringify(items)}`
+        );
         return items.map(item => AutoScaleCore.LifecycleItem.fromDb(item));
     }
     /**
@@ -159,13 +180,15 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      */
     async removeLifecycleItem(item) {
         logger.info('calling removeLifecycleItem');
-        return await docClient.delete({
-            TableName: DB.LIFECYCLEITEM.TableName,
-            Key: {
-                instanceId: item.instanceId,
-                actionName: item.actionName
-            }
-        }).promise();
+        return await docClient
+            .delete({
+                TableName: DB.LIFECYCLEITEM.TableName,
+                Key: {
+                    instanceId: item.instanceId,
+                    actionName: item.actionName
+                }
+            })
+            .promise();
     }
 
     /**
@@ -174,10 +197,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async cleanUpDbLifeCycleActions(items = []) {
         try {
             const tableName = DB.LIFECYCLEITEM.TableName;
-            if (!items || Array.isArray(items) && items.length === 0) {
-
-                const
-                    response = await docClient.scan({
+            if (!items || (Array.isArray(items) && items.length === 0)) {
+                const response = await docClient
+                    .scan({
                         TableName: tableName,
                         Limit: 5
                     })
@@ -193,10 +215,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 let remove = async item => {
                     return await this.removeLifecycleItem(item);
                 };
-                let lifecycleHookTimeout =
-                    !Number.isNaN(this._settings['lifecycle-hook-timeout']) ?
-                        Number(this._settings['lifecycle-hook-timeout']) * 1000 :
-                        AWS_LIFECYCLE_HOOK_DEFAULT_TIMEOUT;
+                let lifecycleHookTimeout = !Number.isNaN(this._settings['lifecycle-hook-timeout'])
+                    ? Number(this._settings['lifecycle-hook-timeout']) * 1000
+                    : AWS_LIFECYCLE_HOOK_DEFAULT_TIMEOUT;
                 items.forEach(item => {
                     if (Date.now() - item.timestamp > lifecycleHookTimeout) {
                         awaitAll.push(remove(item));
@@ -234,7 +255,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info(
                 `[${params.LifecycleActionResult}] applied to hook[${params.LifecycleHookName}] with
             token[${params.LifecycleActionToken}] in auto scaling group
-            [${params.AutoScalingGroupName}]`);
+            [${params.AutoScalingGroupName}]`
+            );
             return true;
         } catch (error) {
             logger.warn(`called completeLifecycleAction. warning:${error.message}`);
@@ -261,24 +283,27 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             };
             if (method === 'replace') {
                 // only attempts to replace the done master record or master election is expired
-                params.ConditionExpression = 'attribute_exists(scalingGroupName) AND ' +
+                params.ConditionExpression =
+                    'attribute_exists(scalingGroupName) AND ' +
                     `voteState = 'new' OR voteState = 'pending' AND voteEndTime < ${now}`;
             } else {
                 params.ConditionExpression = 'attribute_not_exists(scalingGroupName)';
             }
-            return !!await docClient.put(params).promise();
+            return !!(await docClient.put(params).promise());
         } catch (error) {
-            logger.warn('error occurs in putMasterRecord:', JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            ));
+            logger.warn(
+                'error occurs in putMasterRecord:',
+                JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )
+            );
             return false;
         }
     }
 
     /** @override */
     async getMasterRecord() {
-        const
-            params = {
+        const params = {
                 TableName: DB.FORTIGATEMASTERELECTION.TableName,
                 FilterExpression: '#PrimaryKeyName = :primaryKeyValue',
                 ExpressionAttributeNames: {
@@ -321,7 +346,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async finalizeMasterElection() {
         try {
             logger.info('calling finalizeMasterElection');
-            let electedMaster = this._masterRecord || await this.getMasterRecord();
+            let electedMaster = this._masterRecord || (await this.getMasterRecord());
             electedMaster.voteState = 'done';
             const params = {
                 TableName: DB.FORTIGATEMASTERELECTION.TableName,
@@ -336,7 +361,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-
     /**
      * get the health check info about an instance been monitored.
      * @param {Object} instance instance object which a vmId property is required.
@@ -344,8 +368,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
      */
     async getInstanceHealthCheck(instance, heartBeatInterval = null) {
         if (!(instance && instance.instanceId)) {
-            logger.error('getInstanceHealthCheck > error: no instanceId property found' +
-                ` on instance: ${JSON.stringify(instance)}`);
+            logger.error(
+                'getInstanceHealthCheck > error: no instanceId property found' +
+                    ` on instance: ${JSON.stringify(instance)}`
+            );
             return Promise.reject(`invalid instance: ${JSON.stringify(instance)}`);
         }
         var params = {
@@ -360,7 +386,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 heartBeatLossCount,
                 heartBeatDelays,
                 heartBeatDelayAllowance =
-                parseInt(this._settings['heartbeat-delay-allowance']) * 1000,
+                    parseInt(this._settings['heartbeat-delay-allowance']) * 1000,
                 inevitableFailToSyncTime,
                 interval,
                 healthCheckRecord,
@@ -373,8 +399,10 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             // to get a more accurate heart beat elapsed time, the script execution time so far
             // is compensated.
             scriptExecutionStartTime = process.env.SCRIPT_EXECUTION_TIME_CHECKPOINT;
-            interval = heartBeatInterval && !isNaN(heartBeatInterval) ?
-                heartBeatInterval : healthCheckRecord.heartBeatInterval;
+            interval =
+                heartBeatInterval && !isNaN(heartBeatInterval)
+                    ? heartBeatInterval
+                    : healthCheckRecord.heartBeatInterval;
             heartBeatDelays = scriptExecutionStartTime - healthCheckRecord.nextHeartBeatTime;
             // The the inevitable-fail-to-sync time is defined as:
             // the maximum amount of time for an instance to be able to sync without being
@@ -388,10 +416,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             // if t > T + (X - x - 1) * (i * 1000 + I), t has passed the
             // inevitable-fail-to-sync time. This means the instance can never catch up
             // with a heartbeat sync that makes it possile to deem health again.
-            inevitableFailToSyncTime = healthCheckRecord.nextHeartBeatTime +
+            inevitableFailToSyncTime =
+                healthCheckRecord.nextHeartBeatTime +
                 (parseInt(this._settings['heartbeat-loss-count']) -
-                    healthCheckRecord.heartBeatLossCount - 1) *
-                (interval * 1000 + heartBeatDelayAllowance);
+                    healthCheckRecord.heartBeatLossCount -
+                    1) *
+                    (interval * 1000 + heartBeatDelayAllowance);
             // based on the test results, network delay brought more significant side effects
             // to the heart beat monitoring checking than we thought. we have to expand the
             // checking time to reasonably offset the delay.
@@ -405,32 +435,38 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 // healthy unless the the inevitable-fail-to-sync time has passed.
                 healthy = scriptExecutionStartTime <= inevitableFailToSyncTime;
                 heartBeatLossCount = healthCheckRecord.heartBeatLossCount + 1;
-                logger.info(`hb sync is late${heartBeatLossCount > 1 ? ' again' : ''}.\n` +
-                    `hb loss count becomes: ${heartBeatLossCount},\n` +
-                    `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
-                    'expected hb arrived time: ' +
-                    `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
-                    'current hb sync check time: ' +
-                    `${scriptExecutionStartTime} ms in unix timestamp\n` +
-                    `this hb sync delay is: ${heartBeatDelays} ms`);
-                // log the math why this instance is deemed unhealthy
-                if (!healthy) {
-                    logger.info('Instance is deemed unhealthy. reasons:\n' +
-                        `previous hb loss count: ${healthCheckRecord.heartBeatLossCount},\n` +
+                logger.info(
+                    `hb sync is late${heartBeatLossCount > 1 ? ' again' : ''}.\n` +
+                        `hb loss count becomes: ${heartBeatLossCount},\n` +
                         `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
                         'expected hb arrived time: ' +
                         `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
                         'current hb sync check time: ' +
                         `${scriptExecutionStartTime} ms in unix timestamp\n` +
-                        `this hb sync delays: ${heartBeatDelays} ms\n` +
-                        'the inevitable-fail-to-sync time: ' +
-                        `${inevitableFailToSyncTime} ms in unix timestamp has passed.`);
+                        `this hb sync delay is: ${heartBeatDelays} ms`
+                );
+                // log the math why this instance is deemed unhealthy
+                if (!healthy) {
+                    logger.info(
+                        'Instance is deemed unhealthy. reasons:\n' +
+                            `previous hb loss count: ${healthCheckRecord.heartBeatLossCount},\n` +
+                            `hb sync delay allowance: ${heartBeatDelayAllowance} ms\n` +
+                            'expected hb arrived time: ' +
+                            `${healthCheckRecord.nextHeartBeatTime} ms in unix timestamp\n` +
+                            'current hb sync check time: ' +
+                            `${scriptExecutionStartTime} ms in unix timestamp\n` +
+                            `this hb sync delays: ${heartBeatDelays} ms\n` +
+                            'the inevitable-fail-to-sync time: ' +
+                            `${inevitableFailToSyncTime} ms in unix timestamp has passed.`
+                    );
                 }
             }
-            logger.info('called getInstanceHealthCheck. (timestamp: ' +
-                `${scriptExecutionStartTime},  interval:${heartBeatInterval})` +
-                'healthcheck record:',
-                JSON.stringify(healthCheckRecord));
+            logger.info(
+                'called getInstanceHealthCheck. (timestamp: ' +
+                    `${scriptExecutionStartTime},  interval:${heartBeatInterval})` +
+                    'healthcheck record:',
+                JSON.stringify(healthCheckRecord)
+            );
             return {
                 instanceId: instance.instanceId,
                 ip: healthCheckRecord.ip || '',
@@ -445,22 +481,34 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 healthCheckTime: scriptExecutionStartTime
             };
         } catch (error) {
-            logger.info('called getInstanceHealthCheck with error. ' +
-                `error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )}`);
+            logger.info(
+                'called getInstanceHealthCheck with error. ' +
+                    `error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )}`
+            );
             return null;
         }
     }
 
     /** @override */
-    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, masterIp, checkPointTime,
-        forceOutOfSync = false) {
+    async updateInstanceHealthCheck(
+        healthCheckObject,
+        heartBeatInterval,
+        masterIp,
+        checkPointTime,
+        forceOutOfSync = false
+    ) {
         if (!(healthCheckObject && healthCheckObject.instanceId)) {
-            logger.error('updateInstanceHealthCheck > error: no instanceId property found' +
-                ` on healthCheckObject: ${JSON.stringify(healthCheckObject)}`);
-            return Promise.reject('invalid healthCheckObject: ' +
-                `${JSON.stringify(healthCheckObject)}`);
+            logger.error(
+                'updateInstanceHealthCheck > error: no instanceId property found' +
+                    ` on healthCheckObject: ${JSON.stringify(healthCheckObject)}`
+            );
+            return Promise.reject(
+                'invalid healthCheckObject: ' + `${JSON.stringify(healthCheckObject)}`
+            );
         }
         try {
             let params = {
@@ -468,7 +516,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     instanceId: healthCheckObject.instanceId
                 },
                 TableName: DB.FORTIGATEAUTOSCALE.TableName,
-                UpdateExpression: 'set heartBeatLossCount = :HeartBeatLossCount, ' +
+                UpdateExpression:
+                    'set heartBeatLossCount = :HeartBeatLossCount, ' +
                     'heartBeatInterval = :heartBeatInterval, ' +
                     'nextHeartBeatTime = :NextHeartBeatTime, ' +
                     'masterIp = :MasterIp, syncState = :SyncState',
@@ -477,8 +526,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     ':heartBeatInterval': heartBeatInterval,
                     ':NextHeartBeatTime': checkPointTime + heartBeatInterval * 1000,
                     ':MasterIp': masterIp ? masterIp : 'null',
-                    ':SyncState': healthCheckObject.healthy && !forceOutOfSync ?
-                        'in-sync' : 'out-of-sync'
+                    ':SyncState':
+                        healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync'
                 },
                 ConditionExpression: 'attribute_exists(instanceId)'
             };
@@ -489,10 +538,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called updateInstanceHealthCheck');
             return !!result;
         } catch (error) {
-            logger.info('called updateInstanceHealthCheck with error. ' +
-                `error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )}`);
+            logger.info(
+                'called updateInstanceHealthCheck with error. ' +
+                    `error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )}`
+            );
             return Promise.reject(error);
         }
     }
@@ -554,11 +607,15 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async describeInstance(parameters) {
         logger.info('calling describeInstance');
         let readCache = this._settings['enable-vm-info-cache'] === 'true';
-        let virtualMachine, hitCache = '';
+        let virtualMachine,
+            hitCache = '';
 
         if (readCache) {
-            virtualMachine = await this.getVmInfoCache(parameters.scalingGroupName,
-                parameters.instanceId, null);
+            virtualMachine = await this.getVmInfoCache(
+                parameters.scalingGroupName,
+                parameters.instanceId,
+                null
+            );
             hitCache = virtualMachine && '(hit cache)';
         }
 
@@ -571,19 +628,23 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             // check if instance is in scaling group
             if (parameters.scalingGroupName) {
                 // describe the instance in auto scaling group
-                let scalingGroup = await autoScaling.describeAutoScalingGroups({
-                    AutoScalingGroupNames: [
-                        parameters.scalingGroupName
-                    ]
-                }).promise();
-                if (scalingGroup && Array.isArray(scalingGroup.AutoScalingGroups) &&
+                let scalingGroup = await autoScaling
+                    .describeAutoScalingGroups({
+                        AutoScalingGroupNames: [parameters.scalingGroupName]
+                    })
+                    .promise();
+                if (
+                    scalingGroup &&
+                    Array.isArray(scalingGroup.AutoScalingGroups) &&
                     scalingGroup.AutoScalingGroups[0] &&
                     scalingGroup.AutoScalingGroups[0].AutoScalingGroupName ===
-                    parameters.scalingGroupName) {
-                    const instances =
-                        scalingGroup.AutoScalingGroups[0].Instances.filter(instance => {
+                        parameters.scalingGroupName
+                ) {
+                    const instances = scalingGroup.AutoScalingGroups[0].Instances.filter(
+                        instance => {
                             return instance.InstanceId === parameters.instanceId;
-                        });
+                        }
+                    );
                     if (instances && instances.length === 1) {
                         instanceId = instances[0].InstanceId;
                     }
@@ -610,11 +671,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     Values: [parameters.privateIp]
                 });
             }
-            const result = instanceId && await ec2.describeInstances(params).promise();
+            const result = instanceId && (await ec2.describeInstances(params).promise());
             // parse to virtual machine instance
-            virtualMachine = result && result.Reservations[0] &&
-                result.Reservations[0].Instances[0];
-            hitCache = virtualMachine && hitCache || '';
+            virtualMachine =
+                result && result.Reservations[0] && result.Reservations[0].Instances[0];
+            hitCache = (virtualMachine && hitCache) || '';
             // cache the vm info
             if (virtualMachine && readCache) {
                 let cacheTime = this._settings['vm-info-cache-time'];
@@ -623,8 +684,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             }
         }
         // if mv is found
-        virtualMachine = virtualMachine && AutoScaleCore.VirtualMachine.fromAwsEc2(virtualMachine,
-            parameters.scalingGroupName || null);
+        virtualMachine =
+            virtualMachine &&
+            AutoScaleCore.VirtualMachine.fromAwsEc2(
+                virtualMachine,
+                parameters.scalingGroupName || null
+            );
         logger.info(`called describeInstance${hitCache}, virtualMachine: ${virtualMachine}`);
         return virtualMachine;
     }
@@ -650,15 +715,19 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 }
                 status = jsonBodyObject.status;
             } catch (ex) {
-                logger.info('calling extractRequestInfo: unexpected body content format ' +
-                    `(${request.body})`);
+                logger.info(
+                    'calling extractRequestInfo: unexpected body content format ' +
+                        `(${request.body})`
+                );
             }
         } else {
             logger.error('calling extractRequestInfo: no request body found.');
         }
 
-        logger.info(`called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
-            `interval(${interval}), status(${status})`);
+        logger.info(
+            `called extractRequestInfo: extracted: instance Id(${instanceId}), ` +
+                `interval(${interval}), status(${status})`
+        );
         return {
             instanceId,
             interval,
@@ -682,27 +751,31 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 await ec2.modifyNetworkInterfaceAttribute(params).promise();
                 // create a tag
                 params = {
-                    Resources: [
-                        result.NetworkInterface.NetworkInterfaceId
-                    ],
-                    Tags: [{
-                        Key: 'FortiGateAutoscaleNicAttachment',
-                        Value: RESOURCE_TAG_PREFIX
-                    }, {
-                        Key: 'Name',
-                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-instance-nic2`
-                    }, {
-                        Key: 'ResourceGroup',
-                        Value: RESOURCE_TAG_PREFIX
-                    }]
+                    Resources: [result.NetworkInterface.NetworkInterfaceId],
+                    Tags: [
+                        {
+                            Key: 'FortiGateAutoscaleNicAttachment',
+                            Value: RESOURCE_TAG_PREFIX
+                        },
+                        {
+                            Key: 'Name',
+                            Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-instance-nic2`
+                        },
+                        {
+                            Key: 'ResourceGroup',
+                            Value: RESOURCE_TAG_PREFIX
+                        }
+                    ]
                 };
                 await ec2.createTags(params).promise();
             }
             return result && result.NetworkInterface;
         } catch (error) {
-            logger.warn(`called createNetworkInterface. failed.(error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called createNetworkInterface. failed.(error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return false;
         }
     }
@@ -712,9 +785,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called deleteNetworkInterface');
             return await ec2.deleteNetworkInterface(parameters).promise();
         } catch (error) {
-            logger.warn(`called deleteNetworkInterface. failed.(error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called deleteNetworkInterface. failed.(error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return false;
         }
     }
@@ -725,10 +800,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let result = await ec2.describeNetworkInterfaces(parameters).promise();
             return result && result.NetworkInterfaces && result.NetworkInterfaces[0];
         } catch (error) {
-            logger.warn('called describeNetworkInterface. ' +
-                `failed.(error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )})`);
+            logger.warn(
+                'called describeNetworkInterface. ' +
+                    `failed.(error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )})`
+            );
             return false;
         }
     }
@@ -739,10 +818,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             let result = await ec2.describeNetworkInterfaces(parameters).promise();
             return result && result.NetworkInterfaces;
         } catch (error) {
-            logger.warn('called listNetworkInterfaces. ' +
-                `failed.(error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )})`);
+            logger.warn(
+                'called listNetworkInterfaces. ' +
+                    `failed.(error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )})`
+            );
             return false;
         }
     }
@@ -764,24 +847,34 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             };
             await ec2.attachNetworkInterface(params).promise();
             let promiseEmitter = () => {
-                    return ec2.describeNetworkInterfaces({
-                        NetworkInterfaceIds: [nic.NetworkInterfaceId]
-                    }).promise();
+                    return ec2
+                        .describeNetworkInterfaces({
+                            NetworkInterfaceIds: [nic.NetworkInterfaceId]
+                        })
+                        .promise();
                 },
                 validator = result => {
-                    return result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
+                    return (
+                        result &&
+                        result.NetworkInterfaces &&
+                        result.NetworkInterfaces[0] &&
                         result.NetworkInterfaces[0].Attachment &&
-                        result.NetworkInterfaces[0].Attachment.Status === 'attached';
+                        result.NetworkInterfaces[0].Attachment.Status === 'attached'
+                    );
                 };
             let result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
-            logger.info('called attachNetworkInterface. ' +
-                `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`);
+            logger.info(
+                'called attachNetworkInterface. ' +
+                    `done.(attachment id: ${result.NetworkInterfaces[0].Attachment.AttachmentId})`
+            );
             return result.NetworkInterfaces[0].Attachment.AttachmentId;
         } catch (error) {
             await this.deleteNicAttachmentRecord(instance.instanceId);
-            logger.warn(`called attachNetworkInterface. failed.(error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called attachNetworkInterface. failed.(error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return false;
         }
     }
@@ -802,25 +895,34 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             return true;
         }
         if (attachment.InstanceId && attachment.InstanceId !== instance.instanceId) {
-            logger.warn(`cannot detach a nic(id: ${eni.NetworkInterfaceId}, ` +
-                `attached instance: ${attachment.InstanceId}) from the ` +
-                `instance(id: ${instance.instanceId}) it's not attached to.`);
+            logger.warn(
+                `cannot detach a nic(id: ${eni.NetworkInterfaceId}, ` +
+                    `attached instance: ${attachment.InstanceId}) from the ` +
+                    `instance(id: ${instance.instanceId}) it's not attached to.`
+            );
             return false;
         }
 
         try {
-            let result, interfaceId = eni.NetworkInterfaceId;
+            let result,
+                interfaceId = eni.NetworkInterfaceId;
             let params = {
                 AttachmentId: attachment.AttachmentId
             };
             let promiseEmitter = () => {
-                    return ec2.describeNetworkInterfaces({
-                        NetworkInterfaceIds: [interfaceId]
-                    }).promise();
+                    return ec2
+                        .describeNetworkInterfaces({
+                            NetworkInterfaceIds: [interfaceId]
+                        })
+                        .promise();
                 },
                 validator = check => {
-                    return check && check.NetworkInterfaces && check.NetworkInterfaces[0] &&
-                        check.NetworkInterfaces[0].Status === 'available';
+                    return (
+                        check &&
+                        check.NetworkInterfaces &&
+                        check.NetworkInterfaces[0] &&
+                        check.NetworkInterfaces[0].Status === 'available'
+                    );
                 };
 
             if (eni.Status !== 'available') {
@@ -830,26 +932,32 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 }
                 // if the eni is not available, wait for it to become available
                 result = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator);
-                eni = result && result.NetworkInterfaces && result.NetworkInterfaces[0] &&
+                eni =
+                    result &&
+                    result.NetworkInterfaces &&
+                    result.NetworkInterfaces[0] &&
                     result.NetworkInterfaces[0];
             }
 
             logger.info(`called detachNetworkInterface. done.(nic status: ${eni && eni.Status})`);
             return eni && eni.Status === 'available';
         } catch (error) {
-            logger.warn(`called detachNetworkInterface. failed.(error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called detachNetworkInterface. failed.(error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return false;
         }
     }
 
     async listNicAttachmentRecord() {
         try {
-            const
-                response = await docClient.scan({
+            const response = await docClient
+                .scan({
                     TableName: DB.NICATTACHMENT.TableName
-                }).promise();
+                })
+                .promise();
             let recordCount = 0,
                 records = [];
             if (response && response.Items) {
@@ -927,9 +1035,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     /** @override */
     async getSettingItems(keyFilter = null, valueOnly = true) {
         try {
-            const data = await docClient.scan({
-                TableName: DB.SETTINGS.TableName
-            }).promise();
+            const data = await docClient
+                .scan({
+                    TableName: DB.SETTINGS.TableName
+                })
+                .promise();
             let items = Array.isArray(data.Items) && data.Items;
             let formattedItems = {};
             let filteredItems = null,
@@ -940,9 +1050,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     try {
                         item.settingValue = JSON.parse(item.settingValue);
                     } catch (error) {
-                        logger.warn(`getSettingItems error: ${item.settingKey} has ` +
-                            `jsonEncoded (${item.jsonEncoded}) value but unable to apply ` +
-                            `JSON.parse(). settingValue is: ${item.settingValue}`);
+                        logger.warn(
+                            `getSettingItems error: ${item.settingKey} has ` +
+                                `jsonEncoded (${item.jsonEncoded}) value but unable to apply ` +
+                                `JSON.parse(). settingValue is: ${item.settingValue}`
+                        );
                     }
                 }
                 formattedItems[item.settingKey] = valueOnly ? item.settingValue : item;
@@ -952,11 +1064,13 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 }
             });
             this._settings = formattedItems;
-            return keyFilter && filteredItems || formattedItems;
+            return (keyFilter && filteredItems) || formattedItems;
         } catch (error) {
-            logger.warn(`getSettingItems > error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.warn(
+                `getSettingItems > error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`
+            );
             return [];
         }
     }
@@ -986,7 +1100,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 ':jsonEncoded': jsonEncoded ? 'true' : 'false',
                 ':editable': editable ? 'true' : 'false'
             },
-            UpdateExpression: 'SET #settingValue = :settingValue, #jsonEncoded = :jsonEncoded' +
+            UpdateExpression:
+                'SET #settingValue = :settingValue, #jsonEncoded = :jsonEncoded' +
                 ', #editable = :editable'
         };
         if (!value) {
@@ -998,7 +1113,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             params.ExpressionAttributeValues[':description'] = description ? description : '';
             params.UpdateExpression += ', #description = :description';
         }
-        return !!await docClient.update(params).promise();
+        return !!(await docClient.update(params).promise());
     }
 
     /** @override */
@@ -1008,16 +1123,25 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // for local debugging use, the next lines get files from local file system instead
         if (process.env.DEBUG_MODE === 'true') {
             const fs = require('fs');
-            content = fs.readFileSync(path.resolve(process.cwd(),
-                'aws_cloudformation', 'assets', 'configset', parameters.fileName));
+            content = fs.readFileSync(
+                path.resolve(
+                    process.cwd(),
+                    'aws_cloudformation',
+                    'assets',
+                    'configset',
+                    parameters.fileName
+                )
+            );
             return {
                 content: content.toString()
             };
         }
-        let data = await s3.getObject({
-            Bucket: parameters.storageName,
-            Key: path.join(parameters.keyPrefix, parameters.fileName)
-        }).promise();
+        let data = await s3
+            .getObject({
+                Bucket: parameters.storageName,
+                Key: path.join(parameters.keyPrefix, parameters.fileName)
+            })
+            .promise();
 
         content = data && data.Body && data.Body.toString('utf8');
         return {
@@ -1126,14 +1250,18 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 params.ExpressionAttributeValues = {
                     ':Timestamp': item.timestamp
                 };
-                deletionTasks.push(docClient.delete(params).promise().catch(() => {
-                    errorTasks.push(item);
-                }));
+                deletionTasks.push(
+                    docClient
+                        .delete(params)
+                        .promise()
+                        .catch(() => {
+                            errorTasks.push(item);
+                        })
+                );
             });
 
             await Promise.all(deletionTasks);
             return `${deletionTasks.length} rows deleted. ${errorTasks.length} error rows.`;
-
         } catch (error) {
             return false;
         }
@@ -1150,29 +1278,34 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 result = await ec2.createCustomerGateway(params).promise();
             if (result && result.CustomerGateway) {
                 params = {
-                    Resources: [
-                        result.CustomerGateway.CustomerGatewayId
-                    ],
-                    Tags: [{
-                        Key: 'FortiGateAutoscaleTgwVpnAttachment',
-                        Value: RESOURCE_TAG_PREFIX
-                    }, {
-                        Key: 'Name',
-                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
-                            `cgw-${parameters.publicIp}`
-                    }, {
-                        Key: 'ResourceGroup',
-                        Value: RESOURCE_TAG_PREFIX
-                    }]
+                    Resources: [result.CustomerGateway.CustomerGatewayId],
+                    Tags: [
+                        {
+                            Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                            Value: RESOURCE_TAG_PREFIX
+                        },
+                        {
+                            Key: 'Name',
+                            Value:
+                                `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                                `cgw-${parameters.publicIp}`
+                        },
+                        {
+                            Key: 'ResourceGroup',
+                            Value: RESOURCE_TAG_PREFIX
+                        }
+                    ]
                 };
                 await ec2.createTags(params).promise();
             }
             logger.info('called createCustomerGateway');
             return result && result.CustomerGateway;
         } catch (error) {
-            logger.warn(`called createCustomerGateway. failed.(error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called createCustomerGateway. failed.(error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return false;
         }
     }
@@ -1188,9 +1321,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called deleteCustomerGateway');
             return true;
         } catch (error) {
-            logger.warn(`called deleteCustomerGateway. failed > error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called deleteCustomerGateway. failed > error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return false;
         }
     }
@@ -1214,20 +1349,23 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 vpnConnection = data.VpnConnection;
                 // tag the vpnconnection
                 params = {
-                    Resources: [
-                        vpnConnection.VpnConnectionId
-                    ],
-                    Tags: [{
-                        Key: 'FortiGateAutoscaleTgwVpnAttachment',
-                        Value: RESOURCE_TAG_PREFIX
-                    }, {
-                        Key: 'Name',
-                        Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
-                            `vpn-${parameters.publicIp}`
-                    }, {
-                        Key: 'ResourceGroup',
-                        Value: RESOURCE_TAG_PREFIX
-                    }]
+                    Resources: [vpnConnection.VpnConnectionId],
+                    Tags: [
+                        {
+                            Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                            Value: RESOURCE_TAG_PREFIX
+                        },
+                        {
+                            Key: 'Name',
+                            Value:
+                                `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                                `vpn-${parameters.publicIp}`
+                        },
+                        {
+                            Key: 'ResourceGroup',
+                            Value: RESOURCE_TAG_PREFIX
+                        }
+                    ]
                 };
                 logger.info('creating tags on the vpnconnection. tags: ', JSON.stringify(params));
                 await ec2.createTags(params).promise();
@@ -1238,37 +1376,47 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
 
                 if (parameters.transitGatewayId) {
                     let vpnConnectionId = vpnConnection.VpnConnectionId;
-                    logger.info('describing transit gateway attachment' +
-                        `(vpn connection: ${vpnConnectionId}).`);
+                    logger.info(
+                        'describing transit gateway attachment' +
+                            `(vpn connection: ${vpnConnectionId}).`
+                    );
                     params = {
-                        Filters: [{
-                            Name: 'resource-id',
-                            Values: [
-                                vpnConnectionId
-                            ]
-                        },
-                        {
-                            Name: 'transit-gateway-id',
-                            Values: [
-                                parameters.transitGatewayId
-                            ]
-                        }
+                        Filters: [
+                            {
+                                Name: 'resource-id',
+                                Values: [vpnConnectionId]
+                            },
+                            {
+                                Name: 'transit-gateway-id',
+                                Values: [parameters.transitGatewayId]
+                            }
                         ]
                     };
                     let promiseEmitter = () => {
-                        return ec2.describeTransitGatewayAttachments(params).promise()
+                        return ec2
+                            .describeTransitGatewayAttachments(params)
+                            .promise()
                             .catch(error => {
-                                logger.warn('error in describeTransitGatewayAttachments ' +
-                                    `>${JSON.stringify(
-                                        error instanceof Error ? {
-                                            message: error.message, stack: error.stack } : error
-                                    )}`);
+                                logger.warn(
+                                    'error in describeTransitGatewayAttachments ' +
+                                        `>${JSON.stringify(
+                                            error instanceof Error
+                                                ? {
+                                                      message: error.message,
+                                                      stack: error.stack
+                                                  }
+                                                : error
+                                        )}`
+                                );
                             });
                     };
                     let validator = result => {
                         logger.debug(`TransitGatewayAttachments: ${JSON.stringify(result)}`);
-                        if (result && result.TransitGatewayAttachments &&
-                            result.TransitGatewayAttachments.length > 0) {
+                        if (
+                            result &&
+                            result.TransitGatewayAttachments &&
+                            result.TransitGatewayAttachments.length > 0
+                        ) {
                             // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
                             // ec2.describeTransitGatewayAttachments cannot properly filter resource
                             // by resource-id. instead, it always return all resources so we must
@@ -1277,11 +1425,15 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                             // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
                             let attachmentFound = null;
                             attachmentFound = result.TransitGatewayAttachments.find(attachment => {
-                                return attachment.ResourceId === vpnConnectionId &&
-                                    attachment.TransitGatewayId === parameters.transitGatewayId;
+                                return (
+                                    attachment.ResourceId === vpnConnectionId &&
+                                    attachment.TransitGatewayId === parameters.transitGatewayId
+                                );
                             });
-                            logger.debug(`attachmentFound: ${JSON.stringify(attachmentFound)}, ` +
-                                `state: ${attachmentFound && attachmentFound.State}`);
+                            logger.debug(
+                                `attachmentFound: ${JSON.stringify(attachmentFound)}, ` +
+                                    `state: ${attachmentFound && attachmentFound.State}`
+                            );
                             return attachmentFound;
                         }
                         return false;
@@ -1290,17 +1442,31 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                     try {
                         vpnCreationTime = Date.now();
                         data = await AutoScaleCore.Functions.waitFor(
-                            promiseEmitter, validator, 5000, 10);
-                        logger.info('transit gateway attachment created. time used: ' +
-                            `${(Date.now() - vpnCreationTime) / 1000} seconds.`);
+                            promiseEmitter,
+                            validator,
+                            5000,
+                            10
+                        );
+                        logger.info(
+                            'transit gateway attachment created. time used: ' +
+                                `${(Date.now() - vpnCreationTime) / 1000} seconds.`
+                        );
                     } catch (error) {
                         data = null;
-                        logger.error(JSON.stringify(
-                            error instanceof Error ? {
-                                message: error.message, stack: error.stack } : error
-                        ));
-                        logger.error('failed to wait for the transit gateway attachment for vpn' +
-                            `connetion (id: ${vpnConnectionId}) to become accessible.`);
+                        logger.error(
+                            JSON.stringify(
+                                error instanceof Error
+                                    ? {
+                                          message: error.message,
+                                          stack: error.stack
+                                      }
+                                    : error
+                            )
+                        );
+                        logger.error(
+                            'failed to wait for the transit gateway attachment for vpn' +
+                                `connetion (id: ${vpnConnectionId}) to become accessible.`
+                        );
                     }
                     logger.info('transit gateway attachment info: ', JSON.stringify(data));
                     if (data) {
@@ -1311,28 +1477,35 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                         // eslint-disable-next-line max-len
                         // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
                         tgwAttachment = data.TransitGatewayAttachments.find(attachment => {
-                            return attachment.ResourceId === vpnConnectionId &&
-                                attachment.TransitGatewayId === parameters.transitGatewayId;
+                            return (
+                                attachment.ResourceId === vpnConnectionId &&
+                                attachment.TransitGatewayId === parameters.transitGatewayId
+                            );
                         });
                         if (tgwAttachment) {
                             params = {
-                                Resources: [
-                                    tgwAttachment.TransitGatewayAttachmentId
-                                ],
-                                Tags: [{
-                                    Key: 'FortiGateAutoscaleTgwVpnAttachment',
-                                    Value: RESOURCE_TAG_PREFIX
-                                }, {
-                                    Key: 'Name',
-                                    Value: `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
-                                        `tgw-attachment-vpn-${parameters.publicIp}`
-                                }, {
-                                    Key: 'ResourceGroup',
-                                    Value: RESOURCE_TAG_PREFIX
-                                }]
+                                Resources: [tgwAttachment.TransitGatewayAttachmentId],
+                                Tags: [
+                                    {
+                                        Key: 'FortiGateAutoscaleTgwVpnAttachment',
+                                        Value: RESOURCE_TAG_PREFIX
+                                    },
+                                    {
+                                        Key: 'Name',
+                                        Value:
+                                            `${RESOURCE_TAG_PREFIX}-fortigate-autoscale-` +
+                                            `tgw-attachment-vpn-${parameters.publicIp}`
+                                    },
+                                    {
+                                        Key: 'ResourceGroup',
+                                        Value: RESOURCE_TAG_PREFIX
+                                    }
+                                ]
                             };
-                            logger.info('creating tags on attachment. tags: ',
-                                JSON.stringify(params));
+                            logger.info(
+                                'creating tags on attachment. tags: ',
+                                JSON.stringify(params)
+                            );
                             await ec2.createTags(params).promise();
                         }
                     }
@@ -1344,9 +1517,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 vpnConnection: vpnConnection
             };
         } catch (error) {
-            logger.warn(`called createVpnConnection. failed.(error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called createVpnConnection. failed.(error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return {
                 attachmentId: tgwAttachment && tgwAttachment.TransitGatewayAttachmentId,
                 vpnConnection: vpnConnection
@@ -1365,9 +1540,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called deleteVpnConnection');
             return true;
         } catch (error) {
-            logger.warn(`called deleteVpnConnection. failed > error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )})`);
+            logger.warn(
+                `called deleteVpnConnection. failed > error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )})`
+            );
             return false;
         }
     }
@@ -1384,8 +1561,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             if (result && result.Item) {
                 // convert CustomerGatewayConfiguration raw data (JSON string) into object
                 if (result.Item.customerGatewayConfiguration) {
-                    result.Item.customerGatewayConfiguration =
-                        JSON.parse(result.Item.customerGatewayConfiguration);
+                    result.Item.customerGatewayConfiguration = JSON.parse(
+                        result.Item.customerGatewayConfiguration
+                    );
                 }
             }
             return result && result.Item;
@@ -1444,9 +1622,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called deleteTgwVpnAttachmentRecord');
             return result;
         } catch (error) {
-            logger.error(`called deleteTgwVpnAttachmentRecord > error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.error(
+                `called deleteTgwVpnAttachmentRecord > error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`
+            );
             return error;
         }
     }
@@ -1455,18 +1635,22 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         logger.info('calling listTgwVpnAttachments');
         let items = [];
         try {
-            const result = await docClient.scan({
-                TableName: DB.VPNATTACHMENT.TableName
-            }).promise();
+            const result = await docClient
+                .scan({
+                    TableName: DB.VPNATTACHMENT.TableName
+                })
+                .promise();
             if (Array.isArray(result.Items) && result.Items.length > 0) {
                 items = result.Items;
             }
             logger.info('called listTgwVpnAttachments');
             // await deleteTable(dbTables.NICATTACHMENT);
         } catch (error) {
-            logger.warn(`called listTgwVpnAttachments. error >: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.warn(
+                `called listTgwVpnAttachments. error >: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`
+            );
         }
         return items;
     }
@@ -1492,9 +1676,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 logger.warn('called updateTgwRouteTablePropagation. Already propagated.');
                 return 'alread-propagated';
             }
-            logger.error('called updateTgwRouteTablePropagation,  error > ', JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            ));
+            logger.error(
+                'called updateTgwRouteTablePropagation,  error > ',
+                JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )
+            );
             throw error;
         }
     }
@@ -1520,9 +1707,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
                 logger.warn('called updateTgwRouteTableAssociation. Already associated.');
                 return 'alread-associated';
             }
-            logger.error('called updateTgwRouteTableAssociation,  error > ', JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            ));
+            logger.error(
+                'called updateTgwRouteTableAssociation,  error > ',
+                JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )
+            );
             throw error;
         }
     }
@@ -1542,8 +1732,9 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             };
             const result = await ec2.describeVpcs(params).promise();
             if (result && result.Vpcs && result.Vpcs.length > 0) {
-                logger.info('called describeVpc, result: ' +
-                    `${result ? JSON.stringify(result) : 'null'}`);
+                logger.info(
+                    'called describeVpc, result: ' + `${result ? JSON.stringify(result) : 'null'}`
+                );
                 return result.Vpcs[0];
             }
         }
@@ -1562,10 +1753,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         logger.info('calling describeSubnet');
         let params = {};
         if (parameters && parameters.vpcId) {
-            params.Filters = [{
-                Name: 'vpc-id',
-                Values: [parameters.vpcId]
-            }];
+            params.Filters = [
+                {
+                    Name: 'vpc-id',
+                    Values: [parameters.vpcId]
+                }
+            ];
         }
         if (parameters && parameters.subnetIds && Array.isArray(parameters.subnetIds)) {
             params.SubnetIds = parameters.subnetIds;
@@ -1580,12 +1773,15 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         }
         const result = await ec2.describeSubnets(params).promise();
         if (result && result.Subnets && result.Subnets.length > 0) {
-            logger.info('called describeSubnet, result: ' +
-                `${result ? JSON.stringify(result) : 'null'}`);
+            logger.info(
+                'called describeSubnet, result: ' + `${result ? JSON.stringify(result) : 'null'}`
+            );
             return parameters.subnetId ? result.Subnets[0] : result.Subnets;
         } else {
-            logger.warn('called describeSubnet, subnet not found. ' +
-                `params: ${JSON.stringify(parameters)}`);
+            logger.warn(
+                'called describeSubnet, subnet not found. ' +
+                    `params: ${JSON.stringify(parameters)}`
+            );
         }
     }
 
@@ -1594,12 +1790,13 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
         logger.info('calling getVmInfoCache.');
         try {
-            let data, params = {
-                Key: {
-                    id: vmId || instanceId
-                },
-                TableName: DB.VMINFOCACHE.TableName
-            };
+            let data,
+                params = {
+                    Key: {
+                        id: vmId || instanceId
+                    },
+                    TableName: DB.VMINFOCACHE.TableName
+                };
 
             data = await docClient.get(params).promise();
             if (data && data.Item && data.Item.expireTime < Date.now()) {
@@ -1634,10 +1831,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called setVmInfoCache');
             return !!result;
         } catch (error) {
-            logger.info('called setVmInfoCache with error. ' +
-                `error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )}`);
+            logger.info(
+                'called setVmInfoCache with error. ' +
+                    `error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )}`
+            );
             return Promise.reject(error);
         }
     }
@@ -1662,20 +1863,27 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
         // file being returned. Also, there is a hard limit of 1000 per request by the api.
         // eslint-disable-next-line max-len
         // see reference: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#listObjectsV2-property
-        let prefix = path.join(this._settings['asset-storage-key-prefix'],
-            this._settings['fortigate-license-storage-key-prefix'], '/');
+        let prefix = path.join(
+            this._settings['asset-storage-key-prefix'],
+            this._settings['fortigate-license-storage-key-prefix'],
+            '/'
+        );
         let prefixLen = prefix && prefix.length;
         let iterable;
-        let data = await s3.listObjectsV2({
-            Bucket: this._settings['asset-storage-name'],
-            Prefix: prefix,
-            StartAfter: prefix
-        }).promise();
+        let data = await s3
+            .listObjectsV2({
+                Bucket: this._settings['asset-storage-name'],
+                Prefix: prefix,
+                StartAfter: prefix
+            })
+            .promise();
 
         if (data && Array.isArray(data.Contents) && data.Contents.length > 0 && data.Contents) {
             iterable = data.Contents.map(item => {
                 let licenseItem = new AutoScaleCore.LicenseItem(
-                    item.Key.substr(prefixLen), item.ETag);
+                    item.Key.substr(prefixLen),
+                    item.ETag
+                );
                 return [licenseItem.blobKey, licenseItem];
             });
             return new Map(iterable);
@@ -1688,10 +1896,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async listLicenseUsage() {
         logger.info('calling listLicenseUsage');
         try {
-            const
-                response = await docClient.scan({
+            const response = await docClient
+                .scan({
                     TableName: DB.LICENSEUSAGE.TableName
-                }).promise();
+                })
+                .promise();
             let recordCount = 0,
                 records = [];
             if (response && response.Items) {
@@ -1709,7 +1918,6 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             return new Map();
         }
     }
-
 
     /** @override */
     async updateLicenseUsage(licenseRecord, replace = false) {
@@ -1736,10 +1944,14 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called updateLicenseUsage');
             return !!result;
         } catch (error) {
-            logger.info('called updateLicenseUsage with error. ' +
-                `error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )}`);
+            logger.info(
+                'called updateLicenseUsage with error. ' +
+                    `error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )}`
+            );
             return false;
         }
     }
@@ -1748,10 +1960,11 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async listLicenseStock() {
         logger.info('calling listLicenseStock');
         try {
-            const
-                response = await docClient.scan({
+            const response = await docClient
+                .scan({
                     TableName: DB.LICENSESTOCK.TableName
-                }).promise();
+                })
+                .promise();
             let recordCount = 0,
                 records = [];
             if (response && response.Items) {
@@ -1771,7 +1984,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
-    async updateLicenseStock(licenseItem, replace = true) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    async updateLicenseStock(licenseItem, replace = true) {
         logger.info('calling updateLicenseStock');
         try {
             let params = {
@@ -1788,30 +2002,41 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called updateLicenseStock');
             return !!result;
         } catch (error) {
-            logger.info('called updateLicenseStock with error. ' +
-                `error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )}`);
+            logger.info(
+                'called updateLicenseStock with error. ' +
+                    `error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )}`
+            );
             throw error;
         }
     }
     /** @override */
-    async deleteLicenseStock(licenseItem) { // eslint-disable-line no-unused-vars
+    async deleteLicenseStock(licenseItem) {
+        // eslint-disable-line no-unused-vars
         logger.info('calling deleteLicenseStock');
         try {
-            await docClient.delete({
-                TableName: DB.LICENSESTOCK.TableName,
-                Key: {
-                    checksum: licenseItem.checksum
-                }
-            }).promise();
+            await docClient
+                .delete({
+                    TableName: DB.LICENSESTOCK.TableName,
+                    Key: {
+                        checksum: licenseItem.checksum
+                    }
+                })
+                .promise();
             logger.info('called deleteLicenseStock');
             return true;
         } catch (error) {
-            logger.info('called deleteLicenseStock with error. ' +
-                `error: ${JSON.stringify(
-                    error instanceof Error ? { message: error.message, stack: error.stack } : error
-                )}`);
+            logger.info(
+                'called deleteLicenseStock with error. ' +
+                    `error: ${JSON.stringify(
+                        error instanceof Error
+                            ? { message: error.message, stack: error.stack }
+                            : error
+                    )}`
+            );
             throw error;
         }
     }
@@ -1831,9 +2056,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called attacheInstanceToLoadBalancer.');
             return result;
         } catch (error) {
-            logger.info('called attacheInstanceToLoadBalancer. Error:', JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            ));
+            logger.info(
+                'called attacheInstanceToLoadBalancer. Error:',
+                JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )
+            );
             throw error;
         }
     }
@@ -1850,9 +2078,12 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             logger.info('called updateInstanceSrcDestChecking.');
             return result;
         } catch (error) {
-            logger.info('called updateInstanceSrcDestChecking. Error:', JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            ));
+            logger.info(
+                'called updateInstanceSrcDestChecking. Error:',
+                JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )
+            );
             throw error;
         }
     }
@@ -1871,17 +2102,23 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // call parent's init to enforce some general init checkings.
         success = await super.init();
         // check other required tables existence
-        let requiredDbTableNames = this._settings['required-db-table'] &&
-            this._settings['required-db-table'].split(',') || [];
+        let requiredDbTableNames =
+            (this._settings['required-db-table'] &&
+                this._settings['required-db-table'].split(',')) ||
+            [];
         let otherRequiredTableEntries = Object.entries(DB).filter(entry => {
-            return !MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(entry[0]) &&
-                requiredDbTableNames.includes(entry[1].TableName);
+            return (
+                !MINIMUM_REQUIRED_DB_TABLE_KEYS.includes(entry[0]) &&
+                requiredDbTableNames.includes(entry[1].TableName)
+            );
         });
         let errors = [];
         if (otherRequiredTableEntries.length > 0) {
             logger.info('checking other required db table.');
-            await Promise.all(otherRequiredTableEntries.map(
-                entry => this.platform.tableExists(entry[1]).catch(err => errors.push(err)))
+            await Promise.all(
+                otherRequiredTableEntries.map(entry =>
+                    this.platform.tableExists(entry[1]).catch(err => errors.push(err))
+                )
             );
             errors.forEach(err => logger.error(err));
         }
@@ -1905,9 +2142,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             responseLog = '[********] is masked in this log. ¯\\_(ツ)_/¯';
         }
         let log = logger.log(`(${statusCode}) response body:`, JSON.stringify(responseLog)).flush();
-        if (process.env.DEBUG_SAVE_CUSTOM_LOG && (!process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR ||
-                process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR &&
-                logger.errorCount > 0) && log !== '') {
+        if (
+            process.env.DEBUG_SAVE_CUSTOM_LOG &&
+            (!process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR ||
+                (process.env.DEBUG_SAVE_CUSTOM_LOG_ON_ERROR && logger.errorCount > 0)) &&
+            log !== ''
+        ) {
             this.platform.saveLogToDb(log);
         }
         const response = {
@@ -1931,7 +2171,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      */
     /* eslint-enable max-len */
-    async handle(event, context, callback) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    async handle(event, context, callback) {
         await super.handle(...arguments);
     }
 
@@ -1958,7 +2199,6 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         } catch (error) {
             return null;
         }
-
     }
 
     /* ==== Sub-Handlers ==== */
@@ -1972,7 +2212,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-enable max-len */
     async handleAutoScalingEvent(event) {
         logger.info(`calling handleAutoScalingEvent: ${event['detail-type']}`);
-        let result, errorTasks = [],
+        let result,
+            errorTasks = [],
             tasks = [];
         switch (event['detail-type']) {
             case 'EC2 Instance-launch Lifecycle Action':
@@ -1992,20 +2233,25 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 break;
             case 'EC2 Instance Terminate Successful':
                 // remove master record if this instance is the elected master
-                this._selfInstance = this._selfInstance ||
-                    await this.platform.describeInstance({
+                this._selfInstance =
+                    this._selfInstance ||
+                    (await this.platform.describeInstance({
                         instanceId: event.detail.EC2InstanceId
-                    });
-                this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-                if (this._masterRecord &&
-                    this._masterRecord.instanceId === event.detail.EC2InstanceId) {
+                    }));
+                this._masterRecord = this._masterRecord || (await this.platform.getMasterRecord());
+                if (
+                    this._masterRecord &&
+                    this._masterRecord.instanceId === event.detail.EC2InstanceId
+                ) {
                     await this.platform.removeMasterRecord();
                 }
                 // detach nic2
                 if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
-                    tasks.push(this.handleNicDetachment(event).catch(() => {
-                        errorTasks.push('handleNicDetachment');
-                    }));
+                    tasks.push(
+                        this.handleNicDetachment(event).catch(() => {
+                            errorTasks.push('handleNicDetachment');
+                        })
+                    );
                 }
                 await Promise.all(tasks);
                 result = errorTasks.length === 0 && !!this._selfInstance;
@@ -2039,35 +2285,48 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleLaunchingInstanceHook(event) {
         logger.info('calling handleLaunchingInstanceHook');
         const instanceId = event.detail.EC2InstanceId;
-        let lifecycleItem, result, errorTasks = [],
+        let lifecycleItem,
+            result,
+            errorTasks = [],
             tasks = [];
-        this._selfInstance = this._selfInstance ||
-            await this.platform.describeInstance({
+        this._selfInstance =
+            this._selfInstance ||
+            (await this.platform.describeInstance({
                 instanceId: event.detail.EC2InstanceId
-            });
-        this.setScalingGroup(this._settings['master-scaling-group-name'],
-            event.detail.AutoScalingGroupName);
+            }));
+        this.setScalingGroup(
+            this._settings['master-scaling-group-name'],
+            event.detail.AutoScalingGroupName
+        );
         // update source/dest check to false
-        tasks.push(this.updateInstanceForLaunching(event.detail.EC2InstanceId).catch(() => {
-            errorTasks.push('updateInstanceForLaunching');
-        }));
+        tasks.push(
+            this.updateInstanceForLaunching(event.detail.EC2InstanceId).catch(() => {
+                errorTasks.push('updateInstanceForLaunching');
+            })
+        );
         // attach nic2
         if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
-            tasks.push(this.handleNicAttachment(event).catch(() => {
-                errorTasks.push('handleNicAttachment');
-            }));
+            tasks.push(
+                this.handleNicAttachment(event).catch(() => {
+                    errorTasks.push('handleNicAttachment');
+                })
+            );
         }
         // handle TGW VPN attachment
         if (this._selfInstance && this._settings['enable-transit-gateway-vpn'] === 'true') {
-            tasks.push(this.handleTgwVpnAttachment(event).catch(() => {
-                errorTasks.push('handleTgwVpnAttachment');
-            }));
+            tasks.push(
+                this.handleTgwVpnAttachment(event).catch(() => {
+                    errorTasks.push('handleTgwVpnAttachment');
+                })
+            );
         }
         // handle Hybrid licensing load balancer attachment
         if (this._selfInstance && this._settings['enable-hybrid-licensing'] === 'true') {
-            tasks.push(this.handleLoadBalancerAttachment(this._selfInstance).catch(() => {
-                errorTasks.push('handleLoadBalancerAttachment');
-            }));
+            tasks.push(
+                this.handleLoadBalancerAttachment(this._selfInstance).catch(() => {
+                    errorTasks.push('handleLoadBalancerAttachment');
+                })
+            );
         }
         try {
             // if any additional process here failed, should turn this lifecycle hook into
@@ -2076,66 +2335,92 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             result = errorTasks.length === 0 && !!this._selfInstance;
             if (result) {
                 // create a pending lifecycle item for this instance
-                lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                    AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, false);
+                lifecycleItem = new AutoScaleCore.LifecycleItem(
+                    instanceId,
+                    event.detail,
+                    AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG,
+                    false
+                );
                 result = await this.platform.updateLifecycleItem(lifecycleItem);
-                logger.info(`ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
-                    `lifecyclehook(${event.detail.LifecycleActionToken})`);
+                logger.info(
+                    `ForgiGate (instance id: ${instanceId}) is launching to get config, ` +
+                        `lifecyclehook(${event.detail.LifecycleActionToken})`
+                );
                 return result;
             } else {
                 throw new Error(`The following tasks failed: ${JSON.stringify(errorTasks)}.`);
             }
         } catch (error) {
-            lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG, true);
+            lifecycleItem = new AutoScaleCore.LifecycleItem(
+                instanceId,
+                event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_GET_CONFIG,
+                true
+            );
             result = await this.platform.completeLifecycleAction(lifecycleItem, false, false);
-            logger.info(`called handleLaunchingInstanceHook. Error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}. ` +
-                'Abandon Launching Lifecycle Hook for ' +
-                `instance (id:${instanceId}), done: ${result}`);
+            logger.info(
+                `called handleLaunchingInstanceHook. Error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}. ` +
+                    'Abandon Launching Lifecycle Hook for ' +
+                    `instance (id:${instanceId}), done: ${result}`
+            );
             throw error;
         }
     }
 
     async handleTerminatingInstanceHook(event) {
         logger.info('calling handleTerminatingInstanceHook');
-        let result, errorTasks = [],
+        let result,
+            errorTasks = [],
             tasks = [],
             instanceId = event.detail.EC2InstanceId;
-        this._selfInstance = this._selfInstance ||
-            await this.platform.describeInstance({
+        this._selfInstance =
+            this._selfInstance ||
+            (await this.platform.describeInstance({
                 instanceId: event.detail.EC2InstanceId
-            });
+            }));
         await this.parseInstanceInfo(instanceId);
 
         await this.checkInstanceAuthorization(this._selfInstance);
 
         // detach nic2
         if (this._selfInstance && this._settings['enable-second-nic'] === 'true') {
-            tasks.push(this.handleNicDetachment(event).catch(() => {
-                errorTasks.push('handleNicDetachment');
-            }));
+            tasks.push(
+                this.handleNicDetachment(event).catch(() => {
+                    errorTasks.push('handleNicDetachment');
+                })
+            );
         }
         // handle TGW VPN attachment
         if (this._selfInstance && this._settings['enable-transit-gateway-vpn'] === 'true') {
-            tasks.push(this.handleTgwVpnDetachment(event).catch(() => {
-                errorTasks.push('handleTgwVpnDetachment');
-            }));
+            tasks.push(
+                this.handleTgwVpnDetachment(event).catch(() => {
+                    errorTasks.push('handleTgwVpnDetachment');
+                })
+            );
         }
         await Promise.all(tasks);
         result = errorTasks.length === 0 && !!this._selfInstance;
         if (this._selfInstance && result) {
             // force updating this instance sync state to 'out-of-sync' so the script can treat
             // it as an unhealthy instance
-            this._selfHealthCheck = this._selfHealthCheck ||
-                await this.platform.getInstanceHealthCheck({
-                    instanceId: this._selfInstance.instanceId
-                }, 0);
+            this._selfHealthCheck =
+                this._selfHealthCheck ||
+                (await this.platform.getInstanceHealthCheck(
+                    {
+                        instanceId: this._selfInstance.instanceId
+                    },
+                    0
+                ));
             if (this._selfHealthCheck && this._selfHealthCheck.inSync) {
-                await this.platform.updateInstanceHealthCheck(this._selfHealthCheck,
+                await this.platform.updateInstanceHealthCheck(
+                    this._selfHealthCheck,
                     AutoScaleCore.AutoscaleHandler.NO_HEART_BEAT_INTERVAL_SPECIFIED,
-                    this._selfHealthCheck.masterIp, Date.now(), true);
+                    this._selfHealthCheck.masterIp,
+                    Date.now(),
+                    true
+                );
             }
             // check if master
             let masterInfo = await this.getMasterInfo();
@@ -2148,13 +2433,19 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 }
             }
             // complete its lifecycle
-            let lifecycleItem = new AutoScaleCore.LifecycleItem(instanceId, event.detail,
-                AutoScaleCore.LifecycleItem.ACTION_NAME_TERMINATING_INSTANCE, false);
+            let lifecycleItem = new AutoScaleCore.LifecycleItem(
+                instanceId,
+                event.detail,
+                AutoScaleCore.LifecycleItem.ACTION_NAME_TERMINATING_INSTANCE,
+                false
+            );
             logger.log(`lifecycle item: ${JSON.stringify(lifecycleItem)}`);
             await this.platform.completeLifecycleAction(lifecycleItem, true);
             await this.platform.cleanUpDbLifeCycleActions([lifecycleItem]);
-            logger.info(`ForgiGate (instance id: ${instanceId}) is terminating, lifecyclehook(${
-                event.detail.LifecycleActionToken})`);
+            logger.info(
+                `ForgiGate (instance id: ${instanceId}) is terminating, ` +
+                    `lifecyclehook(${event.detail.LifecycleActionToken})`
+            );
         } else {
             logger.warn(`cannot handle nic detachment for instance (id: ${instanceId})`);
         }
@@ -2194,8 +2485,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /* eslint-enable max-len */
     async handleGetConfig() {
         logger.info('calling handleGetConfig');
-        let
-            config,
+        let config,
             masterInfo,
             params = {},
             masterIp,
@@ -2206,10 +2496,13 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 // TODO: remove the workaround if mantis item: #0534971 is resolved
                 // if i am the master, don't wait, continue, if not, wait
                 // this if-condition is to work around the double GET config calls.
-                if (this._masterRecord && this._masterRecord.voteState === 'pending' &&
+                if (
+                    this._masterRecord &&
+                    this._masterRecord.voteState === 'pending' &&
                     this._selfInstance &&
                     this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                    this._masterRecord.scalingGroupName === this.scalingGroupName) {
+                    this._masterRecord.scalingGroupName === this.scalingGroupName
+                ) {
                     duplicatedGetConfigCall = true;
                     masterIp = this._masterRecord.ip;
                     return true;
@@ -2224,8 +2517,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 // master info exists
                 if (result) {
                     // i am the elected master
-                    if (result.primaryPrivateIpAddress ===
-                        this._selfInstance.primaryPrivateIpAddress) {
+                    if (
+                        result.primaryPrivateIpAddress ===
+                        this._selfInstance.primaryPrivateIpAddress
+                    ) {
                         masterIp = this._selfInstance.primaryPrivateIpAddress;
                         return true;
                     } else if (this._masterRecord) {
@@ -2268,25 +2563,34 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
         try {
             masterInfo = await AutoScaleCore.Functions.waitFor(
-                promiseEmitter, validator, 5000, counter);
+                promiseEmitter,
+                validator,
+                5000,
+                counter
+            );
         } catch (error) {
             // if error occurs, check who is holding a master election, if it is this instance,
             // terminates this election. then tear down this instance whether it's master or not.
-            this._masterRecord = this._masterRecord || await this.platform.getMasterRecord();
-            if (this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName) {
+            this._masterRecord = this._masterRecord || (await this.platform.getMasterRecord());
+            if (
+                this._masterRecord.instanceId === this._selfInstance.instanceId &&
+                this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName
+            ) {
                 await this.platform.removeMasterRecord();
             }
             await this.removeInstance(this._selfInstance);
-            throw new Error('Failed to determine the master instance. This instance is unable' +
-                ' to bootstrap. Please report this to' +
-                ' administrators.');
+            throw new Error(
+                'Failed to determine the master instance. This instance is unable' +
+                    ' to bootstrap. Please report this to' +
+                    ' administrators.'
+            );
         }
 
         // get TGW_VPN record
         if (this._settings['enable-transit-gateway-vpn'] === 'true') {
-            let vpnAttachmentRecord =
-                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            let vpnAttachmentRecord = await this.platform.getTgwVpnAttachmentRecord(
+                this._selfInstance
+            );
             if (vpnAttachmentRecord) {
                 params.vpnConfigSetName = 'setuptgwvpn';
                 params.vpnConfiguration =
@@ -2303,20 +2607,27 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             this._step = 'handler:getConfig:getMasterConfig';
             params.callbackUrl = await this.platform.getCallbackEndpointUrl();
             config = await this.getMasterConfig(params);
-            logger.info('called handleGetConfig: returning master config' +
-                `(master-ip: ${masterIp}):\n ${config}`);
+            logger.info(
+                'called handleGetConfig: returning master config' +
+                    `(master-ip: ${masterIp}):\n ${config}`
+            );
             return config;
         } else {
             this._step = 'handler:getConfig:getSlaveConfig';
-            let getPendingMasterIp = !(this._settings['master-election-no-wait'] === 'true' &&
-                this._masterRecord && this._masterRecord.voteState === 'pending');
+            let getPendingMasterIp = !(
+                this._settings['master-election-no-wait'] === 'true' &&
+                this._masterRecord &&
+                this._masterRecord.voteState === 'pending'
+            );
             params.callbackUrl = await this.platform.getCallbackEndpointUrl();
-            params.masterIp = getPendingMasterIp && masterInfo &&
-                masterInfo.primaryPrivateIpAddress || null;
+            params.masterIp =
+                (getPendingMasterIp && masterInfo && masterInfo.primaryPrivateIpAddress) || null;
             params.allowHeadless = this._settings['master-election-no-wait'] === 'true';
             config = await this.getSlaveConfig(params);
-            logger.info('called handleGetConfig: returning slave config' +
-                `(master-ip: ${params.masterIp || 'undetermined'}):\n ${config}`);
+            logger.info(
+                'called handleGetConfig: returning slave config' +
+                    `(master-ip: ${params.masterIp || 'undetermined'}):\n ${config}`
+            );
             return config;
         }
     }
@@ -2326,7 +2637,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             let gracePeriod = (parseInt(this._settings['get-license-grace-period']) || 600) * 1000;
             // do health check on each item
             let queries = [],
-                healthCheckResults, recyclableRecords = [],
+                healthCheckResults,
+                recyclableRecords = [],
                 count = 0,
                 maxCount,
                 platform = this.platform;
@@ -2337,28 +2649,36 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
             usageRecords.forEach(item => {
                 if (item.instanceId && item.scalingGroupName) {
-                    queries.push(async function(rec) {
-                        // get instance health check and instance info
-                        let tasks = [];
-                        tasks.push(
-                            platform.getInstanceHealthCheck({
-                                instanceId: rec.instanceId,
-                                scalingGroupName: rec.scalingGroupName
-                            }).catch(() => null));
-                        tasks.push(
-                            platform.describeInstance({
-                                instanceId: item.instanceId,
-                                scalingGroupName: item.scalingGroupName,
-                                readCache: false
-                            }).catch(() => null));
-                        let [healthCheck, instance] = await Promise.all(tasks);
-                        return {
-                            checksum: rec.checksum,
-                            usageRecord: rec,
-                            healthCheck: healthCheck,
-                            instance: instance
-                        };
-                    }(item));
+                    queries.push(
+                        (async function(rec) {
+                            // get instance health check and instance info
+                            let tasks = [];
+                            tasks.push(
+                                platform
+                                    .getInstanceHealthCheck({
+                                        instanceId: rec.instanceId,
+                                        scalingGroupName: rec.scalingGroupName
+                                    })
+                                    .catch(() => null)
+                            );
+                            tasks.push(
+                                platform
+                                    .describeInstance({
+                                        instanceId: item.instanceId,
+                                        scalingGroupName: item.scalingGroupName,
+                                        readCache: false
+                                    })
+                                    .catch(() => null)
+                            );
+                            let [healthCheck, instance] = await Promise.all(tasks);
+                            return {
+                                checksum: rec.checksum,
+                                usageRecord: rec,
+                                healthCheck: healthCheck,
+                                instance: instance
+                            };
+                        })(item)
+                    );
                 }
             }, this);
             healthCheckResults = await Promise.all(queries);
@@ -2379,14 +2699,21 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     // if instance is gone? recycle the license
                     if (!result.instance) {
                         recyclable = true;
-                    } else if (result.instance && result.healthCheck &&
+                    } else if (
+                        result.instance &&
+                        result.healthCheck &&
                         (!result.healthCheck.inSync ||
                             result.healthCheck.inevitableFailToSyncTime <
-                            result.healthCheck.healthCheckTime)) {
+                                result.healthCheck.healthCheckTime)
+                    ) {
                         // if instance exists but instance state isn't in-sync? recycle the license
                         recyclable = true;
-                    } else if (result.instance && !result.healthCheck && result.usageRecord &&
-                        Date.now() > result.usageRecord.assignedTime + gracePeriod) {
+                    } else if (
+                        result.instance &&
+                        !result.healthCheck &&
+                        result.usageRecord &&
+                        Date.now() > result.usageRecord.assignedTime + gracePeriod
+                    ) {
                         // if instance exists but no healthcheck and grace period has passed?
                         recyclable = true;
                     }
@@ -2411,26 +2738,27 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleNicAttachment(event) {
         logger.info('calling handleNicAttachment');
         if (!event || !event.detail || !event.detail.EC2InstanceId) {
-            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.warn(`event not contains ec2 instance info. event: ${JSON.stringify(event)}`);
             return null;
         }
         try {
             let params, result, nic;
-            this._selfInstance = this._selfInstance ||
-                await this.platform.describeInstance({
+            this._selfInstance =
+                this._selfInstance ||
+                (await this.platform.describeInstance({
                     instanceId: event.detail.EC2InstanceId
-                });
+                }));
             // create a nic
-            let description = `Addtional nic for instance(id:${this._selfInstance.instanceId}) ` +
+            let description =
+                `Addtional nic for instance(id:${this._selfInstance.instanceId}) ` +
                 `in auto scaling group: ${this.scalingGroupName}`;
             let securityGroups = [];
             this._selfInstance.securityGroups.forEach(sgItem => {
                 securityGroups.push(sgItem.GroupId);
             });
-            let attachmentRecord =
-                await this.platform.getNicAttachmentRecord(this._selfInstance.instanceId),
+            let attachmentRecord = await this.platform.getNicAttachmentRecord(
+                    this._selfInstance.instanceId
+                ),
                 subnetPairs = await this.loadSubnetPairs();
             let subnetId = this._selfInstance.subnetId; // set subnet by default
             // find a paired subnet Id if there is one.
@@ -2452,8 +2780,11 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 if (!nic) {
                     throw new Error('create network interface unsuccessfully.');
                 }
-                await this.platform.updateNicAttachmentRecord(this._selfInstance.instanceId,
-                    nic.NetworkInterfaceId, 'pending_attach');
+                await this.platform.updateNicAttachmentRecord(
+                    this._selfInstance.instanceId,
+                    nic.NetworkInterfaceId,
+                    'pending_attach'
+                );
                 result = await this.platform.attachNetworkInterface(this._selfInstance, nic);
                 if (!result) {
                     params = {
@@ -2462,24 +2793,31 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     await this.platform.deleteNetworkInterface(params);
                     throw new Error('attach network interface unsuccessfully.');
                 }
-                await this.platform.updateNicAttachmentRecord(this._selfInstance.instanceId,
-                    nic.NetworkInterfaceId, 'attached', 'pending_attach');
+                await this.platform.updateNicAttachmentRecord(
+                    this._selfInstance.instanceId,
+                    nic.NetworkInterfaceId,
+                    'attached',
+                    'pending_attach'
+                );
                 // reload the instance info
-                this._selfInstance =
-                    await this.platform.describeInstance({
-                        instanceId: event.detail.EC2InstanceId
-                    });
+                this._selfInstance = await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
                 return true;
             } else {
-                logger.info(`instance (id: ${attachmentRecord.instanceId}) has been in ` +
-                    `association with nic (id: ${attachmentRecord.nicId}) ` +
-                    `in state (${attachmentRecord.attachmentState})`);
+                logger.info(
+                    `instance (id: ${attachmentRecord.instanceId}) has been in ` +
+                        `association with nic (id: ${attachmentRecord.nicId}) ` +
+                        `in state (${attachmentRecord.attachmentState})`
+                );
                 return true;
             }
         } catch (error) {
-            logger.warn(`called handleNicAttachment with error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.warn(
+                `called handleNicAttachment with error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`
+            );
             return null;
         }
     }
@@ -2492,18 +2830,18 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             return null;
         }
         try {
-            this._selfInstance = this._selfInstance ||
-                await this.platform.describeInstance({
+            this._selfInstance =
+                this._selfInstance ||
+                (await this.platform.describeInstance({
                     instanceId: event.detail.EC2InstanceId
-                });
-            attachmentRecord =
-                await this.platform.getNicAttachmentRecord(this._selfInstance.instanceId);
+                }));
+            attachmentRecord = await this.platform.getNicAttachmentRecord(
+                this._selfInstance.instanceId
+            );
             if (attachmentRecord && attachmentRecord.attachmentState === 'attached') {
                 // get nic
                 nic = await this.platform.describeNetworkInterface({
-                    NetworkInterfaceIds: [
-                        attachmentRecord.nicId
-                    ]
+                    NetworkInterfaceIds: [attachmentRecord.nicId]
                 });
                 // updete attachment record for in transition
                 // await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
@@ -2519,17 +2857,20 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     await this.platform.deleteNicAttachmentRecord(attachmentRecord.instanceId);
                 }
                 // reload the instance info
-                this._selfInstance =
-                    await this.platform.describeInstance({
-                        instanceId: event.detail.EC2InstanceId
-                    });
+                this._selfInstance = await this.platform.describeInstance({
+                    instanceId: event.detail.EC2InstanceId
+                });
             } else if (!attachmentRecord) {
-                logger.info('no tracking record of network interface attached to instance ' +
-                    `(id: ${this._selfInstance.instanceId})`);
+                logger.info(
+                    'no tracking record of network interface attached to instance ' +
+                        `(id: ${this._selfInstance.instanceId})`
+                );
             } else {
-                logger.info(`instance (id: ${attachmentRecord.instanceId}) with nic ` +
-                    `(id: ${attachmentRecord.nicId}) is not in in the 'attached' state ` +
-                    `(${attachmentRecord.attachmentState})`);
+                logger.info(
+                    `instance (id: ${attachmentRecord.instanceId}) with nic ` +
+                        `(id: ${attachmentRecord.nicId}) is not in in the 'attached' state ` +
+                        `(${attachmentRecord.attachmentState})`
+                );
             }
             return true;
         } catch (error) {
@@ -2537,20 +2878,27 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             if (attachmentRecord) {
                 // reload nic info
                 nic = await this.platform.describeNetworkInterface({
-                    NetworkInterfaceIds: [
-                        attachmentRecord.nicId
-                    ]
+                    NetworkInterfaceIds: [attachmentRecord.nicId]
                 });
                 // if nic is still attached to the same instance
-                if (nic && nic.Attachment &&
-                    nic.Attachment.InstanceId === attachmentRecord.instanceId) {
-                    await this.platform.updateNicAttachmentRecord(attachmentRecord.instanceId,
-                        attachmentRecord.nicId, 'attached', 'pending_detach');
+                if (
+                    nic &&
+                    nic.Attachment &&
+                    nic.Attachment.InstanceId === attachmentRecord.instanceId
+                ) {
+                    await this.platform.updateNicAttachmentRecord(
+                        attachmentRecord.instanceId,
+                        attachmentRecord.nicId,
+                        'attached',
+                        'pending_detach'
+                    );
                 }
             }
-            logger.warn(`called handleNicDetachment with error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.warn(
+                `called handleNicDetachment with error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`
+            );
             return null;
         }
     }
@@ -2588,12 +2936,9 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 instanceTerminated = false,
                 instanceStateInTransition = false,
                 noInstance = false;
-            let groupCheck = await this.platform.describeAutoScalingGroups(
-                scalingGroupName
-            );
+            let groupCheck = await this.platform.describeAutoScalingGroups(scalingGroupName);
             if (!groupCheck) {
-                throw new Error(`auto scaling group (${scalingGroupName})` +
-                    'does not exist.');
+                throw new Error(`auto scaling group (${scalingGroupName})` + 'does not exist.');
             }
             // check if capacity set to (desired:0, minSize: 0, maxSize: any number)
             if (groupCheck.DesiredCapacity === 0 && groupCheck.MinSize === 0) {
@@ -2608,14 +2953,16 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 if (instance.LifecycleState !== 'InService') {
                     instanceInService = false;
                 }
-                if (instance.LifecycleState === 'Pending' ||
+                if (
+                    instance.LifecycleState === 'Pending' ||
                     instance.LifecycleState === 'Pending:Wait' ||
                     instance.LifecycleState === 'Pending:Proceed' ||
                     instance.LifecycleState === 'Terminating' ||
                     instance.LifecycleState === 'Terminating:Wait' ||
                     instance.LifecycleState === 'Terminating:Proceed' ||
                     instance.LifecycleState === 'Detaching' ||
-                    instance.LifecycleState === 'EnteringStandby') {
+                    instance.LifecycleState === 'EnteringStandby'
+                ) {
                     instanceStateInTransition = true;
                 }
                 if (instance.LifecycleState === 'Terminated') {
@@ -2651,15 +2998,20 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         logger.info('calling listNetworkInterfaces');
         // RESOURCE_TAG_PREFIX
         let nics = await this.platform.listNetworkInterfaces({
-            Filters: [{
-                Name: 'tag:FortiGateAutoscaleNicAttachment',
-                Values: [RESOURCE_TAG_PREFIX]
-            }]
+            Filters: [
+                {
+                    Name: 'tag:FortiGateAutoscaleNicAttachment',
+                    Values: [RESOURCE_TAG_PREFIX]
+                }
+            ]
         });
-        return Array.isArray(nics) && nics.filter(nic => {
-            logger.info(`nic (id: ${nic.NetworkInterfaceId}, status: ${nic.Status})`);
-            return !status || nic.Status === status;
-        });
+        return (
+            Array.isArray(nics) &&
+            nics.filter(nic => {
+                logger.info(`nic (id: ${nic.NetworkInterfaceId}, status: ${nic.Status})`);
+                return !status || nic.Status === status;
+            })
+        );
     }
 
     async cleanUpAdditionalNics() {
@@ -2671,9 +3023,11 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         // delete them
         if (Array.isArray(nics) && nics.length > 0) {
             nics.forEach(element => {
-                tasks.push(this.platform.deleteNetworkInterface({
-                    NetworkInterfaceId: element.NetworkInterfaceId
-                }));
+                tasks.push(
+                    this.platform.deleteNetworkInterface({
+                        NetworkInterfaceId: element.NetworkInterfaceId
+                    })
+                );
             });
             try {
                 await Promise.all(tasks);
@@ -2700,18 +3054,22 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             return null;
         }
         try {
-            this._selfInstance = this._selfInstance ||
-                await this.platform.describeInstance({
+            this._selfInstance =
+                this._selfInstance ||
+                (await this.platform.describeInstance({
                     instanceId: event.detail.EC2InstanceId
-                });
+                }));
             // create an ec2 vpn of "ipsec.1" type
             // get the transit gateway id
             let transitGatewayId = this._settings['transit-gateway-id'];
-            let attachmentRecord =
-                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+            let attachmentRecord = await this.platform.getTgwVpnAttachmentRecord(
+                this._selfInstance
+            );
             if (attachmentRecord) {
-                logger.warn('Transit Gateway VPN attachment for instance id: ' +
-                    `(${this._selfInstance.instanceId}) already exisits.`);
+                logger.warn(
+                    'Transit Gateway VPN attachment for instance id: ' +
+                        `(${this._selfInstance.instanceId}) already exisits.`
+                );
                 return true;
             }
             // create a customer gateway with the public IP address of the FGT instance
@@ -2725,11 +3083,7 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 type: 'ipsec.1'
             });
             // create the vpn connection
-            let {
-                attachmentId,
-                vpnConnection
-            } =
-            await this.platform.createVpnConnection({
+            let { attachmentId, vpnConnection } = await this.platform.createVpnConnection({
                 customerGatewayId: customerGateway.CustomerGatewayId,
                 transitGatewayId: transitGatewayId,
                 type: 'ipsec.1',
@@ -2751,27 +3105,34 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
 
             // do not await the callee because it's a blocking method that take while to comeplete
             // running
-            lambda.invoke({
-                FunctionName: this._settings['transit-gateway-vpn-handler-name'],
-                Payload: JSON.stringify({
-                    pskSecret: this._settings['fortigate-psk-secret'],
-                    invokeMethod: 'updateTgwRouteTable',
-                    attachmentId: attachmentId
-                })
-            }, function() {
-                // no need to do anything here in this callback function.
-            });
+            lambda.invoke(
+                {
+                    FunctionName: this._settings['transit-gateway-vpn-handler-name'],
+                    Payload: JSON.stringify({
+                        pskSecret: this._settings['fortigate-psk-secret'],
+                        invokeMethod: 'updateTgwRouteTable',
+                        attachmentId: attachmentId
+                    })
+                },
+                function() {
+                    // no need to do anything here in this callback function.
+                }
+            );
 
             await this.platform.updateTgwVpnAttachmentRecord(this._selfInstance, vpnConnection);
-            logger.info('Transit Gateway VPN attachment (' +
-                `vpn id: ${vpnConnection.VpnConnectionId}, ` +
-                `attachment id: ${attachmentId}, ` +
-                `tgw id: ${vpnConnection.TransitGatewayId}) created.`);
+            logger.info(
+                'Transit Gateway VPN attachment (' +
+                    `vpn id: ${vpnConnection.VpnConnectionId}, ` +
+                    `attachment id: ${attachmentId}, ` +
+                    `tgw id: ${vpnConnection.TransitGatewayId}) created.`
+            );
             return true;
         } catch (error) {
-            logger.warn(`called handleTgwVpnAttachment with error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.warn(
+                `called handleTgwVpnAttachment with error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`
+            );
             return null;
         }
     }
@@ -2784,12 +3145,12 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             return null;
         }
         try {
-            this._selfInstance = this._selfInstance ||
-                await this.platform.describeInstance({
+            this._selfInstance =
+                this._selfInstance ||
+                (await this.platform.describeInstance({
                     instanceId: event.detail.EC2InstanceId
-                });
-            attachmentRecord =
-                await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
+                }));
+            attachmentRecord = await this.platform.getTgwVpnAttachmentRecord(this._selfInstance);
             if (attachmentRecord) {
                 // delete vpn
                 await this.platform.deleteVpnConnection({
@@ -2801,19 +3162,25 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 });
                 // delete attachment record
                 await this.platform.deleteTgwVpnAttachmentRecord(this._selfInstance);
-                logger.info('Transit Gateway VPN attachment (' +
-                    `vpn id: ${attachmentRecord.vpnConnectionId}, ` +
-                    `tgw id: ${attachmentRecord.transitGatewayId}) deleted.`);
+                logger.info(
+                    'Transit Gateway VPN attachment (' +
+                        `vpn id: ${attachmentRecord.vpnConnectionId}, ` +
+                        `tgw id: ${attachmentRecord.transitGatewayId}) deleted.`
+                );
             } else {
-                logger.info('Transit Gateway VPN attachment for instance (' +
-                    `id: ${this._selfInstance.instanceId}` +
-                    `public ip: ${this._selfInstance.primaryPublicIpAddress}) not found.`);
+                logger.info(
+                    'Transit Gateway VPN attachment for instance (' +
+                        `id: ${this._selfInstance.instanceId}` +
+                        `public ip: ${this._selfInstance.primaryPublicIpAddress}) not found.`
+                );
             }
             return true;
         } catch (error) {
-            logger.warn(`called handleTgwVpnDetachment with error: ${JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            )}`);
+            logger.warn(
+                `called handleTgwVpnDetachment with error: ${JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )}`
+            );
             return null;
         }
     }
@@ -2822,7 +3189,8 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async parseConfigSet(configSet, dataSources) {
         let resourceMap = {};
         Object.assign(resourceMap, dataSources);
-        let nodePath, conf = configSet,
+        let nodePath,
+            conf = configSet,
             match,
             matches = typeof configSet === 'string' ? configSet.match(/({\S+})/gm) : [];
         try {
@@ -2845,13 +3213,17 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                             }
                         }
                         // slightly deferent from the default case.
-                        replaceBy =
-                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
+                        replaceBy = AutoScaleCore.Functions.configSetResourceFinder(
+                            resourceMap,
+                            nodePath
+                        );
                         break;
                     case '@device': // reference this device
                         resourceMap['@device'] = this._selfInstance;
-                        replaceBy =
-                            AutoScaleCore.Functions.configSetResourceFinder(resourceMap, nodePath);
+                        replaceBy = AutoScaleCore.Functions.configSetResourceFinder(
+                            resourceMap,
+                            nodePath
+                        );
                         break;
                     case '@setting': // fetch from settings in the db
                         // will fetch info from db that input by user when deploy the template
@@ -2865,9 +3237,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                         break;
                     default:
                         if (resourceMap[resRoot]) {
-                            replaceBy =
-                                AutoScaleCore.Functions.configSetResourceFinder(
-                                    resourceMap, nodePath);
+                            replaceBy = AutoScaleCore.Functions.configSetResourceFinder(
+                                resourceMap,
+                                nodePath
+                            );
                         }
                         break;
                 }
@@ -2896,14 +3269,17 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             await this.platform.deleteCustomerGateway({
                 customerGatewayId: attachment.customerGatewayId
             });
-            logger.info('Transit Gateway VPN attachment (' +
-                `vpn id: ${attachment.vpnConnectionId}, ` +
-                `tgw id: ${attachment.transitGatewayId}) deleted.`);
+            logger.info(
+                'Transit Gateway VPN attachment (' +
+                    `vpn id: ${attachment.vpnConnectionId}, ` +
+                    `tgw id: ${attachment.transitGatewayId}) deleted.`
+            );
             return true;
         };
 
         for (let attachmentRecord of attachments) {
-            let inatance, attachmentId = attachmentRecord.id;
+            let inatance,
+                attachmentId = attachmentRecord.id;
             // check instance existence
             if (cleanUpNonExistInstanceOnly) {
                 inatance = this.platform.describeInstance({
@@ -2912,11 +3288,15 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             }
 
             if (!cleanUpNonExistInstanceOnly || (cleanUpNonExistInstanceOnly && !inatance)) {
-                tasks.push(cleanUpFunc(attachmentRecord).catch(error => {
-                    logger.error(`cannot delete vpn attachemnt by id: ${attachmentId}. ` +
-                        `error: ${error}`);
-                    errorTasks.push(attachmentId);
-                }));
+                tasks.push(
+                    cleanUpFunc(attachmentRecord).catch(error => {
+                        logger.error(
+                            `cannot delete vpn attachemnt by id: ${attachmentId}. ` +
+                                `error: ${error}`
+                        );
+                        errorTasks.push(attachmentId);
+                    })
+                );
             }
         }
 
@@ -2933,27 +3313,38 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async updateTgwRouteTable(attachmentId) {
         let params, waitTimeStart, data;
         params = {
-            Filters: [{
-                Name: 'transit-gateway-attachment-id',
-                Values: [
-                    attachmentId
-                ]
-            }]
+            Filters: [
+                {
+                    Name: 'transit-gateway-attachment-id',
+                    Values: [attachmentId]
+                }
+            ]
         };
         let promiseEmitter = () => {
-            return ec2.describeTransitGatewayAttachments(params).promise()
+            return ec2
+                .describeTransitGatewayAttachments(params)
+                .promise()
                 .catch(error => {
-                    logger.warn('error in describeTransitGatewayAttachments ' +
-                        `>${JSON.stringify(
-                            error instanceof Error ? {
-                                message: error.message, stack: error.stack } : error
-                        )}`);
+                    logger.warn(
+                        'error in describeTransitGatewayAttachments ' +
+                            `>${JSON.stringify(
+                                error instanceof Error
+                                    ? {
+                                          message: error.message,
+                                          stack: error.stack
+                                      }
+                                    : error
+                            )}`
+                    );
                 });
         };
         let validator = result => {
             logger.debug(`TransitGatewayAttachments: ${JSON.stringify(result)}`);
-            if (result && result.TransitGatewayAttachments &&
-                result.TransitGatewayAttachments.length > 0) {
+            if (
+                result &&
+                result.TransitGatewayAttachments &&
+                result.TransitGatewayAttachments.length > 0
+            ) {
                 // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
                 // ec2.describeTransitGatewayAttachments cannot properly filter resource
                 // by resource-id. instead, it always return all resources so we must
@@ -2964,8 +3355,10 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 attachmentFound = result.TransitGatewayAttachments.find(attachment => {
                     return attachment.TransitGatewayAttachmentId === attachmentId;
                 });
-                logger.debug(`attachmentFound: ${JSON.stringify(attachmentFound)}, ` +
-                    `state: ${attachmentFound && attachmentFound.State}`);
+                logger.debug(
+                    `attachmentFound: ${JSON.stringify(attachmentFound)}, ` +
+                        `state: ${attachmentFound && attachmentFound.State}`
+                );
                 // need to wait for the attachment state become available
                 return attachmentFound && attachmentFound.State === 'available';
             }
@@ -2978,35 +3371,41 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                 return false;
             }
             let waitTimeSec = (Date.now() - waitTimeStart) / 1000;
-            logger.error(`VPN attachment cannot become available within ${waitTimeSec}` +
-                ' seconds. Update failed.');
+            logger.error(
+                `VPN attachment cannot become available within ${waitTimeSec}` +
+                    ' seconds. Update failed.'
+            );
             return true;
         };
 
         try {
             waitTimeStart = Date.now();
             // wait until transit gateway attachment become available
-            data = await AutoScaleCore.Functions.waitFor(
-                promiseEmitter, validator, 5000, counter);
+            data = await AutoScaleCore.Functions.waitFor(promiseEmitter, validator, 5000, counter);
             // update
-            let outboutRouteTable =
-                await this.platform.getSettingItem('transit-gateway-route-table-outbound');
+            let outboutRouteTable = await this.platform.getSettingItem(
+                'transit-gateway-route-table-outbound'
+            );
 
             // add transit gateway route association to the inbound route table so all traffic
             // going back to the TGW from any FGT will be routed to the right route (propagation)
             // TODO: use the latest this._settings[] method
-            let inboutRouteTable =
-                await this.platform.getSettingItem('transit-gateway-route-table-inbound');
+            let inboutRouteTable = await this.platform.getSettingItem(
+                'transit-gateway-route-table-inbound'
+            );
 
             let [propagationState, associationState] = await Promise.all([
                 this.platform.updateTgwRouteTablePropagation(attachmentId, outboutRouteTable),
                 this.platform.updateTgwRouteTableAssociation(attachmentId, inboutRouteTable)
             ]);
 
-            logger.info('transit gateway route table updated. ' +
-                'time used: ' + `${(Date.now() - waitTimeStart) / 1000} seconds.` +
-                `propagation state: ${propagationState}, ` +
-                `association state: ${associationState}.`);
+            logger.info(
+                'transit gateway route table updated. ' +
+                    'time used: ' +
+                    `${(Date.now() - waitTimeStart) / 1000} seconds.` +
+                    `propagation state: ${propagationState}, ` +
+                    `association state: ${associationState}.`
+            );
             return {
                 attachmentId: attachmentId,
                 propagationState: propagationState,
@@ -3014,18 +3413,24 @@ class AwsAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             };
         } catch (error) {
             data = null;
-            logger.error(JSON.stringify(
-                error instanceof Error ? { message: error.message, stack: error.stack } : error
-            ));
-            logger.error('failed to wait for the transit gateway attachment ' +
-                `(id: ${attachmentId}) to become available.`);
+            logger.error(
+                JSON.stringify(
+                    error instanceof Error ? { message: error.message, stack: error.stack } : error
+                )
+            );
+            logger.error(
+                'failed to wait for the transit gateway attachment ' +
+                    `(id: ${attachmentId}) to become available.`
+            );
         }
         return data;
     }
 
     async handleLoadBalancerAttachment(instance) {
-        return await this.platform.attacheInstanceToLoadBalancer([instance],
-            this._settings['fortigate-autoscale-target-group-arn']);
+        return await this.platform.attacheInstanceToLoadBalancer(
+            [instance],
+            this._settings['fortigate-autoscale-target-group-arn']
+        );
     }
 
     async updateInstanceForLaunching(instanceId) {
@@ -3060,8 +3465,10 @@ exports.handler = async (event, context, callback) => {
     process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + context.getRemainingTimeInMillis();
     logger = new AutoScaleCore.DefaultLogger(console);
     const handler = new AwsAutoscaleHandler();
-    if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
-        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+    if (
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true'
+    ) {
         logger.outputQueue = true;
         if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
             logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
@@ -3082,8 +3489,10 @@ exports.handleGetLicense = async (event, context, callback) => {
     process.env.SCRIPT_EXECUTION_EXPIRE_TIME = Date.now() + context.getRemainingTimeInMillis();
     logger = new AutoScaleCore.DefaultLogger(console);
     const handler = new AwsAutoscaleHandler();
-    if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
-        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+    if (
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+        process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true'
+    ) {
         logger.outputQueue = true;
         if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
             logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;

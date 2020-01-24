@@ -10,8 +10,10 @@ const ftgtAutoscaleAws = require('fortigate-autoscale-aws');
 // for log output [object object] issues, check util.inspect(result, false, null) for more info
 const logger = new ftgtAutoscaleAws.AutoScaleCore.DefaultLogger(console);
 const autoscaleHandler = new ftgtAutoscaleAws.AwsAutoscaleHandler();
-if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
-    process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true') {
+if (
+    process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED &&
+    process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED.toLowerCase() === 'true'
+) {
     logger.outputQueue = true;
     if (process.env.DEBUG_LOGGER_TIMEZONE_OFFSET) {
         logger.timeZoneOffset = process.env.DEBUG_LOGGER_TIMEZONE_OFFSET;
@@ -87,12 +89,24 @@ async function restart() {
     await init();
     let tasks = [];
     if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true') {
-        tasks.push(autoscaleHandler.updateCapacity(
-            autoscaleHandler._settings['byol-scaling-group-name'], 0, 0, null));
+        tasks.push(
+            autoscaleHandler.updateCapacity(
+                autoscaleHandler._settings['byol-scaling-group-name'],
+                0,
+                0,
+                null
+            )
+        );
     }
 
-    tasks.push(autoscaleHandler.updateCapacity(
-        autoscaleHandler._settings['payg-scaling-group-name'], 0, 0, null));
+    tasks.push(
+        autoscaleHandler.updateCapacity(
+            autoscaleHandler._settings['payg-scaling-group-name'],
+            0,
+            0,
+            null
+        )
+    );
 
     await Promise.all(tasks);
 
@@ -113,44 +127,60 @@ async function restart() {
         minSizePAYG = 0,
         maxSizePAYG = 0;
     if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true') {
-        desiredCapacityBYOL =
-            parseInt(autoscaleHandler._settings['byol-scaling-group-desired-capacity']);
+        desiredCapacityBYOL = parseInt(
+            autoscaleHandler._settings['byol-scaling-group-desired-capacity']
+        );
         minSizeBYOL = parseInt(autoscaleHandler._settings['byol-scaling-group-min-size']);
         maxSizeBYOL = parseInt(autoscaleHandler._settings['byol-scaling-group-max-size']);
     }
 
-    desiredCapacityPAYG =
-        parseInt(autoscaleHandler._settings['scaling-group-desired-capacity']);
+    desiredCapacityPAYG = parseInt(autoscaleHandler._settings['scaling-group-desired-capacity']);
     minSizePAYG = parseInt(autoscaleHandler._settings['scaling-group-min-size']);
     maxSizePAYG = parseInt(autoscaleHandler._settings['scaling-group-max-size']);
 
     // update only when the desired capacity > 0 and the size constraint:
     // desired min <= desired <= max is met
     // bring up the 1st instance which will become the master
-    if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true' &&
-        desiredCapacityBYOL > 0 && desiredCapacityBYOL >= minSizeBYOL &&
-        desiredCapacityBYOL <= maxSizeBYOL) {
+    if (
+        autoscaleHandler._settings['enable-hybrid-licensing'] === 'true' &&
+        desiredCapacityBYOL > 0 &&
+        desiredCapacityBYOL >= minSizeBYOL &&
+        desiredCapacityBYOL <= maxSizeBYOL
+    ) {
         // if master-election-no-wait feature is diabled, bring up the master instance first,
         // delay 1 minute to bring up the rest
         if (autoscaleHandler._settings['master-election-no-wait'] !== 'true') {
             // bring up the master
             await autoscaleHandler.updateCapacity(
-                autoscaleHandler._settings['byol-scaling-group-name'], 1, 1, maxSizeBYOL);
+                autoscaleHandler._settings['byol-scaling-group-name'],
+                1,
+                1,
+                maxSizeBYOL
+            );
             // delay 1 min
             await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
         }
         // bring up the rest instances which will become the slave(s)
         await autoscaleHandler.updateCapacity(
             autoscaleHandler._settings['byol-scaling-group-name'],
-            desiredCapacityBYOL, minSizeBYOL, maxSizeBYOL);
+            desiredCapacityBYOL,
+            minSizeBYOL,
+            maxSizeBYOL
+        );
     }
 
     // bring up instances in the payg scaling group if the capacity and sizes are set properly
-    if (desiredCapacityPAYG > 0 && desiredCapacityPAYG >= minSizePAYG &&
-        desiredCapacityPAYG <= maxSizePAYG) {
+    if (
+        desiredCapacityPAYG > 0 &&
+        desiredCapacityPAYG >= minSizePAYG &&
+        desiredCapacityPAYG <= maxSizePAYG
+    ) {
         await autoscaleHandler.updateCapacity(
-        autoscaleHandler._settings['payg-scaling-group-name'],
-        desiredCapacityPAYG, minSizePAYG, maxSizePAYG);
+            autoscaleHandler._settings['payg-scaling-group-name'],
+            desiredCapacityPAYG,
+            minSizePAYG,
+            maxSizePAYG
+        );
     }
 }
 
@@ -158,10 +188,18 @@ async function stop() {
     await init();
     if (autoscaleHandler._settings['enable-hybrid-licensing'] === 'true') {
         await autoscaleHandler.updateCapacity(
-            autoscaleHandler._settings['byol-scaling-group-name'], 0, 0, null);
+            autoscaleHandler._settings['byol-scaling-group-name'],
+            0,
+            0,
+            null
+        );
     }
     await autoscaleHandler.updateCapacity(
-        autoscaleHandler._settings['payg-scaling-group-name'], 0, 0, null);
+        autoscaleHandler._settings['payg-scaling-group-name'],
+        0,
+        0,
+        null
+    );
     // delete master election result
     await autoscaleHandler.resetMasterElection();
 }

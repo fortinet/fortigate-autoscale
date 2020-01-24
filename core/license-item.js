@@ -34,8 +34,10 @@ module.exports = class LicenseItem {
     set content(value) {
         this._content = value;
         if (this._algorithm && this._content) {
-            this._checksum =
-                crypto.createHash(this._algorithm).update(this._content, 'utf8').digest('hex');
+            this._checksum = crypto
+                .createHash(this._algorithm)
+                .update(this._content, 'utf8')
+                .digest('hex');
         } else {
             this._checksum = null;
         }
@@ -48,8 +50,10 @@ module.exports = class LicenseItem {
     set algorithm(value) {
         this._algorithm = value;
         if (this._algorithm && this._content) {
-            this._checksum =
-                crypto.createHash(this._algorithm).update(this._content, 'utf8').digest('hex');
+            this._checksum = crypto
+                .createHash(this._algorithm)
+                .update(this._content, 'utf8')
+                .digest('hex');
         } else {
             this._checksum = null;
         }
@@ -75,6 +79,9 @@ module.exports = class LicenseItem {
      * @returns {String} blobKey
      */
     static generateBlobKey(name, eTag) {
-        return crypto.createHash('sha1').update(`${name}-${eTag}`, 'utf8').digest('hex');
+        return crypto
+            .createHash('sha1')
+            .update(`${name}-${eTag}`, 'utf8')
+            .digest('hex');
     }
 };

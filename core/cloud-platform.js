@@ -118,7 +118,8 @@ module.exports = class CloudPlatform {
      * Get the url for the callback-url portion of the config.
      * @param {Object} fromContext a context object to get the url, if needed.
      */
-    async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
+    async getCallbackEndpointUrl(fromContext = null) {
+        // eslint-disable-line no-unused-vars
         if (this._settings['autoscale-handler-url']) {
             return await Promise.resolve(this._settings['autoscale-handler-url']);
         } else {
@@ -197,8 +198,13 @@ module.exports = class CloudPlatform {
      * @param {bool} forceOutOfSync whether force to update this record as 'out-of-sync'
      * @returns {bool} resul: true or false
      */
-    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, masterIp, checkPointTime,
-        forceOutOfSync = false) {
+    async updateInstanceHealthCheck(
+        healthCheckObject,
+        heartBeatInterval,
+        masterIp,
+        checkPointTime,
+        forceOutOfSync = false
+    ) {
         await this.throwNotImplementedException();
     }
 
@@ -263,7 +269,7 @@ module.exports = class CloudPlatform {
 
     async getSettingItem(key, valueOnly = true) {
         // check _setting first
-        if (this._settings && this._settings.hasOwnProperty(key)) {
+        if (this._settings && (this._settings[key] !== undefined || this._settings[key] !== null)) {
             // if get full item object
             if (!valueOnly && this._settings[key] && this._settings[key].settingKey) {
                 return this._settings[key];
@@ -390,7 +396,7 @@ module.exports = class CloudPlatform {
      * @param {String} vmId another unique ID to identify the vm if instanceId is not the unique ID
      */
     async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
-        return await this.throwNotImplementedException() || scaleSetName && instanceId && vmId;
+        return (await this.throwNotImplementedException()) || (scaleSetName && instanceId && vmId);
     }
 
     /**
@@ -400,7 +406,7 @@ module.exports = class CloudPlatform {
      * @param {Integer} cacheTime the maximum time in seconds to keep the cache in database
      */
     async setVmInfoCache(scaleSetName, info, cacheTime = 3600) {
-        return await this.throwNotImplementedException() || scaleSetName && info && cacheTime;
+        return (await this.throwNotImplementedException()) || (scaleSetName && info && cacheTime);
     }
 
     /**
@@ -411,7 +417,7 @@ module.exports = class CloudPlatform {
      * @returns {Boolean} A boolean value for whether the update is success or not.
      */
     async updateTgwRouteTablePropagation(attachmentId, routeTableId) {
-        return await this.throwNotImplementedException() || attachmentId && routeTableId;
+        return (await this.throwNotImplementedException()) || (attachmentId && routeTableId);
     }
 
     /**
@@ -422,7 +428,7 @@ module.exports = class CloudPlatform {
      * @returns {Boolean} A boolean value for whether the update is success or not.
      */
     async updateTgwRouteTableAssociation(attachmentId, routeTableId) {
-        return await this.throwNotImplementedException() || attachmentId && routeTableId;
+        return (await this.throwNotImplementedException()) || (attachmentId && routeTableId);
     }
 
     /**

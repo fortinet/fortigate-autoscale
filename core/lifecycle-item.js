@@ -58,7 +58,6 @@ module.exports = class LifecycleItem {
             detail: this.detail,
             done: this.done
         };
-
     }
 
     /**
@@ -67,7 +66,12 @@ module.exports = class LifecycleItem {
      * @returns {LifecycleItem} A new lifecycle item.
      */
     static fromDb(entry) {
-        return new LifecycleItem(entry.instanceId, entry.detail, entry.actionName,
-            entry.done, entry.timestamp);
+        return new LifecycleItem(
+            entry.instanceId,
+            entry.detail,
+            entry.actionName,
+            entry.done,
+            entry.timestamp
+        );
     }
 };

@@ -16,10 +16,11 @@ class Packman {
     }
 
     runCmd(cmd, args = [], cwd = process.cwd(), options) {
-        let output = '', errout = '';
+        let output = '',
+            errout = '';
         return new Promise((resolve, reject) => {
             console.log(`run command:${cmd} ${args.join(' ')} on dir: ${cwd}`);
-            let cproc = spawn(cmd, args, { cwd: cwd, shell: process.env.shell});
+            let cproc = spawn(cmd, args, { cwd: cwd, shell: process.env.shell });
 
             cproc.stdout.on('data', function(data) {
                 output += data;
@@ -61,7 +62,7 @@ class Packman {
     execCmd(cmd, cwd = process.cwd(), options) {
         return new Promise((resolve, reject) => {
             console.log(`run command:${cmd} on dir: ${cwd}`);
-            exec(cmd, { cwd: cwd}, (error, stdout, stderr) => {
+            exec(cmd, { cwd: cwd }, (error, stdout, stderr) => {
                 if (error) {
                     if (options && !options.supressError) {
                         console.error(`exec error: ${error}`);
@@ -81,7 +82,6 @@ class Packman {
             // TODO: npm install can generate warning. how to handle warnings here?
             console.log(err.toString());
         });
-
     }
 
     async isGNUBash() {
@@ -121,15 +121,18 @@ class Packman {
     }
 
     async copy(src, des, cwd = process.cwd(), options = {}) {
-        if (!await this.isGNUBash()) {
+        if (!(await this.isGNUBash())) {
             throw new Error('Sorry, this script can only run on a GNU bash shell.');
         }
         if (path.resolve(des).indexOf(path.resolve(src)) === 0) {
-            throw new Error(`\n\n( ͡° ͜ʖ ͡°) copying <${src}> to its subdir <${des}> creates` +
-            ' a circular reference. I won\'t allow this happen.');
+            throw new Error(
+                `\n\n( ͡° ͜ʖ ͡°) copying <${src}> to its subdir <${des}> creates` +
+                    " a circular reference. I won't allow this happen."
+            );
         }
         return new Promise((resolve, reject) => {
-            this.execCmd(`cp -rL ${src} ${des}`, cwd, options).then(output => resolve(output))
+            this.execCmd(`cp -rL ${src} ${des}`, cwd, options)
+                .then(output => resolve(output))
                 .catch(error => reject(error));
         });
     }
@@ -149,9 +152,11 @@ class Packman {
         }
         let realPath = path.resolve(onDir, location);
         if (realPath.indexOf(onDir) !== 0 || realPath === onDir || realPath === '/') {
-            console.error(`\n\n( ͡° ͜ʖ ͡°) the locaton (${location}) falls outside directories ` +
-            `allowed: ${onDir}, or in somewhere inappropriate to delete.`);
-            console.error('( ͡° ͜ʖ ͡°) I don\'t allow you to delete it');
+            console.error(
+                `\n\n( ͡° ͜ʖ ͡°) the locaton (${location}) falls outside directories ` +
+                    `allowed: ${onDir}, or in somewhere inappropriate to delete.`
+            );
+            console.error("( ͡° ͜ʖ ͡°) I don't allow you to delete it");
             return false;
         }
         await this.execCmd(`rm -rf ${realPath}`, onDir, options);
@@ -184,12 +189,14 @@ class Packman {
         return await this.execCmd(`find . -name "${search}"`, onDir, {
             printStdout: false,
             printStderr: false
-        }).then(output => {
-            return output.split('\n').filter(line => line.trim());
-        }).catch(error => {
-            console.log(error.message);
-            return [];
-        });
+        })
+            .then(output => {
+                return output.split('\n').filter(line => line.trim());
+            })
+            .catch(error => {
+                console.log(error.message);
+                return [];
+            });
     }
 
     readPackageJsonAt(location) {
@@ -215,20 +222,29 @@ class Packman {
             return false;
         }
         if (path.resolve(des).indexOf(path.resolve(src)) === 0) {
-            throw new Error(`\n\n( ͡° ͜ʖ ͡°) moving <${src}> to its subdir <${des}> creates` +
-            ' a circular reference. I won\'t allow this happen.');
+            throw new Error(
+                `\n\n( ͡° ͜ʖ ͡°) moving <${src}> to its subdir <${des}> creates` +
+                    " a circular reference. I won't allow this happen."
+            );
         }
         if (options.moveSourceFiles) {
-            return await this.execCmd(`mv ${path.resolve(src)}/* ${path.resolve(des)}`,
-            process.cwd(), options);
+            return await this.execCmd(
+                `mv ${path.resolve(src)}/* ${path.resolve(des)}`,
+                process.cwd(),
+                options
+            );
         } else {
-            return await this.execCmd(`mv ${path.resolve(src)} ${path.resolve(des)}`,
-            process.cwd(), options);
+            return await this.execCmd(
+                `mv ${path.resolve(src)} ${path.resolve(des)}`,
+                process.cwd(),
+                options
+            );
         }
     }
 
     async zipSafe(fileName, src, excludeList = [], options = {}) {
-        let des, args = [],
+        let des,
+            args = [],
             realPath = path.resolve(src);
         // allow to create zip file in cwd, otherwise, create in the temp dir
         if (realPath.indexOf(process.cwd()) === 0) {
@@ -246,19 +262,17 @@ class Packman {
     }
 
     async unzipSafe(fileName, src, des, cwd = process.cwd(), options = {}) {
-        let file = src + '/' + fileName,
+        let file = `${src}/${fileName}`,
             desFolder = '',
             realPath = path.resolve(des);
         if (realPath.indexOf(process.cwd()) !== 0) {
             des = path.resolve(await this.makeTempDir(), des);
         }
-        desFolder = des + '/' + fileName.replace('.zip', '');
+        desFolder = `${des}/${fileName.replace('.zip', '')}`;
         await this.execCmd(`unzip -o -d ${desFolder} ${file}`, cwd, options);
     }
 
-
-    async npmInstallLocal(location, args = [], options = {}, cachePath = null,
-    pacache = {}) {
+    async npmInstallLocal(location, args = [], options = {}, cachePath = null, pacache = {}) {
         let dependencies = [];
         let packageInfo = this.readPackageJsonAt(location);
         if (packageInfo.name) {
@@ -279,16 +293,22 @@ class Packman {
                     if (depPath && Array.isArray(depPath) && depPath.length > 0) {
                         depPath = depPath[0];
                         // ignore if it's already in the package cache list
-                        if (pacache.hasOwnProperty(depKey)) {
+                        if (pacache[depKey]) {
                             continue;
                         }
                         pacache[depKey] = null;
-                        pacache = await this.npmInstallLocal(path.resolve(packPath, depPath),
-                            args, options, cachePath, pacache);
+                        pacache = await this.npmInstallLocal(
+                            path.resolve(packPath, depPath),
+                            args,
+                            options,
+                            cachePath,
+                            pacache
+                        );
                     }
                 }
             }
-            let pKeys = Object.keys(pacache), packageInfoUpdated = false;
+            let pKeys = Object.keys(pacache),
+                packageInfoUpdated = false;
             if (packageInfo.dependencies) {
                 Object.keys(packageInfo.dependencies).forEach(key => {
                     if (pKeys.includes(key)) {
@@ -297,21 +317,26 @@ class Packman {
                     }
                 });
                 if (packageInfoUpdated) {
-                    fs.writeFileSync(path.resolve(location, 'package.json'),
-                        JSON.stringify(packageInfo, null, 4));
+                    fs.writeFileSync(
+                        path.resolve(location, 'package.json'),
+                        JSON.stringify(packageInfo, null, 4)
+                    );
                 }
             }
             options.noSymlink = false;
             await this.npmInstallAt(location, args, options);
-            let packageFileName =
-                await this.runCmd('npm', ['pack'].concat(args), packPath, options);
+            let packageFileName = await this.runCmd(
+                'npm',
+                ['pack'].concat(args),
+                packPath,
+                options
+            );
             this.moveSafe(path.resolve(packPath, packageFileName), cachePath);
-            if (pacache.hasOwnProperty(packageInfo.name)) {
+            if (pacache[packageInfo.name]) {
                 pacache[packageInfo.name] = path.resolve(cachePath, packageFileName);
                 console.log(pacache[packageInfo.name]);
             }
             return pacache;
-
         } else {
             return false;
         }
@@ -331,6 +356,5 @@ class Packman {
         }
     }
 }
-
 
 module.exports = Packman;

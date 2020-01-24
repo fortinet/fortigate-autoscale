@@ -17,10 +17,11 @@
     "fortigate-autoscale-azure": "file:../azure"
   },
   "devDependencies": {
-    "eslint": "^5.4.0",
-    "eslint-plugin-mocha": "^5.2.0",
-    "mocha": "^5.2.0",
-    "nyc": "^14.1.1"
+    "eslint": "^6.8.0",
+    "eslint-plugin-json": "^2.0.1",
+    "eslint-plugin-mocha": "^6.2.2",
+    "mocha": "^7.0.0",
+    "nyc": "^15.0.0"
   },
   "files_to_deploy": [
     "*.js",

@@ -346,7 +346,8 @@ const DB = {
             {
                 AttributeName: 'id',
                 AttributeType: 'S'
-            },{
+            },
+            {
                 AttributeName: 'timestamp',
                 AttributeType: 'N'
             }
@@ -355,7 +356,8 @@ const DB = {
             {
                 AttributeName: 'id',
                 KeyType: 'HASH'
-            },{
+            },
+            {
                 AttributeName: 'timestamp',
                 KeyType: 'RANGE'
             }
@@ -407,15 +409,18 @@ const DB = {
             }
         ]
     }
-
 };
 
 exports.getTables = (custom_id, unique_id, excludedKeys = null) => {
     let tables = {},
-        prefix = () => { return custom_id ? `${custom_id}-` : '' },
-        suffix = () => { return unique_id ? `-${unique_id}` : '' };
+        prefix = () => {
+            return custom_id ? `${custom_id}-` : '';
+        },
+        suffix = () => {
+            return unique_id ? `-${unique_id}` : '';
+        };
     Object.keys(DB).forEach(itemName => {
-        if (!excludedKeys || Array.isArray(excludedKeys) && !excludedKeys.includes(itemName)) {
+        if (!excludedKeys || (Array.isArray(excludedKeys) && !excludedKeys.includes(itemName))) {
             let table = {};
             table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
             table.KeySchema = DB[itemName].KeySchema;
@@ -429,7 +434,7 @@ exports.getTables = (custom_id, unique_id, excludedKeys = null) => {
 };
 
 exports.getTableSchema = (tables, tableName) => {
-    if (!tables || !tables.hasOwnProperty(tableName)) {
+    if (!tables || !tables[tableName]) {
         return null;
     }
     let schema = {};
@@ -443,8 +448,10 @@ exports.getTableSchema = (tables, tableName) => {
 exports.getKeys = (excludedNames = null) => {
     let keys = [];
     for (let [key, table] of Object.entries(DB)) {
-        if (!excludedNames ||
-                Array.isArray(excludedNames) && !excludedNames.includes(table.TableName)) {
+        if (
+            !excludedNames ||
+            (Array.isArray(excludedNames) && !excludedNames.includes(table.TableName))
+        ) {
             keys.push(key);
         }
     }
@@ -454,8 +461,7 @@ exports.getKeys = (excludedNames = null) => {
 exports.getNames = (excludedKeys = null) => {
     let names = [];
     for (let [key, table] of Object.entries(DB)) {
-        if (!excludedKeys ||
-            Array.isArray(excludedKeys) && !excludedKeys.includes(key)) {
+        if (!excludedKeys || (Array.isArray(excludedKeys) && !excludedKeys.includes(key))) {
             names.push(table.TableName);
         }
     }
