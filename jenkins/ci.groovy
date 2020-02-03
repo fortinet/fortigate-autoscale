@@ -14,12 +14,17 @@ node('devops-aws') {
     stage('NPM Install') {
         echo 'NPM Install..'
         sh 'npm install'
-        sh 'npm install guardhao104/ftnt-devops-ci'
+        sh 'npm install jaydenliang/ftnt-devops-ci'
     }
 
-    stage('Format check') {
+    stage('Format check:: .js & .json') {
         echo 'Format checking..'
         sh './node_modules/.bin/ftnt-devops-ci check -f "**/*.{js,json}"'
+    }
+
+    stage('Format check:: .template') {
+        echo 'Format checking..'
+        sh './node_modules/.bin/ftnt-devops-ci check -f "**/*.template" --parser "json"'
     }
 
     stage('Eslint') {
