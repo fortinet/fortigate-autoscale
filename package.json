@@ -1,40 +1,40 @@
 {
-  "name": "fortigate-autoscale",
-  "version": "2.0.2",
-  "description": "FortiGate Autoscale Project",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
-  "dependencies": {},
-  "scripts": {
-    "pretest": "eslint --fix .",
-    "build": "scripts/make-dist.js all",
-    "test": "nyc mocha './{,!(node_modules|dist|scripts)/**/test/mocha/}*.js'",
-    "build-all": "scripts/make-dist.js all",
-    "build-project": "scripts/make-dist.js project",
-    "build-azure-funcapp": "scripts/make-dist.js azure-funcapp",
-    "build-azure-template-deployment": "scripts/make-dist.js azure-template-deployment",
-    "build-aws-lambda": "scripts/make-dist.js aws-lambda",
-    "build-aws-lambda-faz-handler": "scripts/make-dist.js aws-lambda-faz-handler",
-    "build-aws-lambda-fgt-asg-handler": "scripts/make-dist.js aws-lambda-fgt-asg-handler",
-    "build-aws-lambda-nic-attachment": "scripts/make-dist.js aws-lambda-nic-attachment",
-    "build-aws-lambda-tgw-vpn-handler": "scripts/make-dist.js aws-lambda-tgw-vpn-handler",
-    "build-aws-cloudformation": "scripts/make-dist.js aws-cloudformation",
-    "build-aws-quickstart-special": "scripts/make-dist.js aws-quickstart-special",
-    "unzip-aws-artifacts": "scripts/make-dist.js unzip-aws-artifacts"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/fortinet/fortigate-autoscale"
-  },
-  "author": "fortinet",
-  "license": "MIT",
-  "devDependencies": {
-    "eslint": "^6.8.0",
-    "eslint-plugin-json": "^2.0.1",
-    "eslint-plugin-mocha": "^6.2.2",
-    "mocha": "^7.0.0",
-    "nyc": "^15.0.0"
-  }
+    "name": "fortigate-autoscale",
+    "version": "2.0.2",
+    "description": "FortiGate Autoscale Project",
+    "main": "index.js",
+    "directories": {
+        "test": "tests"
+    },
+    "dependencies": {},
+    "scripts": {
+        "pretest": "eslint --fix .",
+        "build": "scripts/make-dist.js all",
+        "test": "nyc mocha './{,!(node_modules|dist|scripts)/**/test/mocha/}*.js'",
+        "build-all": "scripts/make-dist.js all",
+        "build-project": "scripts/make-dist.js project",
+        "build-azure-funcapp": "scripts/make-dist.js azure-funcapp",
+        "build-azure-template-deployment": "scripts/make-dist.js azure-template-deployment",
+        "build-aws-lambda": "scripts/make-dist.js aws-lambda",
+        "build-aws-lambda-faz-handler": "scripts/make-dist.js aws-lambda-faz-handler",
+        "build-aws-lambda-fgt-asg-handler": "scripts/make-dist.js aws-lambda-fgt-asg-handler",
+        "build-aws-lambda-nic-attachment": "scripts/make-dist.js aws-lambda-nic-attachment",
+        "build-aws-lambda-tgw-vpn-handler": "scripts/make-dist.js aws-lambda-tgw-vpn-handler",
+        "build-aws-cloudformation": "scripts/make-dist.js aws-cloudformation",
+        "build-aws-quickstart-special": "scripts/make-dist.js aws-quickstart-special",
+        "unzip-aws-artifacts": "scripts/make-dist.js unzip-aws-artifacts"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/fortinet/fortigate-autoscale"
+    },
+    "author": "fortinet",
+    "license": "MIT",
+    "devDependencies": {
+        "eslint": "^6.8.0",
+        "eslint-plugin-json": "^2.0.1",
+        "eslint-plugin-mocha": "^6.2.2",
+        "mocha": "^7.0.0",
+        "nyc": "^15.0.0"
+    }
 }

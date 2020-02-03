@@ -56,33 +56,35 @@
         "CreateByolLicenseHandler": {
             "Type": "String",
             "Default": "no",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "value must be chosen from the provided options.",
             "Description": "Deployment options for creating the BYOL license handler function."
         }
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
             ]
         },
         "VpcEndpointIsDefined": {
-            "Fn::Not": [{
-                "Fn::Equals": [{
-                        "Ref": "VpcEndPoint"
-                    },
-                    ""
-                ]
-            }]
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "VpcEndPoint"
+                        },
+                        ""
+                    ]
+                }
+            ]
         },
         "CreateByolLicenseHandler": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "CreateByolLicenseHandler"
                 },
                 "yes"
@@ -107,11 +109,7 @@
                         "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/copy-objects.template",
                         {
                             "S3Region": {
-                                "Fn::If": [
-                                    "GovCloudCondition",
-                                    "s3-us-gov-west-1",
-                                    "s3"
-                                ]
+                                "Fn::If": ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
                             },
                             "S3BucketName": {
                                 "Ref": "S3BucketName"
@@ -131,7 +129,8 @@
                 "Name": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "fortigate-autoscale-api-gateway"
@@ -139,9 +138,7 @@
                     ]
                 },
                 "EndpointConfiguration": {
-                    "Types": [
-                        "PRIVATE"
-                    ]
+                    "Types": ["PRIVATE"]
                 },
                 "Policy": {
                     "Fn::If": [
@@ -171,10 +168,7 @@
                 },
                 "PathPart": "fgt-asg-handler",
                 "ParentId": {
-                    "Fn::GetAtt": [
-                        "FgtAsgApiGateway",
-                        "RootResourceId"
-                    ]
+                    "Fn::GetAtt": ["FgtAsgApiGateway", "RootResourceId"]
                 }
             }
         },
@@ -202,10 +196,7 @@
                                 },
                                 ":lambda:path/2015-03-31/functions/",
                                 {
-                                    "Fn::GetAtt": [
-                                        "FgtAsgLambdaFunctionAsgHandler",
-                                        "Arn"
-                                    ]
+                                    "Fn::GetAtt": ["FgtAsgLambdaFunctionAsgHandler", "Arn"]
                                 },
                                 "/invocations"
                             ]
@@ -238,10 +229,7 @@
                                 },
                                 ":lambda:path/2015-03-31/functions/",
                                 {
-                                    "Fn::GetAtt": [
-                                        "FgtAsgLambdaFunctionAsgHandler",
-                                        "Arn"
-                                    ]
+                                    "Fn::GetAtt": ["FgtAsgLambdaFunctionAsgHandler", "Arn"]
                                 },
                                 "/invocations"
                             ]
@@ -259,10 +247,7 @@
                 },
                 "PathPart": "byol-license",
                 "ParentId": {
-                    "Fn::GetAtt": [
-                        "FgtAsgApiGateway",
-                        "RootResourceId"
-                    ]
+                    "Fn::GetAtt": ["FgtAsgApiGateway", "RootResourceId"]
                 }
             }
         },
@@ -291,10 +276,7 @@
                                 },
                                 ":lambda:path/2015-03-31/functions/",
                                 {
-                                    "Fn::GetAtt": [
-                                        "FgtAsgLambdaFunctionByolLicenseHandler",
-                                        "Arn"
-                                    ]
+                                    "Fn::GetAtt": ["FgtAsgLambdaFunctionByolLicenseHandler", "Arn"]
                                 },
                                 "/invocations"
                             ]
@@ -325,198 +307,38 @@
                 ],
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
-                    "Statement": [{
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": [
-                                "lambda.amazonaws.com"
-                            ]
-                        },
-                        "Action": [
-                            "sts:AssumeRole"
-                        ]
-                    }]
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": ["lambda.amazonaws.com"]
+                            },
+                            "Action": ["sts:AssumeRole"]
+                        }
+                    ]
                 },
                 "Path": "/",
-                "Policies": [{
-                    "PolicyName": "fortigate-autoscale-handler-policy",
-                    "PolicyDocument": {
-                        "Version": "2012-10-17",
-                        "Statement": [{
-                                "Effect": "Allow",
-                                "Action": [
-                                    "dynamodb:CreateTable",
-                                    "dynamodb:DescribeTable",
-                                    "dynamodb:Scan",
-                                    "dynamodb:Query",
-                                    "dynamodb:DeleteItem",
-                                    "dynamodb:GetItem",
-                                    "dynamodb:PutItem",
-                                    "dynamodb:UpdateItem"
-                                ],
-                                "Resource": {
-                                    "Fn::Sub": [
-                                        "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${TABLE_NAME_PREFIX}*",
-                                        {
-                                            "AWS_REGION": {
-                                                "Ref": "AWS::Region"
-                                            },
-                                            "AWS_ACCOUNT_ID": {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "TABLE_NAME_PREFIX": {
-                                                "Ref": "ResourceTagPrefix"
-                                            }
-                                        }
-                                    ]
-                                }
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "autoscaling:CompleteLifecycleAction",
-                                    "autoscaling:SetDesiredCapacity",
-                                    "autoscaling:SetInstanceProtection",
-                                    "autoscaling:ExitStandby",
-                                    "autoscaling:BatchPutScheduledUpdateGroupAction",
-                                    "autoscaling:EnterStandby",
-                                    "autoscaling:PutScheduledUpdateGroupAction",
-                                    "autoscaling:UpdateAutoScalingGroup",
-                                    "autoscaling:DeleteNotificationConfiguration",
-                                    "autoscaling:SetInstanceHealth",
-                                    "autoscaling:TerminateInstanceInAutoScalingGroup",
-                                    "autoscaling:AttachLoadBalancers",
-                                    "autoscaling:DetachLoadBalancers",
-                                    "autoscaling:BatchDeleteScheduledAction",
-                                    "autoscaling:ResumeProcesses",
-                                    "autoscaling:SetDesiredCapacity",
-                                    "autoscaling:PutLifecycleHook",
-                                    "autoscaling:DetachLoadBalancerTargetGroups",
-                                    "autoscaling:SuspendProcesses",
-                                    "autoscaling:AttachLoadBalancerTargetGroups",
-                                    "autoscaling:AttachInstances",
-                                    "autoscaling:CompleteLifecycleAction",
-                                    "autoscaling:CreateOrUpdateTags",
-                                    "autoscaling:SetInstanceProtection",
-                                    "autoscaling:DeleteAutoScalingGroup",
-                                    "autoscaling:DeleteLifecycleHook",
-                                    "autoscaling:CreateAutoScalingGroup",
-                                    "autoscaling:DeleteScheduledAction",
-                                    "autoscaling:DetachInstances",
-                                    "autoscaling:RecordLifecycleActionHeartbeat"
-                                ],
-                                "Resource": {
-                                    "Fn::Sub": [
-                                        "arn:aws:autoscaling:${AWS_REGION}:${AWS_ACCOUNT_ID}:autoScalingGroup:*:autoScalingGroupName/${ASG_NAME}*",
-                                        {
-                                            "AWS_REGION": {
-                                                "Ref": "AWS::Region"
-                                            },
-                                            "AWS_ACCOUNT_ID": {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "ASG_NAME": {
-                                                "Ref": "ResourceTagPrefix"
-                                            }
-                                        }
-                                    ]
-                                }
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "autoscaling:DescribeAutoScalingNotificationTypes",
-                                    "autoscaling:DescribeAutoScalingInstances",
-                                    "ec2:DescribeInstances",
-                                    "autoscaling:DescribeScalingProcessTypes",
-                                    "autoscaling:DescribeTerminationPolicyTypes",
-                                    "dynamodb:ListTables",
-                                    "autoscaling:DescribePolicies",
-                                    "ec2:DescribeInstanceAttribute",
-                                    "autoscaling:DescribeLaunchConfigurations",
-                                    "autoscaling:DescribeAdjustmentTypes",
-                                    "ec2:DescribeNetworkInterfaces",
-                                    "autoscaling:DescribeScalingActivities",
-                                    "autoscaling:DescribeAccountLimits",
-                                    "autoscaling:DescribeAutoScalingGroups",
-                                    "autoscaling:DescribeScheduledActions",
-                                    "autoscaling:DescribeLoadBalancerTargetGroups",
-                                    "autoscaling:DescribeNotificationConfigurations",
-                                    "autoscaling:DescribeLifecycleHookTypes",
-                                    "ec2:DetachNetworkInterface",
-                                    "autoscaling:DescribeTags",
-                                    "ec2:DeleteNetworkInterface",
-                                    "autoscaling:DescribeMetricCollectionTypes",
-                                    "autoscaling:DescribeLoadBalancers",
-                                    "autoscaling:DescribeLifecycleHooks",
-                                    "ec2:CreateNetworkInterface",
-                                    "ec2:ModifyNetworkInterfaceAttribute",
-                                    "ec2:ModifyInstanceAttribute",
-                                    "ec2:DescribeVpcs",
-                                    "ec2:AttachNetworkInterface",
-                                    "ec2:DescribeNetworkInterfaces",
-                                    "ec2:CreateTags",
-                                    "ec2:DescribeVpcs",
-                                    "ec2:DescribeSubnets"
-                                ],
-                                "Resource": "*"
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "apigateway:GET"
-                                ],
-                                "Resource": {
-                                    "Fn::Sub": [
-                                        "arn:aws:apigateway:${AWS_REGION}::*",
-                                        {
-                                            "AWS_REGION": {
-                                                "Ref": "AWS::Region"
-                                            }
-                                        }
-                                    ]
-                                }
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": "s3:GetObject",
-                                "Resource": {
-                                    "Fn::Sub": [
-                                        "arn:aws:s3:::${bucketname}/${keyprefix}assets/configset/*",
-                                        {
-                                            "bucketname": {
-                                                "Ref": "S3BucketName"
-                                            },
-                                            "keyprefix": {
-                                                "Ref": "S3KeyPrefix"
-                                            }
-                                        }
-                                    ]
-                                }
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "elasticloadbalancing:DescribeLoadBalancers",
-                                    "elasticloadbalancing:DescribeListeners",
-                                    "elasticloadbalancing:DescribeLoadBalancerAttributes",
-                                    "elasticloadbalancing:DescribeTargetGroupAttributes",
-                                    "elasticloadbalancing:DescribeTargetHealth",
-                                    "elasticloadbalancing:DescribeTargetGroups"
-                                ],
-                                "Resource": "*"
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "elasticloadbalancing:RegisterTargets",
-                                    "elasticloadbalancing:RemoveTags",
-                                    "elasticloadbalancing:DeregisterTargets"
-                                ],
-                                "Resource": [
-                                    {
+                "Policies": [
+                    {
+                        "PolicyName": "fortigate-autoscale-handler-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:CreateTable",
+                                        "dynamodb:DescribeTable",
+                                        "dynamodb:Scan",
+                                        "dynamodb:Query",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
                                         "Fn::Sub": [
-                                            "arn:aws:elasticloadbalancing:${AWS_REGION}:${AWS_ACCOUNT_ID}:loadbalancer/net/${CUSTOM_ID}*/*",
+                                            "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${TABLE_NAME_PREFIX}*",
                                             {
                                                 "AWS_REGION": {
                                                     "Ref": "AWS::Region"
@@ -524,33 +346,192 @@
                                                 "AWS_ACCOUNT_ID": {
                                                     "Ref": "AWS::AccountId"
                                                 },
-                                                "CUSTOM_ID": {
-                                                    "Ref": "CustomIdentifier"
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "Fn::Sub": [
-                                            "arn:aws:elasticloadbalancing:${AWS_REGION}:${AWS_ACCOUNT_ID}:targetgroup/${CUSTOM_ID}*/*",
-                                            {
-                                                "AWS_REGION": {
-                                                    "Ref": "AWS::Region"
-                                                },
-                                                "AWS_ACCOUNT_ID": {
-                                                    "Ref": "AWS::AccountId"
-                                                },
-                                                "CUSTOM_ID": {
-                                                    "Ref": "CustomIdentifier"
+                                                "TABLE_NAME_PREFIX": {
+                                                    "Ref": "ResourceTagPrefix"
                                                 }
                                             }
                                         ]
                                     }
-                                ]
-                            }
-                        ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "autoscaling:CompleteLifecycleAction",
+                                        "autoscaling:SetDesiredCapacity",
+                                        "autoscaling:SetInstanceProtection",
+                                        "autoscaling:ExitStandby",
+                                        "autoscaling:BatchPutScheduledUpdateGroupAction",
+                                        "autoscaling:EnterStandby",
+                                        "autoscaling:PutScheduledUpdateGroupAction",
+                                        "autoscaling:UpdateAutoScalingGroup",
+                                        "autoscaling:DeleteNotificationConfiguration",
+                                        "autoscaling:SetInstanceHealth",
+                                        "autoscaling:TerminateInstanceInAutoScalingGroup",
+                                        "autoscaling:AttachLoadBalancers",
+                                        "autoscaling:DetachLoadBalancers",
+                                        "autoscaling:BatchDeleteScheduledAction",
+                                        "autoscaling:ResumeProcesses",
+                                        "autoscaling:SetDesiredCapacity",
+                                        "autoscaling:PutLifecycleHook",
+                                        "autoscaling:DetachLoadBalancerTargetGroups",
+                                        "autoscaling:SuspendProcesses",
+                                        "autoscaling:AttachLoadBalancerTargetGroups",
+                                        "autoscaling:AttachInstances",
+                                        "autoscaling:CompleteLifecycleAction",
+                                        "autoscaling:CreateOrUpdateTags",
+                                        "autoscaling:SetInstanceProtection",
+                                        "autoscaling:DeleteAutoScalingGroup",
+                                        "autoscaling:DeleteLifecycleHook",
+                                        "autoscaling:CreateAutoScalingGroup",
+                                        "autoscaling:DeleteScheduledAction",
+                                        "autoscaling:DetachInstances",
+                                        "autoscaling:RecordLifecycleActionHeartbeat"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:autoscaling:${AWS_REGION}:${AWS_ACCOUNT_ID}:autoScalingGroup:*:autoScalingGroupName/${ASG_NAME}*",
+                                            {
+                                                "AWS_REGION": {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                "AWS_ACCOUNT_ID": {
+                                                    "Ref": "AWS::AccountId"
+                                                },
+                                                "ASG_NAME": {
+                                                    "Ref": "ResourceTagPrefix"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "autoscaling:DescribeAutoScalingNotificationTypes",
+                                        "autoscaling:DescribeAutoScalingInstances",
+                                        "ec2:DescribeInstances",
+                                        "autoscaling:DescribeScalingProcessTypes",
+                                        "autoscaling:DescribeTerminationPolicyTypes",
+                                        "dynamodb:ListTables",
+                                        "autoscaling:DescribePolicies",
+                                        "ec2:DescribeInstanceAttribute",
+                                        "autoscaling:DescribeLaunchConfigurations",
+                                        "autoscaling:DescribeAdjustmentTypes",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "autoscaling:DescribeScalingActivities",
+                                        "autoscaling:DescribeAccountLimits",
+                                        "autoscaling:DescribeAutoScalingGroups",
+                                        "autoscaling:DescribeScheduledActions",
+                                        "autoscaling:DescribeLoadBalancerTargetGroups",
+                                        "autoscaling:DescribeNotificationConfigurations",
+                                        "autoscaling:DescribeLifecycleHookTypes",
+                                        "ec2:DetachNetworkInterface",
+                                        "autoscaling:DescribeTags",
+                                        "ec2:DeleteNetworkInterface",
+                                        "autoscaling:DescribeMetricCollectionTypes",
+                                        "autoscaling:DescribeLoadBalancers",
+                                        "autoscaling:DescribeLifecycleHooks",
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:ModifyNetworkInterfaceAttribute",
+                                        "ec2:ModifyInstanceAttribute",
+                                        "ec2:DescribeVpcs",
+                                        "ec2:AttachNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:CreateTags",
+                                        "ec2:DescribeVpcs",
+                                        "ec2:DescribeSubnets"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": ["apigateway:GET"],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:apigateway:${AWS_REGION}::*",
+                                            {
+                                                "AWS_REGION": {
+                                                    "Ref": "AWS::Region"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "s3:GetObject",
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:s3:::${bucketname}/${keyprefix}assets/configset/*",
+                                            {
+                                                "bucketname": {
+                                                    "Ref": "S3BucketName"
+                                                },
+                                                "keyprefix": {
+                                                    "Ref": "S3KeyPrefix"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticloadbalancing:DescribeLoadBalancers",
+                                        "elasticloadbalancing:DescribeListeners",
+                                        "elasticloadbalancing:DescribeLoadBalancerAttributes",
+                                        "elasticloadbalancing:DescribeTargetGroupAttributes",
+                                        "elasticloadbalancing:DescribeTargetHealth",
+                                        "elasticloadbalancing:DescribeTargetGroups"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticloadbalancing:RegisterTargets",
+                                        "elasticloadbalancing:RemoveTags",
+                                        "elasticloadbalancing:DeregisterTargets"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": [
+                                                "arn:aws:elasticloadbalancing:${AWS_REGION}:${AWS_ACCOUNT_ID}:loadbalancer/net/${CUSTOM_ID}*/*",
+                                                {
+                                                    "AWS_REGION": {
+                                                        "Ref": "AWS::Region"
+                                                    },
+                                                    "AWS_ACCOUNT_ID": {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    "CUSTOM_ID": {
+                                                        "Ref": "CustomIdentifier"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": [
+                                                "arn:aws:elasticloadbalancing:${AWS_REGION}:${AWS_ACCOUNT_ID}:targetgroup/${CUSTOM_ID}*/*",
+                                                {
+                                                    "AWS_REGION": {
+                                                        "Ref": "AWS::Region"
+                                                    },
+                                                    "AWS_ACCOUNT_ID": {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    "CUSTOM_ID": {
+                                                        "Ref": "CustomIdentifier"
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
                     }
-                }]
+                ]
             }
         },
         "FgtAsgLambdaFunctionAsgHandler": {
@@ -560,9 +541,11 @@
                 "FunctionName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
-                            }, {
+                            },
+                            {
                                 "Ref": "UniqueId"
                             },
                             "fortigate-autoscale-handler"
@@ -571,10 +554,7 @@
                 },
                 "Runtime": "nodejs12.x",
                 "Role": {
-                    "Fn::GetAtt": [
-                        "FgtAsgHandlerIamRole",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["FgtAsgHandlerIamRole", "Arn"]
                 },
                 "Handler": "index.AutoscaleHandler",
                 "Timeout": {
@@ -582,20 +562,14 @@
                 },
                 "Code": {
                     "S3Bucket": {
-                        "Fn::GetAtt": [
-                            "StackCopyLambdaSource",
-                            "Outputs.DestinationBucket"
-                        ]
+                        "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.DestinationBucket"]
                     },
                     "S3Key": {
                         "Fn::Sub": [
                             "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
                             {
                                 "KeyPrefix": {
-                                    "Fn::GetAtt": [
-                                        "StackCopyLambdaSource",
-                                        "Outputs.KeyPrefix"
-                                    ]
+                                    "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.KeyPrefix"]
                                 }
                             }
                         ]
@@ -610,16 +584,16 @@
                         "UNIQUE_ID": ""
                     }
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             },
-            "DependsOn": [
-                "StackCopyLambdaSource"
-            ]
+            "DependsOn": ["StackCopyLambdaSource"]
         },
         "FgtAsgLambdaFunctionCfnService": {
             "Type": "AWS::Lambda::Function",
@@ -628,9 +602,11 @@
                 "FunctionName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
-                            }, {
+                            },
+                            {
                                 "Ref": "UniqueId"
                             },
                             "fortigate-autoscale-cloud-formation-service"
@@ -639,10 +615,7 @@
                 },
                 "Runtime": "nodejs12.x",
                 "Role": {
-                    "Fn::GetAtt": [
-                        "FgtAsgHandlerIamRole",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["FgtAsgHandlerIamRole", "Arn"]
                 },
                 "Handler": "cfn-service.handler",
                 "Timeout": {
@@ -650,20 +623,14 @@
                 },
                 "Code": {
                     "S3Bucket": {
-                        "Fn::GetAtt": [
-                            "StackCopyLambdaSource",
-                            "Outputs.DestinationBucket"
-                        ]
+                        "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.DestinationBucket"]
                     },
                     "S3Key": {
                         "Fn::Sub": [
                             "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
                             {
                                 "KeyPrefix": {
-                                    "Fn::GetAtt": [
-                                        "StackCopyLambdaSource",
-                                        "Outputs.KeyPrefix"
-                                    ]
+                                    "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.KeyPrefix"]
                                 }
                             }
                         ]
@@ -678,25 +645,22 @@
                         "UNIQUE_ID": ""
                     }
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             },
-            "DependsOn": [
-                "StackCopyLambdaSource"
-            ]
+            "DependsOn": ["StackCopyLambdaSource"]
         },
         "LambdaPermissionFgtAsgHandler": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
                 "FunctionName": {
-                    "Fn::GetAtt": [
-                        "FgtAsgLambdaFunctionAsgHandler",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["FgtAsgLambdaFunctionAsgHandler", "Arn"]
                 },
                 "Action": "lambda:InvokeFunction",
                 "Principal": "apigateway.amazonaws.com",
@@ -726,9 +690,11 @@
                 "FunctionName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
-                            }, {
+                            },
+                            {
                                 "Ref": "UniqueId"
                             },
                             "fortigate-autoscale-byol-license"
@@ -737,10 +703,7 @@
                 },
                 "Runtime": "nodejs12.x",
                 "Role": {
-                    "Fn::GetAtt": [
-                        "FgtAsgHandlerIamRole",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["FgtAsgHandlerIamRole", "Arn"]
                 },
                 "Handler": "index.ByolLicenseHandler",
                 "Timeout": {
@@ -748,20 +711,14 @@
                 },
                 "Code": {
                     "S3Bucket": {
-                        "Fn::GetAtt": [
-                            "StackCopyLambdaSource",
-                            "Outputs.DestinationBucket"
-                        ]
+                        "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.DestinationBucket"]
                     },
                     "S3Key": {
                         "Fn::Sub": [
                             "${KeyPrefix}functions/packages/fgt-asg-handler.zip",
                             {
                                 "KeyPrefix": {
-                                    "Fn::GetAtt": [
-                                        "StackCopyLambdaSource",
-                                        "Outputs.KeyPrefix"
-                                    ]
+                                    "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.KeyPrefix"]
                                 }
                             }
                         ]
@@ -776,25 +733,22 @@
                         "UNIQUE_ID": ""
                     }
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             },
-            "DependsOn": [
-                "StackCopyLambdaSource"
-            ]
+            "DependsOn": ["StackCopyLambdaSource"]
         },
         "LambdaPermissionByolLicenseHandler": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
                 "FunctionName": {
-                    "Fn::GetAtt": [
-                        "FgtAsgLambdaFunctionByolLicenseHandler",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["FgtAsgLambdaFunctionByolLicenseHandler", "Arn"]
                 },
                 "Action": "lambda:InvokeFunction",
                 "Principal": "apigateway.amazonaws.com",
@@ -839,7 +793,8 @@
                     }
                 ]
             }
-        },"FgtAsgHandlerFunctionName": {
+        },
+        "FgtAsgHandlerFunctionName": {
             "Description": "FortiGate Autoscale handler function Name",
             "Value": {
                 "Ref": "FgtAsgLambdaFunctionAsgHandler"
@@ -848,10 +803,7 @@
         "FgtAsgHandlerFunctionArn": {
             "Description": "FortiGate Autoscale handler function ARN",
             "Value": {
-                "Fn::GetAtt": [
-                    "FgtAsgLambdaFunctionAsgHandler",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["FgtAsgLambdaFunctionAsgHandler", "Arn"]
             }
         },
         "FgtAsgHandlerServicName": {
@@ -863,12 +815,10 @@
         "FgtAsgHandlerServiceArn": {
             "Description": "FortiGate Autoscale handler service function ARN",
             "Value": {
-                "Fn::GetAtt": [
-                    "FgtAsgLambdaFunctionCfnService",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["FgtAsgLambdaFunctionCfnService", "Arn"]
             }
-        },"ByolLicenseHandlerFunctionName": {
+        },
+        "ByolLicenseHandlerFunctionName": {
             "Condition": "CreateByolLicenseHandler",
             "Description": "FortiGate Autoscale BYOL license handler function Name",
             "Value": {
@@ -879,10 +829,7 @@
             "Condition": "CreateByolLicenseHandler",
             "Description": "FortiGate Autoscale BYOL license handler function ARN",
             "Value": {
-                "Fn::GetAtt": [
-                    "FgtAsgLambdaFunctionByolLicenseHandler",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["FgtAsgLambdaFunctionByolLicenseHandler", "Arn"]
             }
         },
         "FgtAsgHandlerIamRoleName": {
@@ -894,10 +841,7 @@
         "FgtAsgHandlerIamRoleArn": {
             "Description": "FortiGate Autoscale handler IAM Role name.",
             "Value": {
-                "Fn::GetAtt": [
-                    "FgtAsgHandlerIamRole",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["FgtAsgHandlerIamRole", "Arn"]
             }
         },
         "RequiredConfigsetList": {

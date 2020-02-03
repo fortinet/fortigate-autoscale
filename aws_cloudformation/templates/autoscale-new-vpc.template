@@ -957,10 +957,7 @@
         "FgtLicensingModel": {
             "Description": "The FortiGate licensing model in the Auto Scaling group(s) for the initial deployment of this stack. (Options: PAYG-Only, BYOL-Only, Hybrid)",
             "Value": {
-                "Fn::GetAtt": [
-                    "StackMainWorkload",
-                    "Outputs.FgtLicensingModel"
-                ]
+                "Fn::GetAtt": ["StackMainWorkload", "Outputs.FgtLicensingModel"]
             }
         }
     }
