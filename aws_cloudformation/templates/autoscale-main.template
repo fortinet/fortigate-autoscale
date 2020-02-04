@@ -347,11 +347,11 @@
         }
     },
     "Mappings": {
-        "FortiGateKeyMap": {
-            "FortiGateVersionByol": {
+        "ProductVersionMap": {
+            "FortiGateByol": {
                 "623": "FGTVM64BYOL623"
             },
-            "FortiGateVersionPayg": {
+            "FortiGatePayg": {
                 "623": "FGTVM64PAYG623"
             }
         },
@@ -427,6 +427,14 @@
             "us-west-2": {
                 "FGTVM64BYOL623": "ami-04fc0698575eb8a17",
                 "FGTVM64PAYG623": "ami-00f25d8bf4aaa4613"
+            },
+            "ap-east-1": {
+                "FGTVM64BYOL623": "ami-6f41041e",
+                "FGTVM64PAYG623": "ami-b64702c7"
+            },
+            "me-south-1": {
+                "FGTVM64BYOL623": "ami-04d00a1b72cc745c1",
+                "FGTVM64PAYG623": "ami-0083de45e17edc133"
             }
         },
         "ProtocolPortMap": {
@@ -971,8 +979,8 @@
                             },
                             {
                                 "Fn::FindInMap": [
-                                    "FortiGateKeyMap",
-                                    "FortiGateVersionByol",
+                                    "ProductVersionMap",
+                                    "FortiGateByol",
                                     {
                                         "Ref": "FortiOSVersion"
                                     }
@@ -989,8 +997,8 @@
                             },
                             {
                                 "Fn::FindInMap": [
-                                    "FortiGateKeyMap",
-                                    "FortiGateVersionPayg",
+                                    "ProductVersionMap",
+                                    "FortiGatePayg",
                                     {
                                         "Ref": "FortiOSVersion"
                                     }
