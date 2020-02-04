@@ -347,11 +347,11 @@
         }
     },
     "Mappings": {
-        "FortiGateKeyMap": {
-            "FortiGateVersionByol": {
+        "ProductVersionMap": {
+            "FortiGateByol": {
                 "623": "FGTVM64BYOL623"
             },
-            "FortiGateVersionPayg": {
+            "FortiGatePayg": {
                 "623": "FGTVM64PAYG623"
             }
         },
@@ -971,8 +971,8 @@
                             },
                             {
                                 "Fn::FindInMap": [
-                                    "FortiGateKeyMap",
-                                    "FortiGateVersionByol",
+                                    "ProductVersionMap",
+                                    "FortiGateByol",
                                     {
                                         "Ref": "FortiOSVersion"
                                     }
@@ -989,8 +989,8 @@
                             },
                             {
                                 "Fn::FindInMap": [
-                                    "FortiGateKeyMap",
-                                    "FortiGateVersionPayg",
+                                    "ProductVersionMap",
+                                    "FortiGatePayg",
                                     {
                                         "Ref": "FortiOSVersion"
                                     }
