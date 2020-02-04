@@ -1467,11 +1467,7 @@
                     "IfPAYGOnly",
                     "PAYG-Only",
                     {
-                        "Fn::If": [
-                            "IfBYOLOnly",
-                            "BYOL-Only",
-                            "Hybrid"
-                        ]
+                        "Fn::If": ["IfBYOLOnly", "BYOL-Only", "Hybrid"]
                     }
                 ]
             }

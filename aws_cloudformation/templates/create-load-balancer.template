@@ -27,11 +27,7 @@
         "TrafficProtocol": {
             "Type": "String",
             "Default": "HTTPS",
-            "AllowedValues": [
-                "HTTP",
-                "HTTPS",
-                "TCP"
-            ],
+            "AllowedValues": ["HTTP", "HTTPS", "TCP"],
             "ConstraintDescription": "value must be chosen from the provided options.",
             "Description": "The protocol to use for routing traffic to the targets."
         },
@@ -70,10 +66,7 @@
         "NewInternalLoadBalancer": {
             "Type": "String",
             "Default": "yes",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "Create an internal load balancer to route traffic from FortiGate to targets in a specified target group."
         },
@@ -92,7 +85,8 @@
     },
     "Conditions": {
         "IfNewInternalLoadBalancer": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "NewInternalLoadBalancer"
                 },
                 "yes"
@@ -146,7 +140,8 @@
                         ]
                     ]
                 },
-                "Tags": [{
+                "Tags": [
+                    {
                         "Key": "Name",
                         "Value": {
                             "Fn::Join": [
@@ -206,11 +201,14 @@
                 "VpcId": {
                     "Ref": "VpcId"
                 },
-                "TargetGroupAttributes": [{
-                    "Key": "deregistration_delay.timeout_seconds",
-                    "Value": "30"
-                }],
-                "Tags": [{
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": "30"
+                    }
+                ],
+                "Tags": [
+                    {
                         "Key": "Name",
                         "Value": {
                             "Fn::Join": [
@@ -242,12 +240,14 @@
                 "LoadBalancerArn": {
                     "Ref": "FgtLoadBalancer"
                 },
-                "DefaultActions": [{
-                    "Type": "forward",
-                    "TargetGroupArn": {
-                        "Ref": "FgtTargetGroup"
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "FgtTargetGroup"
+                        }
                     }
-                }],
+                ],
                 "Protocol": {
                     "Fn::FindInMap": [
                         "ProtocolMap",
@@ -290,7 +290,8 @@
                         ]
                     ]
                 },
-                "Tags": [{
+                "Tags": [
+                    {
                         "Key": "Name",
                         "Value": {
                             "Fn::Join": [
@@ -359,7 +360,8 @@
                 "VpcId": {
                     "Ref": "VpcId"
                 },
-                "Tags": [{
+                "Tags": [
+                    {
                         "Key": "Name",
                         "Value": {
                             "Fn::Join": [
@@ -392,12 +394,14 @@
                 "LoadBalancerArn": {
                     "Ref": "InternalLoadBalancer"
                 },
-                "DefaultActions": [{
-                    "Type": "forward",
-                    "TargetGroupArn": {
-                        "Ref": "InternalTargetGroup"
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "InternalTargetGroup"
+                        }
                     }
-                }],
+                ],
                 "Protocol": {
                     "Fn::FindInMap": [
                         "ProtocolMap",
@@ -415,14 +419,12 @@
     },
     "Metadata": {
         "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [{
+            "ParameterGroups": [
+                {
                     "Label": {
                         "default": "Resource tagging configuration"
                     },
-                    "Parameters": [
-                        "ResourceTagPrefix",
-                        "CustomIdentifier"
-                    ]
+                    "Parameters": ["ResourceTagPrefix", "CustomIdentifier"]
                 },
                 {
                     "Label": {
@@ -485,10 +487,7 @@
         "FgtLoadBalancerDnsName": {
             "Description": "FortiGate Autoscale load balancer DNS name",
             "Value": {
-                "Fn::GetAtt": [
-                    "FgtLoadBalancer",
-                    "DNSName"
-                ]
+                "Fn::GetAtt": ["FgtLoadBalancer", "DNSName"]
             }
         },
         "FgtTargetGroupArn": {
@@ -500,10 +499,7 @@
         "InternalLoadBalancerDnsName": {
             "Description": "FortiGate protected service load balancer DNS Name",
             "Value": {
-                "Fn::GetAtt": [
-                    "InternalLoadBalancer",
-                    "DNSName"
-                ]
+                "Fn::GetAtt": ["InternalLoadBalancer", "DNSName"]
             }
         },
         "InternalTargetGroupArn": {

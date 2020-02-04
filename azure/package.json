@@ -1,41 +1,41 @@
 {
-  "name": "fortigate-autoscale-azure",
-  "version": "1.0.0",
-  "description": "FortiGate Autoscale Module - Azure",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
-  "files_to_deploy": [
-    "*.js",
-    "package.json"
-  ],
-  "dependencies": {
-    "azure-storage": "^2.10.3",
-    "fortigate-autoscale-core": "file:../core",
-    "ms-rest-azure": "^3.0.0",
-    "request": "^2.88.0"
-  },
-  "devDependencies": {
-    "eslint": "^6.8.0",
-    "eslint-plugin-json": "^2.0.1",
-    "eslint-plugin-mocha": "^6.2.2",
-    "mocha": "^7.0.0",
-    "nyc": "^15.0.0"
-  },
-  "bundledDependencies": [
-    "fortigate-autoscale-core"
-  ],
-  "scripts": {
-    "pretest": "eslint --fix .",
-    "deploy": "dpl",
-    "build": "scripts/make-dist.js",
-    "test": "nyc mocha --recursive './test/mocha/*.js'"
-  },
-  "author": "fortinet",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/fortinet/fortigate-autoscale"
-  }
+    "name": "fortigate-autoscale-azure",
+    "version": "1.0.0",
+    "description": "FortiGate Autoscale Module - Azure",
+    "main": "index.js",
+    "directories": {
+        "test": "tests"
+    },
+    "files_to_deploy": [
+        "*.js",
+        "package.json"
+    ],
+    "dependencies": {
+        "azure-storage": "^2.10.3",
+        "fortigate-autoscale-core": "file:../core",
+        "ms-rest-azure": "^3.0.0",
+        "request": "^2.88.0"
+    },
+    "devDependencies": {
+        "eslint": "^6.8.0",
+        "eslint-plugin-json": "^2.0.1",
+        "eslint-plugin-mocha": "^6.2.2",
+        "mocha": "^7.0.0",
+        "nyc": "^15.0.0"
+    },
+    "bundledDependencies": [
+        "fortigate-autoscale-core"
+    ],
+    "scripts": {
+        "pretest": "eslint --fix .",
+        "deploy": "dpl",
+        "build": "scripts/make-dist.js",
+        "test": "nyc mocha --recursive './test/mocha/*.js'"
+    },
+    "author": "fortinet",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/fortinet/fortigate-autoscale"
+    }
 }
