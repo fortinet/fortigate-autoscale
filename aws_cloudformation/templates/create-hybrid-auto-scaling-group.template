@@ -178,6 +178,12 @@
             "Type": "String",
             "Default": "",
             "Description": "An optional product code provided for the AMI(PAYG) if using a custom AMI."
+        },
+        "LicensingModel": {
+            "Type": "String",
+            "AllowedValues": ["BYOL-Only", "PAYG-Only", "Hybrid"],
+            "ConstraintDescription": "must be a valid option from the selection.",
+            "Description": "Licensing model that affects the Auto Scaling Groups deployment and configuration."
         }
     },
     "Conditions": {
@@ -207,6 +213,46 @@
                     "Ref": "InstanceProfileArn"
                 },
                 ""
+            ]
+        },
+        "IfBYOLOnly": {
+            "Fn::Equals": [
+                {
+                    "Ref": "LicensingModel"
+                },
+                "BYOL-Only"
+            ]
+        },
+        "IfNotBYOLOnly": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LicensingModel"
+                        },
+                        "BYOL-Only"
+                    ]
+                }
+            ]
+        },
+        "IfNotPAYGOnly": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LicensingModel"
+                        },
+                        "PAYG-Only"
+                    ]
+                }
+            ]
+        },
+        "IfHybrid": {
+            "Fn::Equals": [
+                {
+                    "Ref": "LicensingModel"
+                },
+                "Hybrid"
             ]
         }
     },
@@ -439,7 +485,30 @@
                 ]
             }
         },
-        "AsgScaleInPolicyPayg": {
+        "ByolAsgShrinkOnLowCPUUtilization": {
+            "Condition": "IfBYOLOnly",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupByol"
+                },
+                "ScalingAdjustment": "-1"
+            }
+        },
+        "ByolAsgGrowOnHighCPUUtilization": {
+            "Condition": "IfBYOLOnly",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupByol"
+                },
+                "ScalingAdjustment": "1"
+            }
+        },
+        "PaygAsgShrinkOnLowCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
             "Type": "AWS::AutoScaling::ScalingPolicy",
             "Properties": {
                 "AdjustmentType": "ChangeInCapacity",
@@ -449,7 +518,8 @@
                 "ScalingAdjustment": "-1"
             }
         },
-        "AsgScaleOutPolicyPayg": {
+        "PaygAsgGrowOnHighCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
             "Type": "AWS::AutoScaling::ScalingPolicy",
             "Properties": {
                 "AdjustmentType": "ChangeInCapacity",
@@ -459,7 +529,30 @@
                 "ScalingAdjustment": "1"
             }
         },
-        "AlarmScaleInThresholdCpuUtilPayg": {
+        "PaygAsgShrinkOnByolAsgCondition": {
+            "Condition": "IfHybrid",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupPayg"
+                },
+                "ScalingAdjustment": "-1"
+            }
+        },
+        "PaygAsgGrowOnByolAsgCondition": {
+            "Condition": "IfHybrid",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupPayg"
+                },
+                "ScalingAdjustment": "1"
+            }
+        },
+        "AlarmByolGroupLowCPUUtilization": {
+            "Condition": "IfNotPAYGOnly",
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "EvaluationPeriods": "1",
@@ -467,13 +560,91 @@
                 "Threshold": {
                     "Ref": "AsgScaleInThreshold"
                 },
-                "AlarmDescription": "Alarm if CPU too low or metric disappears indicating instance is down",
+                "AlarmDescription": "Alarm if CPU utilization in (BYOL) Auto Scaling Group goes below the lower-bound threshold over 1 period.",
                 "Period": {
                     "Ref": "AsgCooldown"
                 },
                 "AlarmActions": [
                     {
-                        "Ref": "AsgScaleInPolicyPayg"
+                        "Fn::If": [
+                            "IfBYOLOnly",
+                            {
+                                "Ref": "ByolAsgShrinkOnLowCPUUtilization"
+                            },
+                            {
+                                "Ref": "PaygAsgShrinkOnByolAsgCondition"
+                            }
+                        ]
+                    }
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroupByol"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "LessThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        },
+        "AlarmByolGroupHighCPUUtilization": {
+            "Condition": "IfNotPAYGOnly",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": {
+                    "Ref": "AsgScaleOutThreshold"
+                },
+                "AlarmDescription": "Alarm if CPU utilization in (BYOL) Auto Scaling Group goes above the upper-bound threshold over 1 period.",
+                "Period": {
+                    "Ref": "AsgCooldown"
+                },
+                "AlarmActions": [
+                    {
+                        "Fn::If": [
+                            "IfBYOLOnly",
+                            {
+                                "Ref": "ByolAsgGrowOnHighCPUUtilization"
+                            },
+                            {
+                                "Ref": "PaygAsgGrowOnByolAsgCondition"
+                            }
+                        ]
+                    }
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroupByol"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "GreaterThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        },
+        "AlarmPaygGroupLowCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": {
+                    "Ref": "AsgScaleInThreshold"
+                },
+                "AlarmDescription": "Alarm if CPU utilization in (PAYG) Auto Scaling Group goes below the lower-bound threshold over 1 period.",
+                "Period": {
+                    "Ref": "AsgCooldown"
+                },
+                "AlarmActions": [
+                    {
+                        "Ref": "PaygAsgShrinkOnLowCPUUtilization"
                     }
                 ],
                 "Namespace": "AWS/EC2",
@@ -489,7 +660,8 @@
                 "MetricName": "CPUUtilization"
             }
         },
-        "AlarmScaleOutThresholdCpuUtilPayg": {
+        "AlarmPaygGroupHighCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "EvaluationPeriods": "1",
@@ -497,13 +669,13 @@
                 "Threshold": {
                     "Ref": "AsgScaleOutThreshold"
                 },
-                "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+                "AlarmDescription": "Alarm if CPU utilization in (PAYG) Auto Scaling Group goes above the upper-bound threshold over 1 period.",
                 "Period": {
                     "Ref": "AsgCooldown"
                 },
                 "AlarmActions": [
                     {
-                        "Ref": "AsgScaleOutPolicyPayg"
+                        "Ref": "PaygAsgGrowOnHighCPUUtilization"
                     }
                 ],
                 "Namespace": "AWS/EC2",

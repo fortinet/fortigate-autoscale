@@ -543,11 +543,14 @@ module.exports = class AutoscaleHandler {
         await this.retrieveMaster();
 
         // get the current master instance info for comparisons later
-        let masterInstanceId = this._masterRecord && this._masterRecord.instanceId || null;
-        let masterElectionVote = this._masterRecord && this._masterRecord.voteState || null;
+        let masterInstanceId = (this._masterRecord && this._masterRecord.instanceId) || null;
+        let masterElectionVote = (this._masterRecord && this._masterRecord.voteState) || null;
 
-        if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
-            this.scalingGroupName === this.masterScalingGroupName) {
+        if (
+            this._masterInfo &&
+            this._selfInstance.instanceId === this._masterInfo.instanceId &&
+            this.scalingGroupName === this.masterScalingGroupName
+        ) {
             // this instance is the current master, skip checking master election
             // use master health check result as self health check result
             isMaster = true;
@@ -555,9 +558,9 @@ module.exports = class AutoscaleHandler {
         } else if (this._selfHealthCheck && !this._selfHealthCheck.healthy) {
             // this instance isn't the current master
             // if this instance is unhealth, skip master election check
-
-        } else if (!(this._masterInfo && this._masterHealthCheck &&
-            this._masterHealthCheck.healthy)) {
+        } else if (
+            !(this._masterInfo && this._masterHealthCheck && this._masterHealthCheck.healthy)
+        ) {
             // this instance isn't the current master
             // if no master or master is unhealthy, try to run a master election or check if a
             // master election is running then wait for it to end
@@ -569,7 +572,8 @@ module.exports = class AutoscaleHandler {
                 validator = masterInfo => {
                     // i am the new master, don't wait, continue to finalize the election.
                     // should return true to end the waiting.
-                    if (masterInfo &&
+                    if (
+                        masterInfo &&
                         masterInfo.primaryPrivateIpAddress ===
                             this._selfInstance.primaryPrivateIpAddress
                     ) {
@@ -703,8 +707,9 @@ module.exports = class AutoscaleHandler {
         }
 
         // check whether master has changed or not
-        let currentMasterInstanceId = this._masterRecord && this._masterRecord.instanceId || null;
-        let currentMasterElectionVote = this._masterRecord && this._masterRecord.voteState || null;
+        let currentMasterInstanceId = (this._masterRecord && this._masterRecord.instanceId) || null;
+        let currentMasterElectionVote =
+            (this._masterRecord && this._masterRecord.voteState) || null;
 
         // no master (election done) before, but have a master (election done) now
         // or
@@ -716,8 +721,11 @@ module.exports = class AutoscaleHandler {
 
         // had a master (election done) before, have a master (election done) now,
         // but they have different instance id
-        if (masterElectionVote === 'done' && currentMasterElectionVote === 'done' &&
-            masterInstanceId !== currentMasterInstanceId) {
+        if (
+            masterElectionVote === 'done' &&
+            currentMasterElectionVote === 'done' &&
+            masterInstanceId !== currentMasterInstanceId
+        ) {
             masterChanged = true;
         }
 
@@ -727,9 +735,11 @@ module.exports = class AutoscaleHandler {
             await this.platform.updateHAAPRoleTag(this._selfInstance.instanceId);
         }
 
-        this.logger.info(`currentMasterInstanceId: ${currentMasterInstanceId}, ` +
-            `currentMasterElectionVote: ${currentMasterElectionVote}, ` +
-            `masterChanged: ${masterChanged}`);
+        this.logger.info(
+            `currentMasterInstanceId: ${currentMasterInstanceId}, ` +
+                `currentMasterElectionVote: ${currentMasterElectionVote}, ` +
+                `masterChanged: ${masterChanged}`
+        );
 
         // if no self healthcheck record found, this instance not under monitor. It's about the
         // time to add it to monitor. should make sure its all lifecycle actions are complete
