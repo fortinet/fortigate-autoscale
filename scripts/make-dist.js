@@ -846,7 +846,12 @@ switch (scrptName.toLowerCase()) {
         makeDistAwsCloudFormation({ quickstart: false, fazhandler: false });
         break;
     case 'aws-quickstart-special':
-        makeDistAwsCloudFormation({ quickstart: true, fazhandler: false });
+        makeDistAwsCloudFormation({
+            nicAttachment: true,
+            fazSupport: true,
+            tgwIntegration: false,
+            quickstart: true
+        });
         break;
     case 'project':
         makeDistProject();
