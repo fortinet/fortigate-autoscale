@@ -1,4 +1,5 @@
-[{
+[
+    {
         "ParameterKey": "ResourceTagPrefix",
         "ParameterValue": "fortigate-autoscale-has-a-very-long-res-tag-prefix"
     },

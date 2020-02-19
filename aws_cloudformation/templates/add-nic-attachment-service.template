@@ -42,7 +42,8 @@
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
@@ -67,11 +68,7 @@
                         "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/copy-objects.template",
                         {
                             "S3Region": {
-                                "Fn::If": [
-                                    "GovCloudCondition",
-                                    "s3-us-gov-west-1",
-                                    "s3"
-                                ]
+                                "Fn::If": ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
                             },
                             "S3BucketName": {
                                 "Ref": "S3BucketName"
@@ -88,10 +85,7 @@
         "NicAttachmentCfnServiceProvider": {
             "Properties": {
                 "ServiceToken": {
-                    "Fn::GetAtt": [
-                        "NicAttachmentCfnServiceProviderScript",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["NicAttachmentCfnServiceProviderScript", "Arn"]
                 },
                 "CustomIdentifier": {
                     "Ref": "ResourceTagPrefix"
@@ -107,9 +101,11 @@
                 "FunctionName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
-                            }, {
+                            },
+                            {
                                 "Ref": "UniqueId"
                             },
                             "fortigate-nic-attachment-service-provider"
@@ -118,29 +114,20 @@
                 },
                 "Runtime": "nodejs12.x",
                 "Role": {
-                    "Fn::GetAtt": [
-                        "IamRoleNicAttachment",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["IamRoleNicAttachment", "Arn"]
                 },
                 "Handler": "cfn-service.handler",
                 "Timeout": 300,
                 "Code": {
                     "S3Bucket": {
-                        "Fn::GetAtt": [
-                            "StackCopyLambdaSource",
-                            "Outputs.DestinationBucket"
-                        ]
+                        "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.DestinationBucket"]
                     },
                     "S3Key": {
                         "Fn::Sub": [
                             "${KeyPrefix}functions/packages/nic-attachment.zip",
                             {
                                 "KeyPrefix": {
-                                    "Fn::GetAtt": [
-                                        "StackCopyLambdaSource",
-                                        "Outputs.KeyPrefix"
-                                    ]
+                                    "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.KeyPrefix"]
                                 }
                             }
                         ]
@@ -154,16 +141,16 @@
                         }
                     }
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             },
-            "DependsOn": [
-                "StackCopyLambdaSource"
-            ]
+            "DependsOn": ["StackCopyLambdaSource"]
         },
         "NicAttachmentServiceScript": {
             "Type": "AWS::Lambda::Function",
@@ -172,9 +159,11 @@
                 "FunctionName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "CustomIdentifier"
-                            }, {
+                            },
+                            {
                                 "Ref": "UniqueId"
                             },
                             "fortigate-nic-attachment-service"
@@ -183,29 +172,20 @@
                 },
                 "Runtime": "nodejs12.x",
                 "Role": {
-                    "Fn::GetAtt": [
-                        "IamRoleNicAttachment",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["IamRoleNicAttachment", "Arn"]
                 },
                 "Handler": "index.handler",
                 "Timeout": 300,
                 "Code": {
                     "S3Bucket": {
-                        "Fn::GetAtt": [
-                            "StackCopyLambdaSource",
-                            "Outputs.DestinationBucket"
-                        ]
+                        "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.DestinationBucket"]
                     },
                     "S3Key": {
                         "Fn::Sub": [
                             "${KeyPrefix}functions/packages/nic-attachment.zip",
                             {
                                 "KeyPrefix": {
-                                    "Fn::GetAtt": [
-                                        "StackCopyLambdaSource",
-                                        "Outputs.KeyPrefix"
-                                    ]
+                                    "Fn::GetAtt": ["StackCopyLambdaSource", "Outputs.KeyPrefix"]
                                 }
                             }
                         ]
@@ -219,67 +199,72 @@
                         }
                     }
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             },
-            "DependsOn": [
-                "StackCopyLambdaSource"
-            ]
+            "DependsOn": ["StackCopyLambdaSource"]
         },
         "IamRoleNicAttachment": {
             "Properties": {
                 "AssumeRolePolicyDocument": {
-                    "Statement": [{
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "lambda.amazonaws.com"
+                    "Statement": [
+                        {
+                            "Action": "sts:AssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            }
                         }
-                    }],
+                    ],
                     "Version": "2012-10-17"
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
                 ],
                 "Path": "/",
-                "Policies": [{
-                    "PolicyName": "nic-attachment-service-lambda-policy",
-                    "PolicyDocument": {
-                        "Statement": [{
-                                "Effect": "Allow",
-                                "Action": [
-                                    "ec2:CreateNetworkInterface",
-                                    "ec2:ModifyNetworkInterfaceAttribute",
-                                    "ec2:DescribeInstances",
-                                    "ec2:DetachNetworkInterface",
-                                    "ec2:DescribeNetworkInterfaces",
-                                    "ec2:DeleteNetworkInterface",
-                                    "ec2:AttachNetworkInterface"
-                                ],
-                                "Resource": "*"
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "dynamodb:DescribeTable",
-                                    "dynamodb:CreateTable",
-                                    "dynamodb:DeleteItem",
-                                    "dynamodb:GetItem",
-                                    "dynamodb:Scan",
-                                    "dynamodb:DeleteTable"
-                                ],
-                                "Resource": {
-                                    "Ref": "DbTableArn"
+                "Policies": [
+                    {
+                        "PolicyName": "nic-attachment-service-lambda-policy",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:ModifyNetworkInterfaceAttribute",
+                                        "ec2:DescribeInstances",
+                                        "ec2:DetachNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:DeleteNetworkInterface",
+                                        "ec2:AttachNetworkInterface"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeTable",
+                                        "dynamodb:CreateTable",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Scan",
+                                        "dynamodb:DeleteTable"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DbTableArn"
+                                    }
                                 }
-                            }
-                        ],
-                        "Version": "2012-10-17"
+                            ],
+                            "Version": "2012-10-17"
+                        }
                     }
-                }]
+                ]
             },
             "Type": "AWS::IAM::Role"
         }
@@ -288,19 +273,13 @@
         "CfnServiceProvider": {
             "Description": "Service provider script - EC2 network interface attachment service.",
             "Value": {
-                "Fn::GetAtt": [
-                    "NicAttachmentCfnServiceProviderScript",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["NicAttachmentCfnServiceProviderScript", "Arn"]
             }
         },
         "ServiceScript": {
             "Description": "Service script - EC2 network interface attachment service.",
             "Value": {
-                "Fn::GetAtt": [
-                    "NicAttachmentServiceScript",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["NicAttachmentServiceScript", "Arn"]
             }
         }
     }

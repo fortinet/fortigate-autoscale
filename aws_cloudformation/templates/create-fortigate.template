@@ -47,13 +47,16 @@
     },
     "Conditions": {
         "IfAddCustomTag": {
-            "Fn::Not": [{
-                "Fn::Equals": [{
-                        "Ref": "CustomTagValue"
-                    },
-                    ""
-                ]
-            }]
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CustomTagValue"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -61,72 +64,82 @@
             "Type": "AWS::EC2::NetworkInterface",
             "Properties": {
                 "Description": "FortiGate NIC: port1",
-                "GroupSet": [{
-                    "Ref": "FortiGateSecurityGroupId"
-                }],
+                "GroupSet": [
+                    {
+                        "Ref": "FortiGateSecurityGroupId"
+                    }
+                ],
                 "SourceDestCheck": "false",
                 "SubnetId": {
                     "Ref": "SubnetId1"
                 },
-                "Tags": [{
-                    "Key": "Name",
-                    "Value": {
-                        "Fn::Join": [
-                            "-",
-                            [{
-                                    "Fn::If": [
-                                        "IfAddCustomTag",
-                                        {
-                                            "Ref": "CustomTagValue"
-                                        },
-                                        "FortiGate-NAT-Gateway"
-                                    ]
-                                },
-                                "fgt",
-                                "eni0",
-                                {
-                                    "Ref": "AWS::StackName"
-                                }
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Fn::If": [
+                                            "IfAddCustomTag",
+                                            {
+                                                "Ref": "CustomTagValue"
+                                            },
+                                            "FortiGate-NAT-Gateway"
+                                        ]
+                                    },
+                                    "fgt",
+                                    "eni0",
+                                    {
+                                        "Ref": "AWS::StackName"
+                                    }
+                                ]
                             ]
-                        ]
+                        }
                     }
-                }]
+                ]
             }
         },
         "nic1": {
             "Type": "AWS::EC2::NetworkInterface",
             "Properties": {
                 "Description": "FortiGate NIC: port2",
-                "GroupSet": [{
-                    "Ref": "FortiGateSecurityGroupId"
-                }],
+                "GroupSet": [
+                    {
+                        "Ref": "FortiGateSecurityGroupId"
+                    }
+                ],
                 "SourceDestCheck": "false",
                 "SubnetId": {
                     "Ref": "SubnetId2"
                 },
-                "Tags": [{
-                    "Key": "Name",
-                    "Value": {
-                        "Fn::Join": [
-                            "-",
-                            [{
-                                    "Fn::If": [
-                                        "IfAddCustomTag",
-                                        {
-                                            "Ref": "CustomTagValue"
-                                        },
-                                        "FortiGate-NAT-Gateway"
-                                    ]
-                                },
-                                "fgt",
-                                "eni1",
-                                {
-                                    "Ref": "AWS::StackName"
-                                }
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Fn::If": [
+                                            "IfAddCustomTag",
+                                            {
+                                                "Ref": "CustomTagValue"
+                                            },
+                                            "FortiGate-NAT-Gateway"
+                                        ]
+                                    },
+                                    "fgt",
+                                    "eni1",
+                                    {
+                                        "Ref": "AWS::StackName"
+                                    }
+                                ]
                             ]
-                        ]
+                        }
                     }
-                }]
+                ]
             }
         },
         "eip": {
@@ -140,10 +153,7 @@
             "Type": "AWS::EC2::EIPAssociation",
             "Properties": {
                 "AllocationId": {
-                    "Fn::GetAtt": [
-                        "eip",
-                        "AllocationId"
-                    ]
+                    "Fn::GetAtt": ["eip", "AllocationId"]
                 },
                 "NetworkInterfaceId": {
                     "Ref": "nic0"
@@ -160,7 +170,8 @@
                 "IamInstanceProfile": {
                     "Ref": "InstanceProfile"
                 },
-                "NetworkInterfaces": [{
+                "NetworkInterfaces": [
+                    {
                         "NetworkInterfaceId": {
                             "Ref": "nic0"
                         },
@@ -180,18 +191,20 @@
                     "Ref": "FortiGateInstanceType"
                 },
                 "Monitoring": "true",
-                "Tags": [{
-                    "Key": "Name",
-                    "Value": {
-                        "Fn::If": [
-                            "IfAddCustomTag",
-                            {
-                                "Ref": "CustomTagValue"
-                            },
-                            "FortiGate-NAT-Gateway"
-                        ]
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::If": [
+                                "IfAddCustomTag",
+                                {
+                                    "Ref": "CustomTagValue"
+                                },
+                                "FortiGate-NAT-Gateway"
+                            ]
+                        }
                     }
-                }],
+                ],
                 "UserData": {
                     "Fn::Base64": {
                         "Fn::Join": [
@@ -239,9 +252,7 @@
                     }
                 }
             },
-            "DependsOn": [
-                "eipAssociation"
-            ]
+            "DependsOn": ["eipAssociation"]
         }
     },
     "Outputs": {
