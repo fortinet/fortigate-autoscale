@@ -12,102 +12,90 @@
         "EnableSecondNic": {
             "Type": "String",
             "Default": "no",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "Enable the Secondary Elastic Network Interface controllers."
         },
         "EnableVmInfoCache": {
             "Type": "String",
             "Default": "no",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "Enable VM Info Cache in DB."
         },
         "EnableCustomLog": {
             "Type": "String",
             "Default": "no",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "Enable Custom Log in DB."
         },
         "EnableTransitGatewayVpn": {
             "Type": "String",
             "Default": "no",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "Enable Transit Gateway VPN support."
         },
         "EnableHybridLicensing": {
             "Type": "String",
             "Default": "no",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "Enable Hybrid Licensing support."
         },
         "EnableFortiAnalyzer": {
             "Type": "String",
             "Default": "no",
-            "AllowedValues": [
-                "yes",
-                "no"
-            ],
+            "AllowedValues": ["yes", "no"],
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "Enable FortiAnalyzer support."
         }
     },
     "Conditions": {
         "EnableSecondNic": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "EnableSecondNic"
                 },
                 "yes"
             ]
         },
         "EnableVmInfoCache": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "EnableVmInfoCache"
                 },
                 "yes"
             ]
         },
         "EnableCustomLog": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "EnableCustomLog"
                 },
                 "yes"
             ]
         },
         "EnableFortiAnalyzer": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "EnableFortiAnalyzer"
                 },
                 "yes"
             ]
         },
         "EnableTransitGatewayVpn": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "EnableTransitGatewayVpn"
                 },
                 "yes"
             ]
         },
         "EnableHybridLicensing": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "EnableHybridLicensing"
                 },
                 "yes"
@@ -118,14 +106,18 @@
         "FortiGateAutoscale": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "instanceId",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "instanceId",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "instanceId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "instanceId",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -133,32 +125,39 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "FortiGateAutoscale"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "FortiGateMasterElection": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "scalingGroupName",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "scalingGroupName",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "scalingGroupName",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "scalingGroupName",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -166,25 +165,29 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "FortiGateMasterElection"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "LifecycleItem": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
+                "AttributeDefinitions": [
+                    {
                         "AttributeName": "instanceId",
                         "AttributeType": "S"
                     },
@@ -193,7 +196,8 @@
                         "AttributeType": "S"
                     }
                 ],
-                "KeySchema": [{
+                "KeySchema": [
+                    {
                         "AttributeName": "instanceId",
                         "KeyType": "HASH"
                     },
@@ -209,32 +213,39 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "FortiGateLifecycleItem"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "Settings": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "settingKey",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "settingKey",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "settingKey",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "settingKey",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -242,39 +253,48 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "Settings"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "CustomLog": {
             "Condition": "EnableCustomLog",
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "id",
-                    "AttributeType": "S"
-                }, {
-                    "AttributeName": "timestamp",
-                    "AttributeType": "N"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "id",
-                    "KeyType": "HASH"
-                }, {
-                    "AttributeName": "timestamp",
-                    "KeyType": "RANGE"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -282,33 +302,40 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "CustomLog"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "VmInfoCache": {
             "Condition": "EnableVmInfoCache",
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "id",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "id",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -316,33 +343,40 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "VmInfoCache"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "NicAttachment": {
             "Condition": "EnableSecondNic",
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "instanceId",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "instanceId",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "instanceId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "instanceId",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -350,33 +384,40 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "NicAttachment"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "LicenseStock": {
             "Condition": "EnableHybridLicensing",
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "checksum",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "checksum",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "checksum",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "checksum",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -384,33 +425,40 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "LicenseStock"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "LicenseUsage": {
             "Condition": "EnableHybridLicensing",
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "id",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "id",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -418,26 +466,30 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "LicenseUsage"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "VpnAttachment": {
             "Condition": "EnableTransitGatewayVpn",
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
+                "AttributeDefinitions": [
+                    {
                         "AttributeName": "instanceId",
                         "AttributeType": "S"
                     },
@@ -446,13 +498,16 @@
                         "AttributeType": "S"
                     }
                 ],
-                "KeySchema": [{
-                    "AttributeName": "instanceId",
-                    "KeyType": "HASH"
-                }, {
-                    "AttributeName": "publicIp",
-                    "KeyType": "RANGE"
-                }],
+                "KeySchema": [
+                    {
+                        "AttributeName": "instanceId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "publicIp",
+                        "KeyType": "RANGE"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -460,33 +515,40 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "VpnAttachment"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         },
         "FortiAnalyzer": {
             "Condition": "EnableFortiAnalyzer",
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "AttributeDefinitions": [{
-                    "AttributeName": "instanceId",
-                    "AttributeType": "S"
-                }],
-                "KeySchema": [{
-                    "AttributeName": "instanceId",
-                    "KeyType": "HASH"
-                }],
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "instanceId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "instanceId",
+                        "KeyType": "HASH"
+                    }
+                ],
                 "ProvisionedThroughput": {
                     "ReadCapacityUnits": "1",
                     "WriteCapacityUnits": "1"
@@ -494,116 +556,86 @@
                 "TableName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "FortiAnalyzer"
                         ]
                     ]
                 },
-                "Tags": [{
-                    "Key": "ResourceGroup",
-                    "Value": {
-                        "Ref": "ResourceTagPrefix"
+                "Tags": [
+                    {
+                        "Key": "ResourceGroup",
+                        "Value": {
+                            "Ref": "ResourceTagPrefix"
+                        }
                     }
-                }]
+                ]
             }
         }
     },
     "Outputs": {
         "FortiGateAutoscaleTableArn": {
             "Value": {
-                "Fn::GetAtt": [
-                    "FortiGateAutoscale",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["FortiGateAutoscale", "Arn"]
             }
         },
         "FortiGateMasterElectionTableArn": {
             "Value": {
-                "Fn::GetAtt": [
-                    "FortiGateMasterElection",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["FortiGateMasterElection", "Arn"]
             }
         },
         "LifecycleItemTableArn": {
             "Value": {
-                "Fn::GetAtt": [
-                    "LifecycleItem",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["LifecycleItem", "Arn"]
             }
         },
         "SettingsTableArn": {
             "Value": {
-                "Fn::GetAtt": [
-                    "Settings",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["Settings", "Arn"]
             }
         },
         "CustomLogTableArn": {
             "Condition": "EnableCustomLog",
             "Value": {
-                "Fn::GetAtt": [
-                    "CustomLog",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["CustomLog", "Arn"]
             }
         },
         "VmInfoCacheTableArn": {
             "Condition": "EnableVmInfoCache",
             "Value": {
-                "Fn::GetAtt": [
-                    "VmInfoCache",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["VmInfoCache", "Arn"]
             }
         },
         "NicAttachmentTableArn": {
             "Condition": "EnableSecondNic",
             "Value": {
-                "Fn::GetAtt": [
-                    "NicAttachment",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["NicAttachment", "Arn"]
             }
         },
         "LicenseStockTableArn": {
             "Condition": "EnableHybridLicensing",
             "Value": {
-                "Fn::GetAtt": [
-                    "LicenseStock",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["LicenseStock", "Arn"]
             }
         },
         "LicenseUsageTableArn": {
             "Condition": "EnableHybridLicensing",
             "Value": {
-                "Fn::GetAtt": [
-                    "LicenseUsage",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["LicenseUsage", "Arn"]
             }
         },
         "VpnAttachmentTableArn": {
             "Condition": "EnableTransitGatewayVpn",
             "Value": {
-                "Fn::GetAtt": [
-                    "VpnAttachment",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["VpnAttachment", "Arn"]
             }
         },
         "FortiAnalyzerTableArn": {
             "Condition": "EnableFortiAnalyzer",
             "Value": {
-                "Fn::GetAtt": [
-                    "FortiAnalyzer",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["FortiAnalyzer", "Arn"]
             }
         },
         "TableArnList": {
@@ -613,28 +645,16 @@
                     "${FortiGateAutoscale},${FortiGateMasterElection}${LifecycleItem},${Settings}${CustomLog}${VmInfoCache}${NicAttachment}${LicenseStock}${LicenseUsage}${VpnAttachment}${FortiAnalyzer}",
                     {
                         "FortiGateAutoscale": {
-                            "Fn::GetAtt": [
-                                "FortiGateAutoscale",
-                                "Arn"
-                            ]
+                            "Fn::GetAtt": ["FortiGateAutoscale", "Arn"]
                         },
                         "FortiGateMasterElection": {
-                            "Fn::GetAtt": [
-                                "FortiGateMasterElection",
-                                "Arn"
-                            ]
+                            "Fn::GetAtt": ["FortiGateMasterElection", "Arn"]
                         },
                         "LifecycleItem": {
-                            "Fn::GetAtt": [
-                                "LifecycleItem",
-                                "Arn"
-                            ]
+                            "Fn::GetAtt": ["LifecycleItem", "Arn"]
                         },
                         "Settings": {
-                            "Fn::GetAtt": [
-                                "Settings",
-                                "Arn"
-                            ]
+                            "Fn::GetAtt": ["Settings", "Arn"]
                         },
                         "CustomLog": {
                             "Fn::If": [
@@ -644,10 +664,7 @@
                                         ",${arn}",
                                         {
                                             "arn": {
-                                                "Fn::GetAtt": [
-                                                    "CustomLog",
-                                                    "Arn"
-                                                ]
+                                                "Fn::GetAtt": ["CustomLog", "Arn"]
                                             }
                                         }
                                     ]
@@ -663,10 +680,7 @@
                                         ",${arn}",
                                         {
                                             "arn": {
-                                                "Fn::GetAtt": [
-                                                    "VmInfoCache",
-                                                    "Arn"
-                                                ]
+                                                "Fn::GetAtt": ["VmInfoCache", "Arn"]
                                             }
                                         }
                                     ]
@@ -682,10 +696,7 @@
                                         ",${arn}",
                                         {
                                             "arn": {
-                                                "Fn::GetAtt": [
-                                                    "NicAttachment",
-                                                    "Arn"
-                                                ]
+                                                "Fn::GetAtt": ["NicAttachment", "Arn"]
                                             }
                                         }
                                     ]
@@ -701,10 +712,7 @@
                                         ",${arn}",
                                         {
                                             "arn": {
-                                                "Fn::GetAtt": [
-                                                    "LicenseStock",
-                                                    "Arn"
-                                                ]
+                                                "Fn::GetAtt": ["LicenseStock", "Arn"]
                                             }
                                         }
                                     ]
@@ -720,10 +728,7 @@
                                         ",${arn}",
                                         {
                                             "arn": {
-                                                "Fn::GetAtt": [
-                                                    "LicenseUsage",
-                                                    "Arn"
-                                                ]
+                                                "Fn::GetAtt": ["LicenseUsage", "Arn"]
                                             }
                                         }
                                     ]
@@ -739,10 +744,7 @@
                                         ",${arn}",
                                         {
                                             "arn": {
-                                                "Fn::GetAtt": [
-                                                    "VpnAttachment",
-                                                    "Arn"
-                                                ]
+                                                "Fn::GetAtt": ["VpnAttachment", "Arn"]
                                             }
                                         }
                                     ]
@@ -758,10 +760,7 @@
                                         ",${arn}",
                                         {
                                             "arn": {
-                                                "Fn::GetAtt": [
-                                                    "FortiAnalyzer",
-                                                    "Arn"
-                                                ]
+                                                "Fn::GetAtt": ["FortiAnalyzer", "Arn"]
                                             }
                                         }
                                     ]
