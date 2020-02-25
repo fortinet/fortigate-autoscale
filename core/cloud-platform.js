@@ -443,7 +443,7 @@ module.exports = class CloudPlatform {
      * @param {String} masterInstanceId master instance Id
      */
     async updateHAAPRoleTag(masterInstanceId) {
-        return (await this.throwNotImplementedException()) || true;
+        return await this.throwNotImplementedException() || true;
     }
     /* eslint-enable no-unused-vars */
 };

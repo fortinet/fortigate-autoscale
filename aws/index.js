@@ -1847,7 +1847,7 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
     async updateHAAPRoleTag(masterInstanceId) {
         logger.info('calling updateHAAPRoleTag');
         // query instances in the scaling groups (BYOL and PAYG)
-        let params = { Filters: [] };
+        let params = {Filters: []};
         params.Filters.push({
             Name: 'tag:ResourceGroup',
             Values: [this._settings['resource-tag-prefix']]
@@ -1862,11 +1862,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             instances.Reservations.forEach(resv => {
                 const resvInstances = resv.Instances.filter(resvInstance => {
                     // return true if it contains a tag key: AutoscaleRole and value: master
-                    return (
-                        resvInstance.Tags.filter(
-                            tag => tag.Key === 'AutoscaleRole' && tag.Value === 'master'
-                        ).length > 0
-                    );
+                    return resvInstance.Tags.filter(tag =>
+                        tag.Key === 'AutoscaleRole' && tag.Value === 'master').length > 0;
                 });
                 taggedInstances = [...taggedInstances, ...resvInstances];
             });
@@ -1891,6 +1888,8 @@ class AwsPlatform extends AutoScaleCore.CloudPlatform {
             return false;
         }
     }
+    // end of awsPlatform class
+}
 
     /** @override */
     async getLicenseFileContent(fileName) {
