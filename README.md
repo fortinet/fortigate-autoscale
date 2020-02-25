@@ -1,7 +1,7 @@
 # FortiGate Autoscale
 A collection of **Node.js** modules and cloud-specific templates which support autoscale functionality for groups of FortiGate-VM instances on various cloud platforms.
 
-This project contains the code and templates for the **Amazon AWS** and **Microsoft Azure** autoscale deployments. For autoscale on **AliCloud** see the [alicloud-autoscale](https://github.com/fortinet/alicloud-autoscale/) repository.
+This project contains the code and templates for the **Amazon AWS** and **Microsoft Azure** autoscale deployments. For autoscale on **AliCloud** see the [alicloud-autoscale](https://github.com/fortinet/alicloud-autoscale/) repository. For autoscale on **GCP** see the [fortigate-autoscale-gcp](https://github.com/fortinet/fortigate-autoscale-gcp) repository.
 
 This project is organized in separate node modules:
 

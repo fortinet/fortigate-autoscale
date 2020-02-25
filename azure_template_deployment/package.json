@@ -1,19 +1,19 @@
 {
-    "name": "fortigate-autoscale-azure-template-deployment",
-    "version": "1.0.0-beta",
-    "description": "FortiGate Autoscale for Azure deployment package.",
-    "main": "index.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/fortinet/fortigate-autoscale.git"
-    },
-    "author": "fortinet",
-    "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/fortinet/fortigate-autoscale/issues"
-    },
-    "homepage": "https://github.com/fortinet/fortigate-autoscale#readme"
+  "name": "fortigate-autoscale-azure-template-deployment",
+  "version": "1.0.0-beta",
+  "description": "FortiGate Autoscale for Azure deployment package.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/fortigate-autoscale.git"
+  },
+  "author": "fortinet",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fortinet/fortigate-autoscale/issues"
+  },
+  "homepage": "https://github.com/fortinet/fortigate-autoscale#readme"
 }
