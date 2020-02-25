@@ -437,13 +437,5 @@ module.exports = class CloudPlatform {
     getPlatformLogger() {
         this.throwNotImplementedException();
     }
-
-    /**
-     * update tags for the HA A-P based role
-     * @param {String} masterInstanceId master instance Id
-     */
-    async updateHAAPRoleTag(masterInstanceId) {
-        return (await this.throwNotImplementedException()) || true;
-    }
     /* eslint-enable no-unused-vars */
 };

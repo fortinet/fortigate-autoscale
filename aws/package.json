@@ -1,39 +1,39 @@
 {
-    "name": "fortigate-autoscale-aws",
-    "version": "1.0.0",
-    "description": "FortiGate Autoscale Module - Aws",
-    "main": "index.js",
-    "directories": {
-        "test": "tests"
-    },
-    "files_to_deploy": [
-        "*.js",
-        "package.json"
-    ],
-    "dependencies": {
-        "fortigate-autoscale-core": "file:../core",
-        "xml2js": "^0.4.23"
-    },
-    "devDependencies": {
-        "eslint": "^6.8.0",
-        "eslint-plugin-json": "^2.0.1",
-        "eslint-plugin-mocha": "^6.2.2",
-        "mocha": "^7.0.0",
-        "nyc": "^15.0.0"
-    },
-    "bundledDependencies": [
-        "fortigate-autoscale-core"
-    ],
-    "scripts": {
-        "pretest": "eslint --fix .",
-        "deploy": "dpl",
-        "build": "scripts/make-dist.js",
-        "test": "nyc mocha --recursive './test/mocha/*.js'"
-    },
-    "author": "fortinet",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/fortinet/fortigate-autoscale"
-    }
+  "name": "fortigate-autoscale-aws",
+  "version": "1.0.0",
+  "description": "FortiGate Autoscale Module - Aws",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "files_to_deploy": [
+    "*.js",
+    "package.json"
+  ],
+  "dependencies": {
+    "fortigate-autoscale-core": "file:../core",
+    "xml2js": "^0.4.23"
+  },
+  "devDependencies": {
+    "eslint": "^6.8.0",
+    "eslint-plugin-json": "^2.0.1",
+    "eslint-plugin-mocha": "^6.2.2",
+    "mocha": "^7.0.0",
+    "nyc": "^15.0.0"
+  },
+  "bundledDependencies": [
+    "fortigate-autoscale-core"
+  ],
+  "scripts": {
+    "pretest": "eslint --fix .",
+    "deploy": "dpl",
+    "build": "scripts/make-dist.js",
+    "test": "nyc mocha --recursive './test/mocha/*.js'"
+  },
+  "author": "fortinet",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/fortigate-autoscale"
+  }
 }

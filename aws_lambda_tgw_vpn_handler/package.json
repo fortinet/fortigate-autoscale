@@ -1,25 +1,25 @@
 {
-    "name": "fortigate-autoscale-aws-lambda-tgw-vpn-handler",
-    "version": "1.0.0",
-    "description": "FortiGate Autoscale Project - AWS Lambda - Transit Gateway VPN handler function",
-    "main": "index.js",
-    "scripts": {
-        "pretest": "eslint --fix .",
-        "test": "nyc mocha --recursive './test/mocha/*.js'"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/fortinet/fortigate-autoscale"
-    },
-    "author": "fortinet",
-    "license": "MIT",
-    "dependencies": {
-        "fortigate-autoscale-aws": "file:../aws"
-    },
-    "devDependencies": {
-        "eslint": "^5.4.0",
-        "eslint-plugin-mocha": "^5.2.0",
-        "mocha": "^5.2.0",
-        "nyc": "^13.0.1"
-    }
+  "name": "fortigate-autoscale-aws-lambda-tgw-vpn-handler",
+  "version": "1.0.0",
+  "description": "FortiGate Autoscale Project - AWS Lambda - Transit Gateway VPN handler function",
+  "main": "index.js",
+  "scripts": {
+    "pretest": "eslint --fix .",
+    "test": "nyc mocha --recursive './test/mocha/*.js'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/fortigate-autoscale"
+  },
+  "author": "fortinet",
+  "license": "MIT",
+  "dependencies": {
+    "fortigate-autoscale-aws": "file:../aws"
+  },
+  "devDependencies": {
+    "eslint": "^5.4.0",
+    "eslint-plugin-mocha": "^5.2.0",
+    "mocha": "^5.2.0",
+    "nyc": "^13.0.1"
+  }
 }

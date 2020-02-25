@@ -14,7 +14,7 @@ node('devops-aws') {
     stage('NPM Install') {
         echo 'NPM Install..'
         sh 'npm install'
-        sh 'npm install fortinet/ftnt-devops-ci'
+        sh 'npm install jaydenliang/ftnt-devops-ci'
     }
 
     stage('Format check:: .js & .json') {

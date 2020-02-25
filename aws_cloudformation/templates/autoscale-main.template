@@ -995,21 +995,13 @@
                     "AsgScaleOutThreshold": {
                         "Ref": "FgtAsgScaleOutThreshold"
                     },
-                    "AsgDesiredCapacityByol": {
-                        "Ref": "FgtAsgDesiredCapacityByol"
-                    },
-                    "AsgMinSizeByol": {
-                        "Ref": "FgtAsgMinSizeByol"
-                    },
+                    "AsgDesiredCapacityByol": 0,
+                    "AsgMinSizeByol": 0,
                     "AsgMaxSizeByol": {
                         "Ref": "FgtAsgMaxSizeByol"
                     },
-                    "AsgDesiredCapacityPayg": {
-                        "Ref": "FgtAsgDesiredCapacityPayg"
-                    },
-                    "AsgMinSizePayg": {
-                        "Ref": "FgtAsgMinSizePayg"
-                    },
+                    "AsgDesiredCapacityPayg": 0,
+                    "AsgMinSizePayg": 0,
                     "AsgMaxSizePayg": {
                         "Ref": "FgtAsgMaxSizePayg"
                     },
@@ -1054,16 +1046,7 @@
                             }
                         ]
                     },
-                    "ProductCodePayg": "",
-                    "LicensingModel": {
-                        "Fn::If": [
-                            "IfPAYGOnly",
-                            "PAYG-Only",
-                            {
-                                "Fn::If": ["IfBYOLOnly", "BYOL-Only", "Hybrid"]
-                            }
-                        ]
-                    }
+                    "ProductCodePayg": ""
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
