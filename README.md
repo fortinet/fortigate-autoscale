@@ -34,7 +34,7 @@ Deployment packages as well as source code will be available in the **dist** dir
 | fortigate-autoscale-azure-funcapp.zip | Source code for the FortiGate Autoscale handler - Azure function.|
 | fortigate-autoscale-azure-template-deployment.zip | Azure template. Use this to deploy the solution on the Azure platform.|
 
-Deployment Guides are available from the Fortinet Document Library:
+Deployment guides are available from the Fortinet Document Library:
 
   + [ FortiGate / FortiOS 6.0 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
   + [ FortiGate / FortiOS 6.2 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)
