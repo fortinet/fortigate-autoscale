@@ -155,23 +155,28 @@
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
             ]
         },
         "ELBV2TargetGroupIsDefined": {
-            "Fn::Not": [{
-                "Fn::Equals": [{
-                        "Ref": "ELBV2TargetGroupARNs"
-                    },
-                    ""
-                ]
-            }]
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ELBV2TargetGroupARNs"
+                        },
+                        ""
+                    ]
+                }
+            ]
         },
         "InstanceProfileIsNotDefined": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "InstanceProfileArn"
                 },
                 ""
@@ -189,49 +194,55 @@
                 ],
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
-                    "Statement": [{
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "ec2.amazonaws.com"
-                        },
-                        "Action": "sts:AssumeRole"
-                    }]
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
                 },
                 "Path": "/",
-                "Policies": [{
-                    "PolicyDocument": {
-                        "Version": "2012-10-17",
-                        "Statement": [{
-                            "Action": [
-                                "s3:GetObject"
-                            ],
-                            "Resource": {
-                                "Fn::Sub": [
-                                    "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
-                                    {
-                                        "S3BucketName": {
-                                            "Ref": "S3BucketName"
-                                        },
-                                        "S3KeyPrefix": {
-                                            "Ref": "S3KeyPrefix"
-                                        }
-                                    }
-                                ]
-                            },
-                            "Effect": "Allow"
-                        }]
-                    },
-                    "PolicyName": "fortigate-autoscale-instance-policy"
-                }]
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": ["s3:GetObject"],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
+                                            {
+                                                "S3BucketName": {
+                                                    "Ref": "S3BucketName"
+                                                },
+                                                "S3KeyPrefix": {
+                                                    "Ref": "S3KeyPrefix"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        },
+                        "PolicyName": "fortigate-autoscale-instance-policy"
+                    }
+                ]
             }
         },
         "FgtInstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Condition": "InstanceProfileIsNotDefined",
             "Properties": {
-                "Roles": [{
-                    "Ref": "FgtInstanceIamRole"
-                }]
+                "Roles": [
+                    {
+                        "Ref": "FgtInstanceIamRole"
+                    }
+                ]
             }
         },
         "AsgLaunchTemplate": {
@@ -240,7 +251,8 @@
                 "LaunchTemplateName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "fortigate-autoscale-launch-template"
@@ -285,10 +297,7 @@
                             "Fn::If": [
                                 "InstanceProfileIsNotDefined",
                                 {
-                                    "Fn::GetAtt": [
-                                        "FgtInstanceProfile",
-                                        "Arn"
-                                    ]
+                                    "Fn::GetAtt": ["FgtInstanceProfile", "Arn"]
                                 },
                                 {
                                     "Ref": "InstanceProfileArn"
@@ -299,13 +308,17 @@
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
-                    "NetworkInterfaces": [{
-                        "DeviceIndex": 0,
-                        "Groups": [{
-                            "Ref": "SecurityGroupId"
-                        }],
-                        "AssociatePublicIpAddress": true
-                    }],
+                    "NetworkInterfaces": [
+                        {
+                            "DeviceIndex": 0,
+                            "Groups": [
+                                {
+                                    "Ref": "SecurityGroupId"
+                                }
+                            ],
+                            "AssociatePublicIpAddress": true
+                        }
+                    ],
                     "KeyName": {
                         "Ref": "KeyPairName"
                     }
@@ -318,7 +331,8 @@
                 "AutoScalingGroupName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "fortigate-auto-scaling-group"
@@ -345,16 +359,15 @@
                     "Ref": "AsgMaxSize"
                 },
                 "MinSize": 0,
-                "VPCZoneIdentifier": [{
+                "VPCZoneIdentifier": [
+                    {
                         "Ref": "AsgSubnet1Id"
                     },
                     {
                         "Ref": "AsgSubnet2Id"
                     }
                 ],
-                "TerminationPolicies": [
-                    "Default"
-                ],
+                "TerminationPolicies": ["Default"],
                 "TargetGroupARNs": {
                     "Fn::If": [
                         "ELBV2TargetGroupIsDefined",
@@ -371,19 +384,21 @@
                         }
                     ]
                 },
-                "Tags": [{
+                "Tags": [
+                    {
                         "Key": "Name",
                         "Value": {
                             "Fn::Join": [
                                 "-",
-                                [{
+                                [
+                                    {
                                         "Ref": "ResourceTagPrefix"
                                     },
                                     "fortigate-auto-scaling-group"
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": true
+                        "PropagateAtLaunch": false
                     },
                     {
                         "Key": "ResourceGroup",
@@ -394,9 +409,7 @@
                     }
                 ]
             },
-            "DependsOn": [
-                "AsgLaunchTemplate"
-            ]
+            "DependsOn": ["AsgLaunchTemplate"]
         },
         "AsgScaleInPolicy": {
             "Type": "AWS::AutoScaling::ScalingPolicy",
@@ -407,9 +420,7 @@
                 },
                 "ScalingAdjustment": "-1"
             },
-            "DependsOn": [
-                "FgtAutoScalingGroup"
-            ]
+            "DependsOn": ["FgtAutoScalingGroup"]
         },
         "AsgScaleOutPolicy": {
             "Type": "AWS::AutoScaling::ScalingPolicy",
@@ -420,9 +431,7 @@
                 },
                 "ScalingAdjustment": "1"
             },
-            "DependsOn": [
-                "FgtAutoScalingGroup"
-            ]
+            "DependsOn": ["FgtAutoScalingGroup"]
         },
         "AlarmScaleInThresholdCpuUtil": {
             "Type": "AWS::CloudWatch::Alarm",
@@ -436,16 +445,20 @@
                 "Period": {
                     "Ref": "AsgCooldown"
                 },
-                "AlarmActions": [{
-                    "Ref": "AsgScaleInPolicy"
-                }],
-                "Namespace": "AWS/EC2",
-                "Dimensions": [{
-                    "Name": "AutoScalingGroupName",
-                    "Value": {
-                        "Ref": "FgtAutoScalingGroup"
+                "AlarmActions": [
+                    {
+                        "Ref": "AsgScaleInPolicy"
                     }
-                }],
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroup"
+                        }
+                    }
+                ],
                 "ComparisonOperator": "LessThanThreshold",
                 "MetricName": "CPUUtilization"
             }
@@ -462,16 +475,20 @@
                 "Period": {
                     "Ref": "AsgCooldown"
                 },
-                "AlarmActions": [{
-                    "Ref": "AsgScaleOutPolicy"
-                }],
-                "Namespace": "AWS/EC2",
-                "Dimensions": [{
-                    "Name": "AutoScalingGroupName",
-                    "Value": {
-                        "Ref": "FgtAutoScalingGroup"
+                "AlarmActions": [
+                    {
+                        "Ref": "AsgScaleOutPolicy"
                     }
-                }],
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroup"
+                        }
+                    }
+                ],
                 "ComparisonOperator": "GreaterThanThreshold",
                 "MetricName": "CPUUtilization"
             }
@@ -485,7 +502,8 @@
                 "LifecycleHookName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "lifecyle-hook-instance-launching"
@@ -508,7 +526,8 @@
                 "LifecycleHookName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "lifecyle-hook-instance-terminating"
@@ -532,7 +551,8 @@
                             "asgName": {
                                 "Fn::Join": [
                                     "-",
-                                    [{
+                                    [
+                                        {
                                             "Ref": "ResourceTagPrefix"
                                         },
                                         "fortigate-auto-scaling-group"
@@ -544,22 +564,24 @@
                 },
                 "State": "ENABLED",
                 "Description": "Trigger when FortiGate auto-scaling group is launching / terminating instances or taking lifecycle actions.",
-                "Targets": [{
-                    "Id": {
-                        "Fn::Join": [
-                            "-",
-                            [
-                                "fortigate-autoscale-lifecycle-event-rule",
-                                {
-                                    "Ref": "UniqueId"
-                                }
+                "Targets": [
+                    {
+                        "Id": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    "fortigate-autoscale-lifecycle-event-rule",
+                                    {
+                                        "Ref": "UniqueId"
+                                    }
+                                ]
                             ]
-                        ]
-                    },
-                    "Arn": {
-                        "Ref": "AsgHandlerFunctionArn"
+                        },
+                        "Arn": {
+                            "Ref": "AsgHandlerFunctionArn"
+                        }
                     }
-                }]
+                ]
             }
         },
         "AsgLambdaPermissionLifecycleTriggerInvokation": {
@@ -571,17 +593,15 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "events.amazonaws.com",
                 "SourceArn": {
-                    "Fn::GetAtt": [
-                        "AsgLifecycleHookTriggerEventRule",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["AsgLifecycleHookTriggerEventRule", "Arn"]
                 }
             }
         }
     },
     "Metadata": {
         "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [{
+            "ParameterGroups": [
+                {
                     "Label": {
                         "default": "Basic configuration"
                     },
@@ -598,12 +618,7 @@
                     "Label": {
                         "default": "Launch template configuration"
                     },
-                    "Parameters": [
-                        "InstanceType",
-                        "KeyPairName",
-                        "ProductAMI",
-                        "ProductCode"
-                    ]
+                    "Parameters": ["InstanceType", "KeyPairName", "ProductAMI", "ProductCode"]
                 },
                 {
                     "Label": {
@@ -625,10 +640,7 @@
                     "Label": {
                         "default": "Deployment package configuration"
                     },
-                    "Parameters": [
-                        "S3BucketName",
-                        "S3KeyPrefix"
-                    ]
+                    "Parameters": ["S3BucketName", "S3KeyPrefix"]
                 }
             ]
         }

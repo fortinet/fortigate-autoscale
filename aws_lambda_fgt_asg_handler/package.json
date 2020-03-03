@@ -1,27 +1,27 @@
 {
-  "name": "fortigate-autoscale-aws-fgt-asg-handler",
-  "version": "1.0.0",
-  "description": "FortiGate Autoscale Project - AWS Lambda - FortiGate Auto Scaling Group Handler",
-  "main": "index.js",
-  "scripts": {
-    "pretest": "eslint --fix .",
-    "test": "nyc mocha --recursive './test/mocha/*.js'"
-  },
-  "author": "",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/fortinet/fortigate-autoscale"
-  },
-  "dependencies": {
-    "async-cfn-response": "file:../aws_cfn_response",
-    "fortigate-autoscale-aws": "file:../aws"
-  },
-  "devDependencies": {
-    "eslint": "^6.8.0",
-    "eslint-plugin-json": "^2.0.1",
-    "eslint-plugin-mocha": "^6.2.2",
-    "mocha": "^7.0.0",
-    "nyc": "^15.0.0"
-  }
+    "name": "fortigate-autoscale-aws-fgt-asg-handler",
+    "version": "1.0.0",
+    "description": "FortiGate Autoscale Project - AWS Lambda - FortiGate Auto Scaling Group Handler",
+    "main": "index.js",
+    "scripts": {
+        "pretest": "eslint --fix .",
+        "test": "nyc mocha --recursive './test/mocha/*.js'"
+    },
+    "author": "",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/fortinet/fortigate-autoscale"
+    },
+    "dependencies": {
+        "async-cfn-response": "file:../aws_cfn_response",
+        "fortigate-autoscale-aws": "file:../aws"
+    },
+    "devDependencies": {
+        "eslint": "^6.8.0",
+        "eslint-plugin-json": "^2.0.1",
+        "eslint-plugin-mocha": "^6.2.2",
+        "mocha": "^7.0.0",
+        "nyc": "^15.0.0"
+    }
 }

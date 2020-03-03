@@ -49,10 +49,7 @@
         },
         "FortiAnalyzerVersion": {
             "Type": "String",
-            "AllowedValues": [
-                "LATEST",
-                "602"
-            ],
+            "AllowedValues": ["LATEST", "602"],
             "Default": "LATEST",
             "ConstraintDescription": "must choose from the provided options.",
             "Description": "FortiAnalyzer version. This parameter should be passed down from the caller stack for consistency."
@@ -132,20 +129,24 @@
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
             ]
         },
         "IfAddCustomTag": {
-            "Fn::Not": [{
-                "Fn::Equals": [{
-                        "Ref": "CustomIdentifier"
-                    },
-                    ""
-                ]
-            }]
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CustomIdentifier"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -153,7 +154,8 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "FortiAnalyzer security group",
-                "SecurityGroupIngress": [{
+                "SecurityGroupIngress": [
+                    {
                         "IpProtocol": "tcp",
                         "CidrIp": {
                             "Ref": "AdminCidr"
@@ -194,10 +196,12 @@
                         "ToPort": 514
                     }
                 ],
-                "SecurityGroupEgress": [{
-                    "IpProtocol": "-1",
-                    "CidrIp": "0.0.0.0/0"
-                }],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
                 "VpcId": {
                     "Ref": "VpcId"
                 }
@@ -212,48 +216,54 @@
                 ],
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
-                    "Statement": [{
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "ec2.amazonaws.com"
-                        },
-                        "Action": "sts:AssumeRole"
-                    }]
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
                 },
                 "Path": "/",
-                "Policies": [{
-                    "PolicyDocument": {
-                        "Version": "2012-10-17",
-                        "Statement": [{
-                            "Action": [
-                                "s3:GetObject"
-                            ],
-                            "Resource": {
-                                "Fn::Sub": [
-                                    "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
-                                    {
-                                        "S3BucketName": {
-                                            "Ref": "S3BucketName"
-                                        },
-                                        "S3KeyPrefix": {
-                                            "Ref": "S3KeyPrefix"
-                                        }
-                                    }
-                                ]
-                            },
-                            "Effect": "Allow"
-                        }]
-                    },
-                    "PolicyName": "aws-quick-start-s3-policy"
-                }]
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": ["s3:GetObject"],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
+                                            {
+                                                "S3BucketName": {
+                                                    "Ref": "S3BucketName"
+                                                },
+                                                "S3KeyPrefix": {
+                                                    "Ref": "S3KeyPrefix"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        },
+                        "PolicyName": "aws-quick-start-s3-policy"
+                    }
+                ]
             }
         },
         "IamInstanceProfileFaz": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "Roles": [{
-                    "Ref": "IamRoleFazInstance"
-                }]
+                "Roles": [
+                    {
+                        "Ref": "IamRoleFazInstance"
+                    }
+                ]
             }
         },
         "ec2InstanceFortiAnalyzer": {
@@ -285,55 +295,56 @@
                 "InstanceType": {
                     "Ref": "InstanceType"
                 },
-                "NetworkInterfaces": [{
-                    "DeviceIndex": 0,
-                    "AssociatePublicIpAddress": true,
-                    "SubnetId": {
-                        "Ref": "SubnetId"
-                    },
-                    "GroupSet": [{
-                        "Ref": "sgFortiAnalyzerInstance"
-                    }]
-                }],
-                "Monitoring": "true",
-                "Tags": [{
-                    "Key": "Name",
-                    "Value": {
-                        "Fn::If": [
-                            "IfAddCustomTag",
+                "NetworkInterfaces": [
+                    {
+                        "DeviceIndex": 0,
+                        "AssociatePublicIpAddress": true,
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        },
+                        "GroupSet": [
                             {
-                                "Fn::Join": [
-                                    "-",
-                                    [{
-                                            "Ref": "CustomIdentifier"
-                                        },
-                                        "FortiAnalyzer"
-                                    ]
-                                ]
-                            },
-                            "FortiAnalyzer"
+                                "Ref": "sgFortiAnalyzerInstance"
+                            }
                         ]
                     }
-                }]
+                ],
+                "Monitoring": "true",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::If": [
+                                "IfAddCustomTag",
+                                {
+                                    "Fn::Join": [
+                                        "-",
+                                        [
+                                            {
+                                                "Ref": "CustomIdentifier"
+                                            },
+                                            "FortiAnalyzer"
+                                        ]
+                                    ]
+                                },
+                                "FortiAnalyzer"
+                            ]
+                        }
+                    }
+                ]
             }
         },
         "FazHandlerService": {
             "Properties": {
                 "ServiceToken": {
-                    "Fn::GetAtt": [
-                        "LambdaFunctionFazHandler",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["LambdaFunctionFazHandler", "Arn"]
                 },
                 "ServiceType": "registration",
                 "InstanceId": {
                     "Ref": "ec2InstanceFortiAnalyzer"
                 },
                 "PrivateIp": {
-                    "Fn::GetAtt": [
-                        "ec2InstanceFortiAnalyzer",
-                        "PrivateIp"
-                    ]
+                    "Fn::GetAtt": ["ec2InstanceFortiAnalyzer", "PrivateIp"]
                 },
                 "CustomIdentifier": {
                     "Ref": "CustomIdentifier"
@@ -361,11 +372,7 @@
                         "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/copy-objects.template",
                         {
                             "S3Region": {
-                                "Fn::If": [
-                                    "GovCloudCondition",
-                                    "s3-us-gov-west-1",
-                                    "s3"
-                                ]
+                                "Fn::If": ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
                             }
                         }
                     ]
@@ -377,20 +384,14 @@
             "Properties": {
                 "Code": {
                     "S3Bucket": {
-                        "Fn::GetAtt": [
-                            "StackCopyLambda",
-                            "Outputs.DestinationBucket"
-                        ]
+                        "Fn::GetAtt": ["StackCopyLambda", "Outputs.DestinationBucket"]
                     },
                     "S3Key": {
                         "Fn::Sub": [
                             "${KeyPrefix}functions/packages/faz-handler.zip",
                             {
                                 "KeyPrefix": {
-                                    "Fn::GetAtt": [
-                                        "StackCopyLambda",
-                                        "Outputs.KeyPrefix"
-                                    ]
+                                    "Fn::GetAtt": ["StackCopyLambda", "Outputs.KeyPrefix"]
                                 }
                             }
                         ]
@@ -399,10 +400,7 @@
                 "Description": "Register a FortiAnalyzer to DB for the FortiGate AutoScale",
                 "Handler": "index.handler",
                 "Role": {
-                    "Fn::GetAtt": [
-                        "IamRoleFazHandler",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["IamRoleFazHandler", "Arn"]
                 },
                 "Runtime": "nodejs12.x",
                 "Timeout": 300,
@@ -425,46 +423,52 @@
         "IamRoleFazHandler": {
             "Properties": {
                 "AssumeRolePolicyDocument": {
-                    "Statement": [{
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "lambda.amazonaws.com"
+                    "Statement": [
+                        {
+                            "Action": "sts:AssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            }
                         }
-                    }],
+                    ],
                     "Version": "2012-10-17"
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
                 ],
                 "Path": "/",
-                "Policies": [{
-                    "PolicyName": "faz-handler-inline-policy",
-                    "PolicyDocument": {
-                        "Statement": [{
-                            "Effect": "Allow",
-                            "Action": [
-                                "dynamodb:CreateTable",
-                                "dynamodb:DescribeTable",
-                                "dynamodb:Scan",
-                                "dynamodb:Query",
-                                "dynamodb:DeleteItem",
-                                "dynamodb:GetItem",
-                                "dynamodb:PutItem",
-                                "dynamodb:UpdateItem"
-                            ],
-                            "Resource": {
-                                "Fn::Split": [
-                                    ",",
-                                    {
-                                        "Ref": "DdbTableArnList"
+                "Policies": [
+                    {
+                        "PolicyName": "faz-handler-inline-policy",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:CreateTable",
+                                        "dynamodb:DescribeTable",
+                                        "dynamodb:Scan",
+                                        "dynamodb:Query",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Split": [
+                                            ",",
+                                            {
+                                                "Ref": "DdbTableArnList"
+                                            }
+                                        ]
                                     }
-                                ]
-                            }
-                        }],
-                        "Version": "2012-10-17"
+                                }
+                            ],
+                            "Version": "2012-10-17"
+                        }
                     }
-                }]
+                ]
             },
             "Type": "AWS::IAM::Role"
         }
@@ -473,37 +477,25 @@
         "InstanceId": {
             "Description": "The instance ID of the FortiAnalyzer for logging.",
             "Value": {
-                "Fn::GetAtt": [
-                    "FazHandlerService",
-                    "InstanceId"
-                ]
+                "Fn::GetAtt": ["FazHandlerService", "InstanceId"]
             }
         },
         "PrivateIp": {
             "Description": "The private ip of the FortiAnalyzer for logging.",
             "Value": {
-                "Fn::GetAtt": [
-                    "FazHandlerService",
-                    "PrivateIp"
-                ]
+                "Fn::GetAtt": ["FazHandlerService", "PrivateIp"]
             }
         },
         "VIP": {
             "Description": "The vip of the FortiAnalyzer for logging.",
             "Value": {
-                "Fn::GetAtt": [
-                    "FazHandlerService",
-                    "VIP"
-                ]
+                "Fn::GetAtt": ["FazHandlerService", "VIP"]
             }
         },
         "FazHandlerServiceToken": {
             "Description": "The service token for the FortiAnalyzer registration service.",
             "Value": {
-                "Fn::GetAtt": [
-                    "LambdaFunctionFazHandler",
-                    "Arn"
-                ]
+                "Fn::GetAtt": ["LambdaFunctionFazHandler", "Arn"]
             }
         }
     }

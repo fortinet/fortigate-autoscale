@@ -178,30 +178,81 @@
             "Type": "String",
             "Default": "",
             "Description": "An optional product code provided for the AMI(PAYG) if using a custom AMI."
+        },
+        "LicensingModel": {
+            "Type": "String",
+            "AllowedValues": ["BYOL-Only", "PAYG-Only", "Hybrid"],
+            "ConstraintDescription": "must be a valid option from the selection.",
+            "Description": "Licensing model that affects the Auto Scaling Groups deployment and configuration."
         }
     },
     "Conditions": {
         "GovCloudCondition": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "AWS::Region"
                 },
                 "us-gov-west-1"
             ]
         },
         "ELBV2TargetGroupIsDefined": {
-            "Fn::Not": [{
-                "Fn::Equals": [{
-                        "Ref": "ELBV2TargetGroupARNs"
-                    },
-                    ""
-                ]
-            }]
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ELBV2TargetGroupARNs"
+                        },
+                        ""
+                    ]
+                }
+            ]
         },
         "InstanceProfileIsNotDefined": {
-            "Fn::Equals": [{
+            "Fn::Equals": [
+                {
                     "Ref": "InstanceProfileArn"
                 },
                 ""
+            ]
+        },
+        "IfBYOLOnly": {
+            "Fn::Equals": [
+                {
+                    "Ref": "LicensingModel"
+                },
+                "BYOL-Only"
+            ]
+        },
+        "IfNotBYOLOnly": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LicensingModel"
+                        },
+                        "BYOL-Only"
+                    ]
+                }
+            ]
+        },
+        "IfNotPAYGOnly": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LicensingModel"
+                        },
+                        "PAYG-Only"
+                    ]
+                }
+            ]
+        },
+        "IfHybrid": {
+            "Fn::Equals": [
+                {
+                    "Ref": "LicensingModel"
+                },
+                "Hybrid"
             ]
         }
     },
@@ -216,49 +267,55 @@
                 ],
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
-                    "Statement": [{
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "ec2.amazonaws.com"
-                        },
-                        "Action": "sts:AssumeRole"
-                    }]
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
                 },
                 "Path": "/",
-                "Policies": [{
-                    "PolicyDocument": {
-                        "Version": "2012-10-17",
-                        "Statement": [{
-                            "Action": [
-                                "s3:GetObject"
-                            ],
-                            "Resource": {
-                                "Fn::Sub": [
-                                    "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
-                                    {
-                                        "S3BucketName": {
-                                            "Ref": "S3BucketName"
-                                        },
-                                        "S3KeyPrefix": {
-                                            "Ref": "S3KeyPrefix"
-                                        }
-                                    }
-                                ]
-                            },
-                            "Effect": "Allow"
-                        }]
-                    },
-                    "PolicyName": "fortigate-autoscale-instance-policy"
-                }]
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": ["s3:GetObject"],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:s3:::${S3BucketName}/${S3KeyPrefix}*",
+                                            {
+                                                "S3BucketName": {
+                                                    "Ref": "S3BucketName"
+                                                },
+                                                "S3KeyPrefix": {
+                                                    "Ref": "S3KeyPrefix"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        },
+                        "PolicyName": "fortigate-autoscale-instance-policy"
+                    }
+                ]
             }
         },
         "FgtInstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Condition": "InstanceProfileIsNotDefined",
             "Properties": {
-                "Roles": [{
-                    "Ref": "FgtInstanceIamRole"
-                }]
+                "Roles": [
+                    {
+                        "Ref": "FgtInstanceIamRole"
+                    }
+                ]
             }
         },
         "AsgLaunchTemplatePayg": {
@@ -267,7 +324,8 @@
                 "LaunchTemplateName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "fortigate-payg-autoscale-launch-template"
@@ -312,10 +370,7 @@
                             "Fn::If": [
                                 "InstanceProfileIsNotDefined",
                                 {
-                                    "Fn::GetAtt": [
-                                        "FgtInstanceProfile",
-                                        "Arn"
-                                    ]
+                                    "Fn::GetAtt": ["FgtInstanceProfile", "Arn"]
                                 },
                                 {
                                     "Ref": "InstanceProfileArn"
@@ -326,13 +381,17 @@
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
-                    "NetworkInterfaces": [{
-                        "DeviceIndex": 0,
-                        "Groups": [{
-                            "Ref": "SecurityGroupId"
-                        }],
-                        "AssociatePublicIpAddress": true
-                    }],
+                    "NetworkInterfaces": [
+                        {
+                            "DeviceIndex": 0,
+                            "Groups": [
+                                {
+                                    "Ref": "SecurityGroupId"
+                                }
+                            ],
+                            "AssociatePublicIpAddress": true
+                        }
+                    ],
                     "KeyName": {
                         "Ref": "KeyPairName"
                     }
@@ -345,7 +404,8 @@
                 "AutoScalingGroupName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "fortigate-payg-auto-scaling-group"
@@ -374,16 +434,15 @@
                 "MinSize": {
                     "Ref": "AsgMinSizePayg"
                 },
-                "VPCZoneIdentifier": [{
+                "VPCZoneIdentifier": [
+                    {
                         "Ref": "AsgSubnet1Id"
                     },
                     {
                         "Ref": "AsgSubnet2Id"
                     }
                 ],
-                "TerminationPolicies": [
-                    "Default"
-                ],
+                "TerminationPolicies": ["Default"],
                 "TargetGroupARNs": {
                     "Fn::If": [
                         "ELBV2TargetGroupIsDefined",
@@ -400,12 +459,14 @@
                         }
                     ]
                 },
-                "Tags": [{
+                "Tags": [
+                    {
                         "Key": "Name",
                         "Value": {
                             "Fn::Join": [
                                 "-",
-                                [{
+                                [
+                                    {
                                         "Ref": "ResourceTagPrefix"
                                     },
                                     "fortigate-payg-auto-scaling-group"
@@ -424,7 +485,30 @@
                 ]
             }
         },
-        "AsgScaleInPolicyPayg": {
+        "ByolAsgShrinkOnLowCPUUtilization": {
+            "Condition": "IfBYOLOnly",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupByol"
+                },
+                "ScalingAdjustment": "-1"
+            }
+        },
+        "ByolAsgGrowOnHighCPUUtilization": {
+            "Condition": "IfBYOLOnly",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupByol"
+                },
+                "ScalingAdjustment": "1"
+            }
+        },
+        "PaygAsgShrinkOnLowCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
             "Type": "AWS::AutoScaling::ScalingPolicy",
             "Properties": {
                 "AdjustmentType": "ChangeInCapacity",
@@ -434,7 +518,8 @@
                 "ScalingAdjustment": "-1"
             }
         },
-        "AsgScaleOutPolicyPayg": {
+        "PaygAsgGrowOnHighCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
             "Type": "AWS::AutoScaling::ScalingPolicy",
             "Properties": {
                 "AdjustmentType": "ChangeInCapacity",
@@ -444,7 +529,30 @@
                 "ScalingAdjustment": "1"
             }
         },
-        "AlarmScaleInThresholdCpuUtilPayg": {
+        "PaygAsgShrinkOnByolAsgCondition": {
+            "Condition": "IfHybrid",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupPayg"
+                },
+                "ScalingAdjustment": "-1"
+            }
+        },
+        "PaygAsgGrowOnByolAsgCondition": {
+            "Condition": "IfHybrid",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "FgtAutoScalingGroupPayg"
+                },
+                "ScalingAdjustment": "1"
+            }
+        },
+        "AlarmByolGroupLowCPUUtilization": {
+            "Condition": "IfNotPAYGOnly",
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "EvaluationPeriods": "1",
@@ -452,25 +560,38 @@
                 "Threshold": {
                     "Ref": "AsgScaleInThreshold"
                 },
-                "AlarmDescription": "Alarm if CPU too low or metric disappears indicating instance is down",
+                "AlarmDescription": "Alarm if CPU utilization in (BYOL) Auto Scaling Group goes below the lower-bound threshold over 1 period.",
                 "Period": {
                     "Ref": "AsgCooldown"
                 },
-                "AlarmActions": [{
-                    "Ref": "AsgScaleInPolicyPayg"
-                }],
-                "Namespace": "AWS/EC2",
-                "Dimensions": [{
-                    "Name": "AutoScalingGroupName",
-                    "Value": {
-                        "Ref": "FgtAutoScalingGroupPayg"
+                "AlarmActions": [
+                    {
+                        "Fn::If": [
+                            "IfBYOLOnly",
+                            {
+                                "Ref": "ByolAsgShrinkOnLowCPUUtilization"
+                            },
+                            {
+                                "Ref": "PaygAsgShrinkOnByolAsgCondition"
+                            }
+                        ]
                     }
-                }],
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroupByol"
+                        }
+                    }
+                ],
                 "ComparisonOperator": "LessThanThreshold",
                 "MetricName": "CPUUtilization"
             }
         },
-        "AlarmScaleOutThresholdCpuUtilPayg": {
+        "AlarmByolGroupHighCPUUtilization": {
+            "Condition": "IfNotPAYGOnly",
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "EvaluationPeriods": "1",
@@ -478,20 +599,94 @@
                 "Threshold": {
                     "Ref": "AsgScaleOutThreshold"
                 },
-                "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+                "AlarmDescription": "Alarm if CPU utilization in (BYOL) Auto Scaling Group goes above the upper-bound threshold over 1 period.",
                 "Period": {
                     "Ref": "AsgCooldown"
                 },
-                "AlarmActions": [{
-                    "Ref": "AsgScaleOutPolicyPayg"
-                }],
-                "Namespace": "AWS/EC2",
-                "Dimensions": [{
-                    "Name": "AutoScalingGroupName",
-                    "Value": {
-                        "Ref": "FgtAutoScalingGroupPayg"
+                "AlarmActions": [
+                    {
+                        "Fn::If": [
+                            "IfBYOLOnly",
+                            {
+                                "Ref": "ByolAsgGrowOnHighCPUUtilization"
+                            },
+                            {
+                                "Ref": "PaygAsgGrowOnByolAsgCondition"
+                            }
+                        ]
                     }
-                }],
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroupByol"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "GreaterThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        },
+        "AlarmPaygGroupLowCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": {
+                    "Ref": "AsgScaleInThreshold"
+                },
+                "AlarmDescription": "Alarm if CPU utilization in (PAYG) Auto Scaling Group goes below the lower-bound threshold over 1 period.",
+                "Period": {
+                    "Ref": "AsgCooldown"
+                },
+                "AlarmActions": [
+                    {
+                        "Ref": "PaygAsgShrinkOnLowCPUUtilization"
+                    }
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroupPayg"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "LessThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        },
+        "AlarmPaygGroupHighCPUUtilization": {
+            "Condition": "IfNotBYOLOnly",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": {
+                    "Ref": "AsgScaleOutThreshold"
+                },
+                "AlarmDescription": "Alarm if CPU utilization in (PAYG) Auto Scaling Group goes above the upper-bound threshold over 1 period.",
+                "Period": {
+                    "Ref": "AsgCooldown"
+                },
+                "AlarmActions": [
+                    {
+                        "Ref": "PaygAsgGrowOnHighCPUUtilization"
+                    }
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "FgtAutoScalingGroupPayg"
+                        }
+                    }
+                ],
                 "ComparisonOperator": "GreaterThanThreshold",
                 "MetricName": "CPUUtilization"
             }
@@ -505,7 +700,8 @@
                 "LifecycleHookName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "lifecyle-hook-instance-launching"
@@ -528,7 +724,8 @@
                 "LifecycleHookName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "lifecyle-hook-instance-terminating"
@@ -552,7 +749,8 @@
                             "asgName": {
                                 "Fn::Join": [
                                     "-",
-                                    [{
+                                    [
+                                        {
                                             "Ref": "ResourceTagPrefix"
                                         },
                                         "fortigate-payg-auto-scaling-group"
@@ -564,22 +762,24 @@
                 },
                 "State": "ENABLED",
                 "Description": "Trigger when FortiGate PAYG auto-scaling group is launching / terminating instances or taking lifecycle actions.",
-                "Targets": [{
-                    "Id": {
-                        "Fn::Join": [
-                            "-",
-                            [
-                                "fortigate-payg-autoscale-lifecycle-event-rule",
-                                {
-                                    "Ref": "UniqueId"
-                                }
+                "Targets": [
+                    {
+                        "Id": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    "fortigate-payg-autoscale-lifecycle-event-rule",
+                                    {
+                                        "Ref": "UniqueId"
+                                    }
+                                ]
                             ]
-                        ]
-                    },
-                    "Arn": {
-                        "Ref": "AsgHandlerFunctionArn"
+                        },
+                        "Arn": {
+                            "Ref": "AsgHandlerFunctionArn"
+                        }
                     }
-                }]
+                ]
             }
         },
         "AsgLambdaPermissionLifecycleTriggerInvokationPayg": {
@@ -591,10 +791,7 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "events.amazonaws.com",
                 "SourceArn": {
-                    "Fn::GetAtt": [
-                        "AsgLifecycleHookTriggerEventRulePayg",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["AsgLifecycleHookTriggerEventRulePayg", "Arn"]
                 }
             }
         },
@@ -604,7 +801,8 @@
                 "LaunchTemplateName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "fortigate-byol-autoscale-launch-template"
@@ -664,10 +862,7 @@
                             "Fn::If": [
                                 "InstanceProfileIsNotDefined",
                                 {
-                                    "Fn::GetAtt": [
-                                        "FgtInstanceProfile",
-                                        "Arn"
-                                    ]
+                                    "Fn::GetAtt": ["FgtInstanceProfile", "Arn"]
                                 },
                                 {
                                     "Ref": "InstanceProfileArn"
@@ -678,13 +873,17 @@
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
-                    "NetworkInterfaces": [{
-                        "DeviceIndex": 0,
-                        "Groups": [{
-                            "Ref": "SecurityGroupId"
-                        }],
-                        "AssociatePublicIpAddress": true
-                    }],
+                    "NetworkInterfaces": [
+                        {
+                            "DeviceIndex": 0,
+                            "Groups": [
+                                {
+                                    "Ref": "SecurityGroupId"
+                                }
+                            ],
+                            "AssociatePublicIpAddress": true
+                        }
+                    ],
                     "KeyName": {
                         "Ref": "KeyPairName"
                     }
@@ -697,7 +896,8 @@
                 "AutoScalingGroupName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "fortigate-byol-auto-scaling-group"
@@ -726,16 +926,15 @@
                 "MinSize": {
                     "Ref": "AsgMinSizeByol"
                 },
-                "VPCZoneIdentifier": [{
+                "VPCZoneIdentifier": [
+                    {
                         "Ref": "AsgSubnet1Id"
                     },
                     {
                         "Ref": "AsgSubnet2Id"
                     }
                 ],
-                "TerminationPolicies": [
-                    "Default"
-                ],
+                "TerminationPolicies": ["Default"],
                 "TargetGroupARNs": {
                     "Fn::If": [
                         "ELBV2TargetGroupIsDefined",
@@ -752,12 +951,14 @@
                         }
                     ]
                 },
-                "Tags": [{
+                "Tags": [
+                    {
                         "Key": "Name",
                         "Value": {
                             "Fn::Join": [
                                 "-",
-                                [{
+                                [
+                                    {
                                         "Ref": "ResourceTagPrefix"
                                     },
                                     "fortigate-byol-auto-scaling-group"
@@ -785,7 +986,8 @@
                 "LifecycleHookName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "lifecyle-hook-instance-launching"
@@ -808,7 +1010,8 @@
                 "LifecycleHookName": {
                     "Fn::Join": [
                         "-",
-                        [{
+                        [
+                            {
                                 "Ref": "ResourceTagPrefix"
                             },
                             "lifecyle-hook-instance-terminating"
@@ -832,7 +1035,8 @@
                             "asgName": {
                                 "Fn::Join": [
                                     "-",
-                                    [{
+                                    [
+                                        {
                                             "Ref": "ResourceTagPrefix"
                                         },
                                         "fortigate-byol-auto-scaling-group"
@@ -844,22 +1048,24 @@
                 },
                 "State": "ENABLED",
                 "Description": "Trigger when FortiGate BYOL auto-scaling group is launching / terminating instances or taking lifecycle actions.",
-                "Targets": [{
-                    "Id": {
-                        "Fn::Join": [
-                            "-",
-                            [
-                                "fortigate-byol-autoscale-lifecycle-event-rule",
-                                {
-                                    "Ref": "UniqueId"
-                                }
+                "Targets": [
+                    {
+                        "Id": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    "fortigate-byol-autoscale-lifecycle-event-rule",
+                                    {
+                                        "Ref": "UniqueId"
+                                    }
+                                ]
                             ]
-                        ]
-                    },
-                    "Arn": {
-                        "Ref": "AsgHandlerFunctionArn"
+                        },
+                        "Arn": {
+                            "Ref": "AsgHandlerFunctionArn"
+                        }
                     }
-                }]
+                ]
             }
         },
         "AsgLambdaPermissionLifecycleTriggerInvokationByol": {
@@ -871,17 +1077,15 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "events.amazonaws.com",
                 "SourceArn": {
-                    "Fn::GetAtt": [
-                        "AsgLifecycleHookTriggerEventRuleByol",
-                        "Arn"
-                    ]
+                    "Fn::GetAtt": ["AsgLifecycleHookTriggerEventRuleByol", "Arn"]
                 }
             }
         }
     },
     "Metadata": {
         "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [{
+            "ParameterGroups": [
+                {
                     "Label": {
                         "default": "Basic configuration"
                     },
@@ -925,10 +1129,7 @@
                     "Label": {
                         "default": "Deployment package configuration"
                     },
-                    "Parameters": [
-                        "S3BucketName",
-                        "S3KeyPrefix"
-                    ]
+                    "Parameters": ["S3BucketName", "S3KeyPrefix"]
                 }
             ]
         }
