@@ -43,7 +43,7 @@ Installation Guides are available from the Fortinet Document Library:
 
 ## Deploy to AWS
 
-<a href="https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=fortigate-autoscale&templateURL=https://s3-us-west-2.amazonaws.com/fortinet-github-aws-release-artifacts/fortigate-autoscale/master/fortigate-autoscale-aws-cloudformation/templates/workload-master.template"><img alt="Launch Stack" src="https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png"></a>
+<a href="https://us-west-2.console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/quickcreate?templateUrl=https%3A%2F%2Fs3-us-west-2.amazonaws.com%2Ffortinet-github-aws-release-artifacts%2Ffortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2Ftemplates%2Fautoscale-new-vpc.template&param_S3BucketName=fortinet-github-aws-release-artifacts&param_S3KeyPrefix=fortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2F&stackName=fortigate-autoscale-demo&param_ResourceTagPrefix=fortigate-autoscale-demo" alt="Launch Stack" src="https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png"></a>
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
