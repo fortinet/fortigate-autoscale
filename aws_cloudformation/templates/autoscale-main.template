@@ -1046,16 +1046,7 @@
                             }
                         ]
                     },
-                    "ProductCodePayg": "",
-                    "LicensingModel": {
-                        "Fn::If": [
-                            "IfPAYGOnly",
-                            "PAYG-Only",
-                            {
-                                "Fn::If": ["IfBYOLOnly", "BYOL-Only", "Hybrid"]
-                            }
-                        ]
-                    }
+                    "ProductCodePayg": ""
                 },
                 "TemplateURL": {
                     "Fn::Sub": [
