@@ -34,7 +34,7 @@ node('devops-aws') {
 
     stage('NPM Audit') {
         echo 'running npm audit..'
-        sh 'npm audit'
+        sh 'npm audit --production'
     }
 
     stage('Test') {
