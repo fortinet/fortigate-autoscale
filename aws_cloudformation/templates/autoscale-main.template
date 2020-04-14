@@ -359,122 +359,86 @@
         },
         "AWSAMIRegionMap": {
             "AMI": {
-                "FGTVM64BYOL623": "aws-marketplace/FortiGate-VM64-AWS build1066 (6.2.3) GA-e5936f4a-0d69-479f-919c-d5e158bd4d12-ami-00364bb191729739b.4",
-                "FGTVM64PAYG623": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build1066 (6.2.3) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-07d8d9716be7d7aa1.4",
-                "FGTVM64BYOL609": "aws-marketplace/FortiGate-VM64-AWS build0335 (6.0.9) GA-e5936f4a-0d69-479f-919c-d5e158bd4d12-ami-0c1175f0c7b1a4068.4",
-                "FGTVM64PAYG609": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build0335 (6.0.9) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-06dc918973105d4c6.4"
+                "FGTVM64BYOL623": "aws-marketplace/FortiGate-VM64-AWS build8404 (6.2.3) GA-e5936f4a-0d69-479f-919c-d5e158bd4d12-ami-01c5698f7658a8322.4",
+                "FGTVM64PAYG623": "aws-marketplace/FortiGate-VM64-AWSONDEMAND build8404 (6.2.3) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-0462507a813be3282.4"
             },
             "ap-northeast-1": {
-                "FGTVM64BYOL623": "ami-02b216ce42200bd6a",
-                "FGTVM64PAYG623": "ami-00de99b513c2f852c",
-                "FGTVM64BYOL609": "ami-00048e23cff503d1c",
-                "FGTVM64PAYG609": "ami-08a0f28d39f19c3d7"
+                "FGTVM64BYOL623": "ami-0bc8cacacf3dfcfc8",
+                "FGTVM64PAYG623": "ami-0444162d604179bf6"
             },
             "ap-northeast-2": {
-                "FGTVM64BYOL623": "ami-03e10bf695135056e",
-                "FGTVM64PAYG623": "ami-04e318d96c99ea8c0",
-                "FGTVM64BYOL609": "ami-088416cb1cb4299bb",
-                "FGTVM64PAYG609": "ami-0c19cb872879a1edd"
+                "FGTVM64BYOL623": "ami-0a2a06f3cbde68482",
+                "FGTVM64PAYG623": "ami-065b67d14c722617a"
             },
             "ap-south-1": {
-                "FGTVM64BYOL623": "ami-007c03d473e55daa2",
-                "FGTVM64PAYG623": "ami-043bb481ef1af8740",
-                "FGTVM64BYOL609": "ami-00136414f49de9076",
-                "FGTVM64PAYG609": "ami-0b54e4aacf3cf7ae8"
+                "FGTVM64BYOL623": "ami-053b6c12f13183b41",
+                "FGTVM64PAYG623": "ami-0f6693857523585b8"
             },
             "ap-southeast-1": {
-                "FGTVM64BYOL623": "ami-0786cffca939042d8",
-                "FGTVM64PAYG623": "ami-0178ca1a0dbfe62c7",
-                "FGTVM64BYOL609": "ami-0fcb785218ff17e0e",
-                "FGTVM64PAYG609": "ami-063ea92ce8015f035"
+                "FGTVM64BYOL623": "ami-039c20a560db91564",
+                "FGTVM64PAYG623": "ami-0155fb808596ae522"
             },
             "ap-southeast-2": {
-                "FGTVM64BYOL623": "ami-003c22d372f903dc6",
-                "FGTVM64PAYG623": "ami-05708d1e433accc2a",
-                "FGTVM64BYOL609": "ami-0e56fed96adc354f0",
-                "FGTVM64PAYG609": "ami-0ff5e9a4702bf8a46"
+                "FGTVM64BYOL623": "ami-0fce8cb38dad71632",
+                "FGTVM64PAYG623": "ami-0b67711c6be07aa0b"
             },
             "ca-central-1": {
-                "FGTVM64BYOL623": "ami-004936b7904788393",
-                "FGTVM64PAYG623": "ami-04165f7ee507c0cad",
-                "FGTVM64BYOL609": "ami-034ee49a9eefefb61",
-                "FGTVM64PAYG609": "ami-0b4099c2c678032ce"
+                "FGTVM64BYOL623": "ami-047aac44951feb9fb",
+                "FGTVM64PAYG623": "ami-099941e57393c2225"
             },
             "eu-central-1": {
-                "FGTVM64BYOL623": "ami-0bde30b21653b5903",
-                "FGTVM64PAYG623": "ami-00bf5257dfad78d20",
-                "FGTVM64BYOL609": "ami-0b32558715c9613fd",
-                "FGTVM64PAYG609": "ami-0243ee7bdfac9e151"
+                "FGTVM64BYOL623": "ami-050d93bdbc31fcc64",
+                "FGTVM64PAYG623": "ami-0c380ca68f2b1f6e8"
             },
             "eu-north-1": {
-                "FGTVM64BYOL623": "ami-091620f61be5bad55",
-                "FGTVM64PAYG623": "ami-0a9fe3da1f94dc557",
-                "FGTVM64BYOL609": "ami-0d832e22ffa980783",
-                "FGTVM64PAYG609": "ami-0a9fa0c957356a0c4"
+                "FGTVM64BYOL623": "ami-071a868b96c93d6da",
+                "FGTVM64PAYG623": "ami-0d49417aa3a3912e1"
             },
             "eu-west-1": {
-                "FGTVM64BYOL623": "ami-011224dfab21c9d08",
-                "FGTVM64PAYG623": "ami-0255eb9792084e4ac",
-                "FGTVM64BYOL609": "ami-052a7a7ff26317bd3",
-                "FGTVM64PAYG609": "ami-063ad2828459a0cf3"
+                "FGTVM64BYOL623": "ami-013de57d4a8680ade",
+                "FGTVM64PAYG623": "ami-0874d1d29263b27ff"
             },
             "eu-west-2": {
-                "FGTVM64BYOL623": "ami-0c5e79337e1c595ea",
-                "FGTVM64PAYG623": "ami-0666078c010cb391a",
-                "FGTVM64BYOL609": "ami-0fb09225933c87520",
-                "FGTVM64PAYG609": "ami-0a051b2faed9e0a98"
+                "FGTVM64BYOL623": "ami-0aad5e076fa22e8c4",
+                "FGTVM64PAYG623": "ami-04eba63bb19dbeebe"
             },
             "eu-west-3": {
-                "FGTVM64BYOL623": "ami-0857a38f3352c6082",
-                "FGTVM64PAYG623": "ami-02859c7a250c53024",
-                "FGTVM64BYOL609": "ami-03846e3ceab8a312c",
-                "FGTVM64PAYG609": "ami-0ceb3c0e82e8c87cf"
+                "FGTVM64BYOL623": "ami-092a7d4eb40332b32",
+                "FGTVM64PAYG623": "ami-0c104a0848b644152"
             },
             "sa-east-1": {
-                "FGTVM64BYOL623": "ami-025f083b78a0fc34f",
-                "FGTVM64PAYG623": "ami-043440e0fa85b7c9f",
-                "FGTVM64BYOL609": "ami-04df407364293d7a1",
-                "FGTVM64PAYG609": "ami-04a19422c20125add"
+                "FGTVM64BYOL623": "ami-0feee4be0b03e070d",
+                "FGTVM64PAYG623": "ami-04de901f24e8532db"
             },
             "us-east-1": {
-                "FGTVM64BYOL623": "ami-00785474df0ceb957",
-                "FGTVM64PAYG623": "ami-09de0b07172ea3af1",
-                "FGTVM64BYOL609": "ami-08538056ff4beef35",
-                "FGTVM64PAYG609": "ami-02cddaf8c79508cb5"
+                "FGTVM64BYOL623": "ami-056b8cbed90f235f7",
+                "FGTVM64PAYG623": "ami-027f258cda3df62de"
             },
             "us-east-2": {
-                "FGTVM64BYOL623": "ami-009564e7a8002c522",
-                "FGTVM64PAYG623": "ami-03194de4065cca447",
-                "FGTVM64BYOL609": "ami-0b610d5b7bef2b763",
-                "FGTVM64PAYG609": "ami-0905b043d9d9bd422"
+                "FGTVM64BYOL623": "ami-02dfca9796bfaff10",
+                "FGTVM64PAYG623": "ami-05a4ac8312f7911b9"
             },
             "us-gov-west-1": {
                 "FGTVM64BYOL623": "ami-10a64461",
                 "FGTVM64PAYG623": "ami-475cbf36"
             },
             "us-west-1": {
-                "FGTVM64BYOL623": "ami-076d45ee950157d79",
-                "FGTVM64PAYG623": "ami-059bf3b352703af0b",
-                "FGTVM64BYOL609": "ami-0f78f48a383a2d3a6",
-                "FGTVM64PAYG609": "ami-0ba51b3944abe6769"
+                "FGTVM64BYOL623": "ami-012fa84a251f3e63f",
+                "FGTVM64PAYG623": "ami-0f54d37e47fa994a0"
             },
             "us-west-2": {
-                "FGTVM64BYOL623": "ami-04fc0698575eb8a17",
-                "FGTVM64PAYG623": "ami-00f25d8bf4aaa4613",
-                "FGTVM64BYOL609": "ami-06fd331efe5f4af9d",
-                "FGTVM64PAYG609": "ami-016f57d74ba86f22a"
+                "FGTVM64BYOL623": "ami-00efdd54f8b4755da",
+                "FGTVM64PAYG623": "ami-02b9cc036cab1071d"
             },
             "ap-east-1": {
-                "FGTVM64BYOL623": "ami-6f41041e",
-                "FGTVM64BYOL609": "ami-0f8099b694f569d04",
-                "FGTVM64PAYG623": "ami-b64702c7",
-                "FGTVM64PAYG609": "ami-0eb0771abcfb0a7c9"
+                "FGTVM64BYOL623": "ami-0bfc475f9b1de6da9",
+
+                "FGTVM64PAYG623": "ami-0437be57fc361c67b"
             },
             "me-south-1": {
-                "FGTVM64BYOL623": "ami-04d00a1b72cc745c1",
-                "FGTVM64BYOL609": "ami-0524e9b50e20664a0",
-                "FGTVM64PAYG623": "ami-0083de45e17edc133",
-                "FGTVM64PAYG609": "ami-010abdc5818a0d565"
+                "FGTVM64BYOL623": "ami-0063dcdb7c00646a5",
+
+                "FGTVM64PAYG623": "ami-0fcd028d7d86a0695"
             }
         },
         "ProtocolPortMap": {
