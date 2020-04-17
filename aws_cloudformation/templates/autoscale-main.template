@@ -419,8 +419,8 @@
                 "FGTVM64PAYG623": "ami-05a4ac8312f7911b9"
             },
             "us-gov-west-1": {
-                "FGTVM64BYOL623": "ami-10a64461",
-                "FGTVM64PAYG623": "ami-475cbf36"
+                "FGTVM64BYOL623": "ami-23b28442",
+                "FGTVM64PAYG623": "ami-c4d9efa5"
             },
             "us-west-1": {
                 "FGTVM64BYOL623": "ami-012fa84a251f3e63f",
