@@ -140,6 +140,12 @@
                         ]
                     ]
                 },
+                "LoadBalancerAttributes": [
+                    {
+                        "Key": "load_balancing.cross_zone.enabled",
+                        "Value": "true"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -290,6 +296,12 @@
                         ]
                     ]
                 },
+                "LoadBalancerAttributes": [
+                    {
+                        "Key": "load_balancing.cross_zone.enabled",
+                        "Value": "true"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -499,13 +511,28 @@
         "InternalLoadBalancerDnsName": {
             "Description": "FortiGate protected service load balancer DNS Name",
             "Value": {
-                "Fn::GetAtt": ["InternalLoadBalancer", "DNSName"]
+                "Fn::If": [
+                    "IfNewInternalLoadBalancer",
+                    {
+                        "Fn::GetAtt": [
+                            "InternalLoadBalancer",
+                            "DNSName"
+                        ]
+                    },
+                    ""
+                ]
             }
         },
         "InternalTargetGroupArn": {
             "Description": "FortiGate protected service target group ARN",
             "Value": {
-                "Ref": "InternalTargetGroup"
+                "Fn::If": [
+                    "IfNewInternalLoadBalancer",
+                    {
+                        "Ref": "InternalTargetGroup"
+                    },
+                    ""
+                ]
             }
         }
     }
