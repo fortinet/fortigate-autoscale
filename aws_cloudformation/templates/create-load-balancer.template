@@ -140,6 +140,12 @@
                         ]
                     ]
                 },
+                "LoadBalancerAttributes": [
+                    {
+                        "Key": "load_balancing.cross_zone.enabled",
+                        "Value": "true"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -290,6 +296,12 @@
                         ]
                     ]
                 },
+                "LoadBalancerAttributes": [
+                    {
+                        "Key": "load_balancing.cross_zone.enabled",
+                        "Value": "true"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
