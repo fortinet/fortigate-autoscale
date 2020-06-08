@@ -1,6 +1,6 @@
 {
     "name": "fortigate-autoscale",
-    "version": "2.0.5",
+    "version": "2.0.7",
     "description": "FortiGate Autoscale Project",
     "main": "index.js",
     "directories": {
@@ -34,6 +34,7 @@
         "eslint": "^6.8.0",
         "eslint-plugin-json": "^2.0.1",
         "eslint-plugin-mocha": "^6.2.2",
+        "ftnt-devops-ci": "github:fortinet/ftnt-devops-ci",
         "mocha": "^7.0.0",
         "nyc": "^15.0.0"
     }

@@ -14,7 +14,11 @@ node('devops-aws') {
     stage('NPM Install') {
         echo 'NPM Install..'
         sh 'npm install'
-        sh 'npm install fortinet/ftnt-devops-ci'
+    }
+
+    stage('NPM Audit') {
+        echo 'running npm audit..'
+        sh 'npm audit --production'
     }
 
     stage('Format check:: .js & .json') {
@@ -30,11 +34,6 @@ node('devops-aws') {
     stage('Eslint') {
         echo 'Eslinting..'
         sh './node_modules/.bin/ftnt-devops-ci check -l "**/*.js"'
-    }
-
-    stage('NPM Audit') {
-        echo 'running npm audit..'
-        sh 'npm audit'
     }
 
     stage('Test') {
