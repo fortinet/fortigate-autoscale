@@ -14,27 +14,16 @@ node('devops-aws') {
     stage('NPM Install') {
         echo 'NPM Install..'
         sh 'npm install'
-        sh 'npm install fortinet/ftnt-devops-ci'
-    }
-
-    stage('Format check:: .js & .json') {
-        echo 'Format checking..'
-        sh './node_modules/.bin/ftnt-devops-ci check -f "**/*.{js,json}"'
-    }
-
-    stage('Format check:: .template') {
-        echo 'Format checking..'
-        sh './node_modules/.bin/ftnt-devops-ci check -f "**/*.template" --parser "json"'
-    }
-
-    stage('Eslint') {
-        echo 'Eslinting..'
-        sh './node_modules/.bin/ftnt-devops-ci check -l "**/*.js"'
     }
 
     stage('NPM Audit') {
         echo 'running npm audit..'
-        sh 'npm audit'
+        sh 'npm audit --production'
+    }
+
+    stage('Linting check') {
+        echo 'running linter...'
+        sh 'npm run lint-check'
     }
 
     stage('Test') {

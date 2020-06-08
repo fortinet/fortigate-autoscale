@@ -70,7 +70,7 @@
         },
         "FortiGateInstanceType": {
             "Type": "String",
-            "Default": "c5.large",
+            "Default": "c5.xlarge",
             "AllowedValues": [
                 "t2.small",
                 "c5.large",
@@ -85,7 +85,7 @@
         "FortiOSVersion": {
             "Type": "String",
             "Default": "6.2.3",
-            "AllowedValues": ["6.2.3", "6.0.9"],
+            "AllowedValues": ["6.2.3"],
             "ConstraintDescription": "must be a valid FortiOS version from the selection.",
             "Description": "FortiOS version."
         },
