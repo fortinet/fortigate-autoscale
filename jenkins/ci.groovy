@@ -21,19 +21,9 @@ node('devops-aws') {
         sh 'npm audit --production'
     }
 
-    stage('Format check:: .js & .json') {
-        echo 'Format checking..'
-        sh './node_modules/.bin/ftnt-devops-ci check -f "**/*.{js,json}"'
-    }
-
-    stage('Format check:: .template') {
-        echo 'Format checking..'
-        sh './node_modules/.bin/ftnt-devops-ci check -f "**/*.template" --parser "json"'
-    }
-
-    stage('Eslint') {
-        echo 'Eslinting..'
-        sh './node_modules/.bin/ftnt-devops-ci check -l "**/*.js"'
+    stage('Linting check') {
+        echo 'running linter...'
+        sh 'npm run lint-check'
     }
 
     stage('Test') {
