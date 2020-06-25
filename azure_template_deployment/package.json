@@ -1,6 +1,6 @@
 {
     "name": "fortigate-autoscale-azure-template-deployment",
-    "version": "1.0.0-beta",
+    "version": "2.0.8",
     "description": "FortiGate Autoscale for Azure deployment package.",
     "main": "index.js",
     "scripts": {
