@@ -1918,6 +1918,10 @@
                 "siteConfig": {
                     "appSettings": [
                         {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "node"
+                        },
+                        {
                             "name": "AzureWebJobsDashboard",
                             "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountId'), '2019-04-01').keys[0].value)]"
                         },
@@ -1990,7 +1994,7 @@
                             "value": "[subscription().tenantId]"
                         },
                         {
-                            "name": "WEBSITE_RUN_FROM_ZIP",
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
                             "value": "[parameters('PackageResURL')]"
                         },
                         {

@@ -355,6 +355,60 @@ class Packman {
             return false;
         }
     }
+
+    /**
+     * install a package. useful for installing a local package
+     * @param {String} pkgNameOrLocation the name or path of the package to install
+     * @param {Boolean} production whether install as production level or default level
+     * @param {Boolean} save save this package as dependency or not
+     * @param {String} installAt the path to install this package
+     */
+    async npmInstallPackage(
+        pkgNameOrLocation,
+        production = true,
+        save = true,
+        installAt = process.cwd()
+    ) {
+        const pathInfo = path.parse(pkgNameOrLocation);
+        let argList = ['install'];
+        let installPath, dependencyPath, relativePath;
+        if (production) {
+            argList.push('--production');
+        }
+        if (!save) {
+            argList.push('--no-save');
+        }
+        argList.push(pkgNameOrLocation);
+        if (pathInfo.dir) {
+            installPath = path.join(installAt, pkgNameOrLocation);
+            relativePath = path.relative(installAt, installPath);
+            if (relativePath.indexOf('../') !== 0) {
+                // relate to the same folder level
+                dependencyPath = `file://${relativePath}`;
+                relativePath = `./${relativePath}`;
+            } else {
+                dependencyPath = `file://${installPath}`;
+            }
+        }
+        // if installing from a local module (folder), should update the package dependency to
+        // use a relative location
+
+        let output = await this.runCmd('npm', argList, installAt);
+        if (save && installPath) {
+            let packageInfo = this.readPackageJsonAt(installAt);
+            if (packageInfo) {
+                Object.entries(packageInfo.dependencies).forEach(entry => {
+                    if (entry[1] === dependencyPath) {
+                        packageInfo.dependencies[entry[0]] = relativePath;
+                    }
+                });
+                const packagePath = path.resolve(installAt, 'package.json');
+                fs.writeFileSync(packagePath, JSON.stringify(packageInfo, null, 4));
+                delete require.cache[packagePath];
+            }
+        }
+        return true;
+    }
 }
 
 module.exports = Packman;

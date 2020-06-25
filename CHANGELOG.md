@@ -4,11 +4,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.8] - 2020-06-25
+### Changed
+- bugfix AWS: Optional internal ELB selection error on template
+- matched the changes in Azure Function App configuration
+- updated the AWS 'Launch Stack' buttons on README
+- removed Transit Gateway related templates from this repo
+
+### Added
+- AWS ELB cross-zone balancing support.
+
+## [2.0.7] - 2020-04-27
+### Changed
+- Update FortiGate AWS AMI Id.
+
+## [2.0.5] - 2020-02-25
+### Changed
+- fixed version 6.0.9 missing in FOS selection on the Azure template.
+
+## [2.0.4] - 2020-02-25
+### Added
+- added suppport for FOS 6.0.9 on Azure.
+
+## [2.0.3] - 2020-02-19
+### Added
+- added suppport for FOS 6.0.9 and two AWS regions.
+
 ## [2.0.2] - 2020-01-23
 ### Changed
 - update lambda function runtime version from 8.10 to 12.x
 - fix the incorrect link for 'deploy to aws' button on the README.md
-- use the recommended way to allocate Buffer in nodejs
+- use the recommended way to allocate Buffer in nodejs.
 
 ## [2.0.1] - 2020-01-02
 ### Added

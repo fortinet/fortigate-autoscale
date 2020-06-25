@@ -438,6 +438,7 @@
                                         "ec2:AttachNetworkInterface",
                                         "ec2:DescribeNetworkInterfaces",
                                         "ec2:CreateTags",
+                                        "ec2:DeleteTags",
                                         "ec2:DescribeVpcs",
                                         "ec2:DescribeSubnets"
                                     ],

@@ -398,7 +398,7 @@
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": true
+                        "PropagateAtLaunch": false
                     },
                     {
                         "Key": "ResourceGroup",

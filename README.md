@@ -34,16 +34,18 @@ Deployment packages as well as source code will be available in the **dist** dir
 | fortigate-autoscale-azure-funcapp.zip | Source code for the FortiGate Autoscale handler - Azure function.|
 | fortigate-autoscale-azure-template-deployment.zip | Azure template. Use this to deploy the solution on the Azure platform.|
 
-Installation Guides are available from the Fortinet Document Library:
+Deployment guides are available from the Fortinet Document Library:
 
   + [ FortiGate / FortiOS 6.0 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
   + [ FortiGate / FortiOS 6.2 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)
   + [ FortiGate / FortiOS 6.0 Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
   + [ FortiGate / FortiOS 6.2 Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.2/aws-cookbook/6.2.0/543390/deploying-auto-scaling-on-aws-without-transit-gateway-integration)
 
-## Deploy to AWS
+## Launch a demo
 
-<a href="https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=fortigate-autoscale&templateURL=https://s3-us-west-2.amazonaws.com/fortinet-github-aws-release-artifacts/fortigate-autoscale/master/fortigate-autoscale-aws-cloudformation/templates/workload-master.template"><img alt="Launch Stack" src="https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png"></a>
+| AWS (new VPC) | AWS (existing VPC) | Azure |
+| ------ | ------ | ------|
+| <a href="https://console.aws.amazon.com/cloudformation/home?#/stacks/quickcreate?templateUrl=https%3A%2F%2Fs3-us-west-2.amazonaws.com%2Ffortinet-github-aws-release-artifacts%2Ffortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2Ftemplates%2Fautoscale-new-vpc.template&param_S3BucketName=fortinet-github-aws-release-artifacts&param_S3KeyPrefix=fortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2F&stackName=fortigate-autoscale-demo&param_ResourceTagPrefix=fortigate-autoscale-demo" target="_blank"> <img alt="Launch Stack" src="https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png"></a> | <a href="https://console.aws.amazon.com/cloudformation/home?#/stacks/quickcreate?templateUrl=https%3A%2F%2Fs3-us-west-2.amazonaws.com%2Ffortinet-github-aws-release-artifacts%2Ffortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2Ftemplates%2Fautoscale-existing-vpc.template&param_S3BucketName=fortinet-github-aws-release-artifacts&param_S3KeyPrefix=fortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2F&stackName=fortigate-autoscale-demo&param_ResourceTagPrefix=fortigate-autoscale-demo" target="_blank"> <img alt="Launch Stack" src="https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png"></a> | <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmaster%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a> |
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
