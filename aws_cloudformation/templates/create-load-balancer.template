@@ -514,10 +514,7 @@
                 "Fn::If": [
                     "IfNewInternalLoadBalancer",
                     {
-                        "Fn::GetAtt": [
-                            "InternalLoadBalancer",
-                            "DNSName"
-                        ]
+                        "Fn::GetAtt": ["InternalLoadBalancer", "DNSName"]
                     },
                     ""
                 ]

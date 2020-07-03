@@ -959,21 +959,13 @@
                     "AsgScaleOutThreshold": {
                         "Ref": "FgtAsgScaleOutThreshold"
                     },
-                    "AsgDesiredCapacityByol": {
-                        "Ref": "FgtAsgDesiredCapacityByol"
-                    },
-                    "AsgMinSizeByol": {
-                        "Ref": "FgtAsgMinSizeByol"
-                    },
+                    "AsgDesiredCapacityByol": 0,
+                    "AsgMinSizeByol": 0,
                     "AsgMaxSizeByol": {
                         "Ref": "FgtAsgMaxSizeByol"
                     },
-                    "AsgDesiredCapacityPayg": {
-                        "Ref": "FgtAsgDesiredCapacityPayg"
-                    },
-                    "AsgMinSizePayg": {
-                        "Ref": "FgtAsgMinSizePayg"
-                    },
+                    "AsgDesiredCapacityPayg": 0,
+                    "AsgMinSizePayg": 0,
                     "AsgMaxSizePayg": {
                         "Ref": "FgtAsgMaxSizePayg"
                     },
@@ -1060,7 +1052,7 @@
                 },
                 "ServiceType": "initiateAutoscale"
             },
-            "DependsOn": ["StackCreateFortiGateAutoScalingGroup", "SaveSettings"]
+            "DependsOn": ["ServiceWarmUp"]
         },
         "StopFortiGateAutoScalingGroupService": {
             "Type": "AWS::CloudFormation::CustomResource",
@@ -1271,6 +1263,43 @@
                 "StackCreateFortiGateAutoScalingGroup",
                 "StackCreateFortiGateAutoScaleHandler"
             ]
+        },
+        "StackWaitFor": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "Parameters": {
+                    "ServiceTimeout": 600,
+                    "Runtime": "python3.7"
+                },
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${S3BucketName}.${S3Region}.amazonaws.com/${S3KeyPrefix}templates/wait-for.template",
+                        {
+                            "S3Region": {
+                                "Fn::If": ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
+                            },
+                            "S3BucketName": {
+                                "Ref": "S3BucketName"
+                            },
+                            "S3KeyPrefix": {
+                                "Ref": "S3KeyPrefix"
+                            }
+                        }
+                    ]
+                },
+                "TimeoutInMinutes": "10"
+            }
+        },
+        "ServiceWarmUp": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": ["StackWaitFor", "Outputs.FunctionArn"]
+                },
+                "WaitSeconds": 30,
+                "OnRequestType": "Create"
+            },
+            "DependsOn": ["StackCreateFortiGateAutoScalingGroup", "SaveSettings"]
         }
     },
     "Metadata": {
