@@ -300,6 +300,16 @@
                 "description": "Timeout value (in seconds) for the Azure function script. Minimum is 30. Maximum is 230."
             }
         },
+        "ServicePlanTier" : {
+            "type": "string",
+            "allowedValues": [
+                "Premium (P1V2)"
+            ],
+            "defaultValue": "Premium (P1V2)",
+            "metadata": {
+                "description": "The pricing tier for the function service plan."
+            }
+        },
         "PackageResURL": {
             "type": "string",
             "metadata": {
@@ -314,6 +324,24 @@
         "location": "[resourceGroup().location]",
         "functionAppName": "[concat(variables('uniqueResourceNamePrefix'),'funcapp')]",
         "hostingPlanName": "[concat(variables('functionAppName'),'-service-plan')]",
+        "servicePlanTierPresets": {
+            "Free (for demo only)": {
+                "sku": "Free",
+                "skucode": "F1",
+                "workerSize": "0",
+                "workerSizeId": "0",
+                "numberOfWorkers": "1",
+                "reserved": false
+            },
+            "Premium (P1V2)": {
+                "sku": "PremiumV2",
+                "skucode": "P1v2",
+                "workerSize": "3",
+                "workerSizeId": "3",
+                "numberOfWorkers": "1",
+                "reserved": false
+            }
+        },
         "functionAppInsightName": "[concat(variables('functionAppName'),'-insights')]",
         "functionAppInsightAvailableLocations": [
             "eastus",
@@ -1897,8 +1925,12 @@
             "location": "[variables('location')]",
             "properties": {
                 "name": "[variables('hostingPlanName')]",
-                "computeMode": "Dynamic",
-                "sku": "Dynamic"
+                "sku": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].sku]",
+                "skucode": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].skucode]",
+                "workerSize": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].workerSize]",
+                "workerSizeId": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].workerSizeId]",
+                "numberOfWorkers": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].numberOfWorkers]",
+                "reserved": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].reserved]"
             }
         },
         {
