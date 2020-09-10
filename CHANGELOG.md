@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.9] - 2020-09-01
+### Changed
+- fixed AWS improperly receiving initial auto scaling events
+- removed a FortiOS 6.0.4 #0543036 workaround
+
 ## [2.0.8] - 2020-06-25
 ### Changed
 - bugfix AWS: Optional internal ELB selection error on template

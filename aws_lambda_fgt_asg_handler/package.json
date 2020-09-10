@@ -1,6 +1,6 @@
 {
     "name": "fortigate-autoscale-aws-fgt-asg-handler",
-    "version": "2.0.8",
+    "version": "2.0.9",
     "description": "FortiGate Autoscale Project - AWS Lambda - FortiGate Auto Scaling Group Handler",
     "main": "index.js",
     "scripts": {

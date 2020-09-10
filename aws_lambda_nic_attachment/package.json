@@ -1,6 +1,6 @@
 {
     "name": "fortigate-autoscale-aws-lambda-nic-attachment",
-    "version": "2.0.8",
+    "version": "2.0.9",
     "description": "FortiGate Autoscale Project - AWS Lambda - Network Interface Attachment",
     "main": "index.js",
     "scripts": {
