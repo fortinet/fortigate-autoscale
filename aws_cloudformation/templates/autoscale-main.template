@@ -180,13 +180,13 @@
             "ConstraintDescription": "must specify an admin access key pair for FortiGate instances.",
             "Description": "Amazon EC2 Key Pair for admin access."
         },
-        "MasterElectionTimeout": {
+        "PrimaryElectionTimeout": {
             "Type": "Number",
             "Default": 300,
             "MinValue": 90,
             "MaxValue": 3600,
             "ConstraintDescription": "must be a valid number between 90 and 3600.",
-            "Description": "The maximum time (in seconds) to wait for a master election to complete. Minimum is 30. Maximum is 3600."
+            "Description": "The maximum time (in seconds) to wait for a primary election to complete. Minimum is 30. Maximum is 3600."
         },
         "HeartBeatInterval": {
             "Type": "Number",
@@ -1133,10 +1133,10 @@
                 "LifecycleHookTimeout": {
                     "Ref": "LifecycleHookTimeout"
                 },
-                "MasterElectionTimeout": {
-                    "Ref": "MasterElectionTimeout"
+                "PrimaryElectionTimeout": {
+                    "Ref": "PrimaryElectionTimeout"
                 },
-                "MasterElectionNoWait": "true",
+                "PrimaryElectionNoWait": "true",
                 "HeartBeatInterval": {
                     "Ref": "HeartBeatInterval"
                 },
@@ -1152,7 +1152,7 @@
                         "Outputs.FgtAsgHandlerApiGatewayUrl"
                     ]
                 },
-                "MasterScalingGroupName": {
+                "PrimaryScalingGroupName": {
                     "Fn::If": [
                         "IfPAYGOnly",
                         {
@@ -1317,7 +1317,7 @@
                         "FgtAsgMaxSizePayg",
                         "FgtAsgScaleOutThreshold",
                         "FgtAsgScaleInThreshold",
-                        "MasterElectionTimeout",
+                        "PrimaryElectionTimeout",
                         "GetLicenseGracePeriod",
                         "FgtAsgHealthCheckGracePeriod",
                         "FgtAsgCooldown",
@@ -1439,8 +1439,8 @@
                 "FortiGatePskSecret": {
                     "default": "FortiGate PSK secret"
                 },
-                "MasterElectionTimeout": {
-                    "default": "Master election timeout"
+                "PrimaryElectionTimeout": {
+                    "default": "Primary election timeout"
                 },
                 "HeartBeatInterval": {
                     "default": "Heart beat interval"

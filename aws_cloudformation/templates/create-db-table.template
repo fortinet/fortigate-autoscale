@@ -143,7 +143,7 @@
                 ]
             }
         },
-        "FortiGateMasterElection": {
+        "FortiGatePrimaryElection": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "AttributeDefinitions": [
@@ -169,7 +169,7 @@
                             {
                                 "Ref": "ResourceTagPrefix"
                             },
-                            "FortiGateMasterElection"
+                            "FortiGatePrimaryElection"
                         ]
                     ]
                 },
@@ -581,9 +581,9 @@
                 "Fn::GetAtt": ["FortiGateAutoscale", "Arn"]
             }
         },
-        "FortiGateMasterElectionTableArn": {
+        "FortiGatePrimaryElectionTableArn": {
             "Value": {
-                "Fn::GetAtt": ["FortiGateMasterElection", "Arn"]
+                "Fn::GetAtt": ["FortiGatePrimaryElection", "Arn"]
             }
         },
         "LifecycleItemTableArn": {
@@ -642,13 +642,13 @@
             "Description": "The comma-delimited list of arn of DynamoDB tables created in this stack.",
             "Value": {
                 "Fn::Sub": [
-                    "${FortiGateAutoscale},${FortiGateMasterElection}${LifecycleItem},${Settings}${CustomLog}${VmInfoCache}${NicAttachment}${LicenseStock}${LicenseUsage}${VpnAttachment}${FortiAnalyzer}",
+                    "${FortiGateAutoscale},${FortiGatePrimaryElection}${LifecycleItem},${Settings}${CustomLog}${VmInfoCache}${NicAttachment}${LicenseStock}${LicenseUsage}${VpnAttachment}${FortiAnalyzer}",
                     {
                         "FortiGateAutoscale": {
                             "Fn::GetAtt": ["FortiGateAutoscale", "Arn"]
                         },
-                        "FortiGateMasterElection": {
-                            "Fn::GetAtt": ["FortiGateMasterElection", "Arn"]
+                        "FortiGatePrimaryElection": {
+                            "Fn::GetAtt": ["FortiGatePrimaryElection", "Arn"]
                         },
                         "LifecycleItem": {
                             "Fn::GetAtt": ["LifecycleItem", "Arn"]
@@ -776,13 +776,13 @@
             "Description": "The comma-delimited list of name of created tables in this stack.",
             "Value": {
                 "Fn::Sub": [
-                    "${FortiGateAutoscale},${FortiGateMasterElection},${LifecycleItem},${Settings},${CustomLog},${VmInfoCache},${NicAttachment},${LicenseStock},${LicenseUsage},${VpnAttachment},${FortiAnalyzer}",
+                    "${FortiGateAutoscale},${FortiGatePrimaryElection},${LifecycleItem},${Settings},${CustomLog},${VmInfoCache},${NicAttachment},${LicenseStock},${LicenseUsage},${VpnAttachment},${FortiAnalyzer}",
                     {
                         "FortiGateAutoscale": {
                             "Ref": "FortiGateAutoscale"
                         },
-                        "FortiGateMasterElection": {
-                            "Ref": "FortiGateMasterElection"
+                        "FortiGatePrimaryElection": {
+                            "Ref": "FortiGatePrimaryElection"
                         },
                         "LifecycleItem": {
                             "Ref": "LifecycleItem"

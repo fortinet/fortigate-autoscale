@@ -108,7 +108,7 @@
         "ParameterValue": "taskcat"
     },
     {
-        "ParameterKey": "MasterElectionTimeout",
+        "ParameterKey": "PrimaryElectionTimeout",
         "ParameterValue": 300
     },
     {

@@ -33,11 +33,11 @@ module.exports = class AutoscaleHandler {
         this._baseConfig = baseConfig;
         this._selfInstance = null;
         this._selfHealthCheck = null;
-        this._masterRecord = null;
-        this._masterInfo = null;
+        this._primaryRecord = null;
+        this._primaryInfo = null;
         this._requestInfo = {};
         this.scalingGroupName = null;
-        this.masterScalingGroupName = null;
+        this.primaryScalingGroupName = null;
     }
 
     static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
@@ -178,10 +178,10 @@ module.exports = class AutoscaleHandler {
                 throw new Error('Deployment settings not saved.');
             }
 
-            // set scaling group names for master and self
+            // set scaling group names for primary and self
             this.setScalingGroup(
-                this._settings['master-scaling-group-name'],
-                this._settings['master-scaling-group-name']
+                this._settings['primary-scaling-group-name'],
+                this._settings['primary-scaling-group-name']
             );
         }
         return success;
@@ -316,7 +316,7 @@ module.exports = class AutoscaleHandler {
             }));
         if (this._selfInstance) {
             this.setScalingGroup(
-                this._settings['master-scaling-group-name'],
+                this._settings['primary-scaling-group-name'],
                 this._settings['byol-scaling-group-name']
             );
         } else {
@@ -327,7 +327,7 @@ module.exports = class AutoscaleHandler {
             });
             if (this._selfInstance) {
                 this.setScalingGroup(
-                    this._settings['master-scaling-group-name'],
+                    this._settings['primary-scaling-group-name'],
                     this._settings['payg-scaling-group-name']
                 );
             }
@@ -335,7 +335,7 @@ module.exports = class AutoscaleHandler {
         if (this._selfInstance) {
             this.logger.info(
                 `instance identification (id: ${this._selfInstance.instanceId}, ` +
-                    `scaling group self: ${this.scalingGroupName}, master: ${this.masterScalingGroupName})`
+                    `scaling group self: ${this.scalingGroupName}, primary: ${this.primaryScalingGroupName})`
             );
         } else {
             this.logger.warn(`cannot identify instance: vmid:(${instanceId})`);
@@ -513,11 +513,11 @@ module.exports = class AutoscaleHandler {
             interval = this._requestInfo.interval;
 
         let parameters = {},
-            masterIp,
-            isMaster = false,
+            primaryIp,
+            isPrimary = false,
             lifecycleShouldAbandon = false;
 
-        let masterChanged = false;
+        let primaryChanged = false;
 
         parameters.instanceId = instanceId;
         parameters.scalingGroupName = this.scalingGroupName;
@@ -539,77 +539,77 @@ module.exports = class AutoscaleHandler {
         if (this._selfHealthCheck && !this._selfHealthCheck.inSync) {
             return {};
         }
-        // get master instance monitoring
-        await this.retrieveMaster();
+        // get primary instance monitoring
+        await this.retrievePrimary();
 
-        // get the current master instance info for comparisons later
-        let masterInstanceId = (this._masterRecord && this._masterRecord.instanceId) || null;
-        let masterElectionVote = (this._masterRecord && this._masterRecord.voteState) || null;
+        // get the current primary instance info for comparisons later
+        let primaryInstanceId = (this._primaryRecord && this._primaryRecord.instanceId) || null;
+        let primaryElectionVote = (this._primaryRecord && this._primaryRecord.voteState) || null;
 
         if (
-            this._masterInfo &&
-            this._selfInstance.instanceId === this._masterInfo.instanceId &&
-            this.scalingGroupName === this.masterScalingGroupName
+            this._primaryInfo &&
+            this._selfInstance.instanceId === this._primaryInfo.instanceId &&
+            this.scalingGroupName === this.primaryScalingGroupName
         ) {
-            // this instance is the current master, skip checking master election
-            // use master health check result as self health check result
-            isMaster = true;
-            this._selfHealthCheck = this._masterHealthCheck;
+            // this instance is the current primary, skip checking primary election
+            // use primary health check result as self health check result
+            isPrimary = true;
+            this._selfHealthCheck = this._primaryHealthCheck;
         } else if (this._selfHealthCheck && !this._selfHealthCheck.healthy) {
-            // this instance isn't the current master
-            // if this instance is unhealth, skip master election check
+            // this instance isn't the current primary
+            // if this instance is unhealth, skip primary election check
         } else if (
-            !(this._masterInfo && this._masterHealthCheck && this._masterHealthCheck.healthy)
+            !(this._primaryInfo && this._primaryHealthCheck && this._primaryHealthCheck.healthy)
         ) {
-            // this instance isn't the current master
-            // if no master or master is unhealthy, try to run a master election or check if a
-            // master election is running then wait for it to end
-            // promiseEmitter to handle the master election process by periodically check:
+            // this instance isn't the current primary
+            // if no primary or primary is unhealthy, try to run a primary election or check if a
+            // primary election is running then wait for it to end
+            // promiseEmitter to handle the primary election process by periodically check:
             // 1. if there is a running election, then waits for its final
             // 2. if there isn't a running election, then runs an election and complete it
-            let promiseEmitter = this.checkMasterElection.bind(this),
+            let promiseEmitter = this.checkPrimaryElection.bind(this),
                 // validator set a condition to determine if the fgt needs to keep waiting or not.
-                validator = masterInfo => {
-                    // i am the new master, don't wait, continue to finalize the election.
+                validator = primaryInfo => {
+                    // i am the new primary, don't wait, continue to finalize the election.
                     // should return true to end the waiting.
                     if (
-                        masterInfo &&
-                        masterInfo.primaryPrivateIpAddress ===
+                        primaryInfo &&
+                        primaryInfo.primaryPrivateIpAddress ===
                             this._selfInstance.primaryPrivateIpAddress
                     ) {
-                        isMaster = true;
+                        isPrimary = true;
                         return true;
-                    } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-                        // i am not the new master
-                        // if no wait for master election, I could become a headless instance
-                        // may allow any instance of slave role to come up without master.
-                        // They will receive the new master ip on one of their following
+                    } else if (this._primaryRecord && this._primaryRecord.voteState === 'pending') {
+                        // i am not the new primary
+                        // if no wait for primary election, I could become a headless instance
+                        // may allow any instance of secondary role to come up without primary.
+                        // They will receive the new primary ip on one of their following
                         // heartbeat sync callback
-                        if (this._settings['master-election-no-wait'] === 'true') {
+                        if (this._settings['primary-election-no-wait'] === 'true') {
                             return true;
                         } else {
-                            // the new master hasn't come up to finalize the election,
+                            // the new primary hasn't come up to finalize the election,
                             // I should keep on waiting.
                             // should return false to continue.
-                            this._masterRecord = null; // clear the master record cache
+                            this._primaryRecord = null; // clear the primary record cache
                             return false;
                         }
-                    } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
-                        // if the master election is final, then no need to wait.
+                    } else if (this._primaryRecord && this._primaryRecord.voteState === 'done') {
+                        // if the primary election is final, then no need to wait.
                         // should return true to end the waiting.
                         return true;
                     } else {
-                        // no master elected yet
+                        // no primary elected yet
                         // entering this syncedCallback function means i am already insync so
-                        // i used to be assigned a master.
-                        // if i am not in the master scaling group then I can't start a new
+                        // i used to be assigned a primary.
+                        // if i am not in the primary scaling group then I can't start a new
                         // election.
-                        // i stay as is and hoping for someone in the master scaling group
-                        // triggers a master election. Then I will be notified at some point.
-                        if (this.scalingGroupName !== this.masterScalingGroupName) {
+                        // i stay as is and hoping for someone in the primary scaling group
+                        // triggers a primary election. Then I will be notified at some point.
+                        if (this.scalingGroupName !== this.primaryScalingGroupName) {
                             return true;
                         } else {
-                            // for new instance or instance in the master scaling group
+                            // for new instance or instance in the primary scaling group
                             // they should keep on waiting
                             return false;
                         }
@@ -628,38 +628,38 @@ module.exports = class AutoscaleHandler {
                 };
 
             try {
-                this._masterInfo = await CoreFunctions.waitFor(
+                this._primaryInfo = await CoreFunctions.waitFor(
                     promiseEmitter,
                     validator,
                     5000,
                     counter
                 );
-                // after new master is elected, get the new master healthcheck
+                // after new primary is elected, get the new primary healthcheck
                 // there are two possible results here:
-                // 1. a new instance comes up and becomes the new master, master healthcheck won't
+                // 1. a new instance comes up and becomes the new primary, primary healthcheck won't
                 // exist yet because this instance isn't added to monitor.
                 //   1.1. in this case, the instance will be added to monitor.
-                // 2. an existing slave instance becomes the new master, master healthcheck exists
+                // 2. an existing secondary instance becomes the new primary, primary healthcheck exists
                 // because the instance in under monitoring.
                 //   2.1. in this case, the instance will take actions based on its healthcheck
                 //        result.
-                this._masterHealthCheck = null; // invalidate the master health check object
-                // reload the master health check object
-                await this.retrieveMaster();
+                this._primaryHealthCheck = null; // invalidate the primary health check object
+                // reload the primary health check object
+                await this.retrievePrimary();
             } catch (error) {
-                // if error occurs, check who is holding a master election, if it is this instance,
+                // if error occurs, check who is holding a primary election, if it is this instance,
                 // terminates this election. then continue
-                await this.retrieveMaster(null, true);
+                await this.retrievePrimary(null, true);
 
                 if (
-                    this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                    this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName
+                    this._primaryRecord.instanceId === this._selfInstance.instanceId &&
+                    this._primaryRecord.scalingGroupName === this._selfInstance.scalingGroupName
                 ) {
-                    await this.platform.removeMasterRecord();
+                    await this.platform.removePrimaryRecord();
                 }
                 await this.removeInstance(this._selfInstance);
                 throw new Error(
-                    'Failed to determine the master instance within ' +
+                    'Failed to determine the primary instance within ' +
                         `${process.env.SCRIPT_EXECUTION_EXPIRE_TIME} seconds. This instance is unable` +
                         ' to bootstrap. Please report this to administrators.'
                 );
@@ -667,7 +667,7 @@ module.exports = class AutoscaleHandler {
         }
 
         // check if myself is under health check monitoring
-        // (master instance itself may have got its healthcheck result in some code blocks above)
+        // (primary instance itself may have got its healthcheck result in some code blocks above)
         this._selfHealthCheck =
             this._selfHealthCheck ||
             (await this.platform.getInstanceHealthCheck(
@@ -677,76 +677,76 @@ module.exports = class AutoscaleHandler {
                 interval
             ));
 
-        // if this instance is the master instance and the master record is still pending, it will
-        // finalize the master election.
+        // if this instance is the primary instance and the primary record is still pending, it will
+        // finalize the primary election.
         if (
-            this._masterInfo &&
-            this._selfInstance.instanceId === this._masterInfo.instanceId &&
-            this.scalingGroupName === this.masterScalingGroupName &&
-            this._masterRecord &&
-            this._masterRecord.voteState === 'pending'
+            this._primaryInfo &&
+            this._selfInstance.instanceId === this._primaryInfo.instanceId &&
+            this.scalingGroupName === this.primaryScalingGroupName &&
+            this._primaryRecord &&
+            this._primaryRecord.voteState === 'pending'
         ) {
-            isMaster = true;
+            isPrimary = true;
             if (
                 !this._selfHealthCheck ||
                 (this._selfHealthCheck && this._selfHealthCheck.healthy)
             ) {
                 // if election couldn't be finalized, remove the current election so someone else
                 // could start another election
-                if (!(await this.platform.finalizeMasterElection())) {
-                    await this.platform.removeMasterRecord();
-                    this._masterRecord = null;
+                if (!(await this.platform.finalizePrimaryElection())) {
+                    await this.platform.removePrimaryRecord();
+                    this._primaryRecord = null;
                     lifecycleShouldAbandon = true;
                 } else {
-                    this._masterRecord = null;
-                    await this.retrieveMaster();
+                    this._primaryRecord = null;
+                    await this.retrievePrimary();
                     // update tags
                     await this.platform.updateHAAPRoleTag(this._selfInstance.instanceId);
                 }
             }
         }
 
-        // check whether master has changed or not
-        let currentMasterInstanceId = (this._masterRecord && this._masterRecord.instanceId) || null;
-        let currentMasterElectionVote =
-            (this._masterRecord && this._masterRecord.voteState) || null;
+        // check whether primary has changed or not
+        let currentPrimaryInstanceId = (this._primaryRecord && this._primaryRecord.instanceId) || null;
+        let currentPrimaryElectionVote =
+            (this._primaryRecord && this._primaryRecord.voteState) || null;
 
-        // no master (election done) before, but have a master (election done) now
+        // no primary (election done) before, but have a primary (election done) now
         // or
-        // had a pending master (election pending) before, but now master election is done
-        // no matter the master id has changed or not.
-        if (masterElectionVote !== 'done' && currentMasterElectionVote === 'done') {
-            masterChanged = true;
+        // had a pending primary (election pending) before, but now primary election is done
+        // no matter the primary id has changed or not.
+        if (primaryElectionVote !== 'done' && currentPrimaryElectionVote === 'done') {
+            primaryChanged = true;
         }
 
-        // had a master (election done) before, have a master (election done) now,
+        // had a primary (election done) before, have a primary (election done) now,
         // but they have different instance id
         if (
-            masterElectionVote === 'done' &&
-            currentMasterElectionVote === 'done' &&
-            masterInstanceId !== currentMasterInstanceId
+            primaryElectionVote === 'done' &&
+            currentPrimaryElectionVote === 'done' &&
+            primaryInstanceId !== currentPrimaryInstanceId
         ) {
-            masterChanged = true;
+            primaryChanged = true;
         }
 
-        // if master has changed and this is the new master,
-        // update master/slave tags
-        if (masterChanged && isMaster) {
+        // if primary has changed and this is the new primary,
+        // update primary/secondary tags
+        if (primaryChanged && isPrimary) {
             await this.platform.updateHAAPRoleTag(this._selfInstance.instanceId);
         }
 
         this.logger.info(
-            `currentMasterInstanceId: ${currentMasterInstanceId}, ` +
-                `currentMasterElectionVote: ${currentMasterElectionVote}, ` +
-                `masterChanged: ${masterChanged}`
+            `currentPrimaryInstanceId: ${currentPrimaryInstanceId}, ` +
+                `currentPrimaryElectionVote: ${currentPrimaryElectionVote}, ` +
+                `primaryChanged: ${primaryChanged}`
         );
 
         // if no self healthcheck record found, this instance not under monitor. It's about the
         // time to add it to monitor. should make sure its all lifecycle actions are complete
         // while starting to monitor it.
-        // if this instance is not the master, still add it to monitor but leave its master unknown.
-        // if there's a master instance, add the monitor record using this master regardless
-        // the master health status.
+        // if this instance is not the primary, still add it to monitor but leave its primary unknown.
+        // if there's a primary instance, add the monitor record using this primary regardless
+        // the primary health status.
         if (!this._selfHealthCheck) {
             // check if a lifecycle event waiting
             await this.completeGetConfigLifecycleAction(
@@ -754,66 +754,66 @@ module.exports = class AutoscaleHandler {
                 !lifecycleShouldAbandon
             );
 
-            masterIp = this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null;
-            // if slave finds master is pending, don't update master ip to the health check record
+            primaryIp = this._primaryInfo ? this._primaryInfo.primaryPrivateIpAddress : null;
+            // if secondary finds primary is pending, don't update primary ip to the health check record
             if (
-                !isMaster &&
-                this._masterRecord &&
-                this._masterRecord.voteState === 'pending' &&
-                this._settings['master-election-no-wait'] === 'true'
+                !isPrimary &&
+                this._primaryRecord &&
+                this._primaryRecord.voteState === 'pending' &&
+                this._settings['primary-election-no-wait'] === 'true'
             ) {
-                masterIp = null;
+                primaryIp = null;
             }
-            await this.addInstanceToMonitor(this._selfInstance, interval, masterIp);
-            let logMessagMasterIp =
-                !masterIp && this._settings['master-election-no-wait'] === 'true'
-                    ? ' without master ip)'
-                    : ` master-ip: ${masterIp})`;
+            await this.addInstanceToMonitor(this._selfInstance, interval, primaryIp);
+            let logMessagPrimaryIp =
+                !primaryIp && this._settings['primary-election-no-wait'] === 'true'
+                    ? ' without primary ip)'
+                    : ` master-ip: ${primaryIp})`;
             this.logger.info(
                 `instance (id:${this._selfInstance.instanceId}, ` +
-                    `${logMessagMasterIp} is added to monitor at timestamp: ${Date.now()}.`
+                    `${logMessagPrimaryIp} is added to monitor at timestamp: ${Date.now()}.`
             );
-            // if this newly come-up instance is the new master, save its instance id as the
+            // if this newly come-up instance is the new primary, save its instance id as the
             // default password into settings because all other instance will sync password from
-            // the master there's a case if users never changed the master's password, when the
-            // master was torn-down, there will be no way to retrieve this original password.
+            // the primary there's a case if users never changed the primary's password, when the
+            // primary was torn-down, there will be no way to retrieve this original password.
             // so in this case, should keep track of the update of default password.
             if (
-                this._masterInfo &&
-                this._selfInstance.instanceId === this._masterInfo.instanceId &&
-                this.scalingGroupName === this.masterScalingGroupName
+                this._primaryInfo &&
+                this._selfInstance.instanceId === this._primaryInfo.instanceId &&
+                this.scalingGroupName === this.primaryScalingGroupName
             ) {
                 await this.platform.setSettingItem(
                     'fortigate-default-password',
                     this._selfInstance.instanceId,
-                    'default password comes from the new elected master.',
+                    'default password comes from the new elected primary.',
                     false,
                     false
                 );
             }
-            return masterIp
+            return primaryIp
                 ? {
-                      'master-ip': this._masterInfo.primaryPrivateIpAddress
+                      'master-ip': this._primaryInfo.primaryPrivateIpAddress
                   }
                 : '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
-            // this instance is already in monitor. if the master has changed (i.e.: the current
-            // master is different from the one this instance is holding), and the new master
-            // is in a healthy state now, notify it by sending the new master ip to it.
+            // this instance is already in monitor. if the primary has changed (i.e.: the current
+            // primary is different from the one this instance is holding), and the new primary
+            // is in a healthy state now, notify it by sending the new primary ip to it.
 
-            // if no master presents (reasons: waiting for the pending master instance to become
-            // in-service; the master has been purged but no new master is elected yet.)
+            // if no primary presents (reasons: waiting for the pending primary instance to become
+            // in-service; the primary has been purged but no new primary is elected yet.)
             // keep the calling instance 'in-sync'. don't update its master-ip.
 
-            masterIp =
-                this._masterInfo && this._masterHealthCheck && this._masterHealthCheck.healthy
-                    ? this._masterInfo.primaryPrivateIpAddress
-                    : this._selfHealthCheck.masterIp;
+            primaryIp =
+                this._primaryInfo && this._primaryHealthCheck && this._primaryHealthCheck.healthy
+                    ? this._primaryInfo.primaryPrivateIpAddress
+                    : this._selfHealthCheck.primaryIp;
             let now = Date.now();
             await this.platform.updateInstanceHealthCheck(
                 this._selfHealthCheck,
                 interval,
-                masterIp,
+                primaryIp,
                 now
             );
             this.logger.info(
@@ -823,11 +823,11 @@ module.exports = class AutoscaleHandler {
                     `(${this._selfHealthCheck.healthy ? 'healthy' : 'unhealthy'}, ` +
                     `heartBeatLossCount: ${this._selfHealthCheck.heartBeatLossCount}, ` +
                     `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
-                    `syncState: ${this._selfHealthCheck.syncState}, master-ip: ${masterIp}).`
+                    `syncState: ${this._selfHealthCheck.syncState}, master-ip: ${primaryIp}).`
             );
-            return masterIp && this._selfHealthCheck && this._selfHealthCheck.masterIp !== masterIp
+            return primaryIp && this._selfHealthCheck && this._selfHealthCheck.primaryIp !== primaryIp
                 ? {
-                      'master-ip': this._masterInfo.primaryPrivateIpAddress
+                      'master-ip': this._primaryInfo.primaryPrivateIpAddress
                   }
                 : '';
         } else {
@@ -843,7 +843,7 @@ module.exports = class AutoscaleHandler {
                 await this.platform.updateInstanceHealthCheck(
                     this._selfHealthCheck,
                     interval,
-                    this._selfHealthCheck.masterIp,
+                    this._selfHealthCheck.primaryIp,
                     Date.now(),
                     true
                 );
@@ -892,7 +892,7 @@ module.exports = class AutoscaleHandler {
         return await configSet;
     }
 
-    async getMasterConfig(parameters) {
+    async getPrimaryConfig(parameters) {
         // no dollar sign in place holders
         let config = '';
         this._baseConfig = await this.getBaseConfig();
@@ -912,7 +912,7 @@ module.exports = class AutoscaleHandler {
         return config;
     }
 
-    async getSlaveConfig(parameters) {
+    async getSecondaryConfig(parameters) {
         this._baseConfig = await this.getBaseConfig();
         const autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
@@ -927,18 +927,18 @@ module.exports = class AutoscaleHandler {
         if (!apiEndpoint) {
             errorMessage = 'Api endpoint is missing';
         }
-        if (!(parameters.masterIp || parameters.allowHeadless)) {
-            errorMessage = 'Master ip is missing';
+        if (!(parameters.primaryIp || parameters.allowHeadless)) {
+            errorMessage = 'Primary ip is missing';
         }
         if (!pskSecret) {
             errorMessage = 'psksecret is missing';
         }
-        if (!pskSecret || !apiEndpoint || !(parameters.masterIp || parameters.allowHeadless)) {
+        if (!pskSecret || !apiEndpoint || !(parameters.primaryIp || parameters.allowHeadless)) {
             throw new Error(
                 `Base config is invalid (${errorMessage}): ${JSON.stringify({
                     syncInterface: syncInterface,
                     apiEndpoint: apiEndpoint,
-                    masterIp: parameters.masterIp,
+                    primaryIp: parameters.primaryIp,
                     pskSecret: pskSecret && typeof pskSecret
                 })}`
             );
@@ -952,59 +952,59 @@ module.exports = class AutoscaleHandler {
             });
             this._baseConfig += config;
         }
-        const setMasterIp =
-            !parameters.masterIp && parameters.allowHeadless
+        const setPrimaryIp =
+            !parameters.primaryIp && parameters.allowHeadless
                 ? ''
-                : `\n    set master-ip ${parameters.masterIp}`;
+                : `\n    set master-ip ${parameters.primaryIp}`;
         return await this._baseConfig
-            .replace(new RegExp('set role master', 'gm'), `set role slave${setMasterIp}`)
+            .replace(new RegExp('set role master', 'gm'), `set role slave${setPrimaryIp}`)
             .replace(new RegExp('{CALLBACK_URL}', 'gm'), parameters.callbackUrl);
     }
 
-    async checkMasterElection() {
-        this.logger.info('calling checkMasterElection');
+    async checkPrimaryElection() {
+        this.logger.info('calling checkPrimaryElection');
         let needElection = false,
-            purgeMaster = false,
+            purgePrimary = false,
             electionLock = false,
             electionComplete = false;
 
-        // reload the master
-        await this.retrieveMaster(null, true);
-        this.logger.info('current master healthcheck:', JSON.stringify(this._masterHealthCheck));
-        // is there a master election done?
-        // check the master record and its voteState
-        // if there's a complete election, get master health check
-        if (this._masterRecord && this._masterRecord.voteState === 'done') {
-            // if master is unhealthy, we need a new election
+        // reload the primary
+        await this.retrievePrimary(null, true);
+        this.logger.info('current primary healthcheck:', JSON.stringify(this._primaryHealthCheck));
+        // is there a primary election done?
+        // check the primary record and its voteState
+        // if there's a complete election, get primary health check
+        if (this._primaryRecord && this._primaryRecord.voteState === 'done') {
+            // if primary is unhealthy, we need a new election
             if (
-                !this._masterHealthCheck ||
-                !this._masterHealthCheck.healthy ||
-                !this._masterHealthCheck.inSync
+                !this._primaryHealthCheck ||
+                !this._primaryHealthCheck.healthy ||
+                !this._primaryHealthCheck.inSync
             ) {
-                purgeMaster = needElection = true;
+                purgePrimary = needElection = true;
             } else {
-                purgeMaster = needElection = false;
+                purgePrimary = needElection = false;
             }
-        } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
-            // if there's a pending master election, and if this election is incomplete by
-            // the end-time, purge this election and starta new master election. otherwise, wait
+        } else if (this._primaryRecord && this._primaryRecord.voteState === 'pending') {
+            // if there's a pending primary election, and if this election is incomplete by
+            // the end-time, purge this election and starta new primary election. otherwise, wait
             // until it's finished
-            needElection = purgeMaster = Date.now() > this._masterRecord.voteEndTime;
+            needElection = purgePrimary = Date.now() > this._primaryRecord.voteEndTime;
         } else {
-            // if no master, try to hold a master election
+            // if no primary, try to hold a primary election
             needElection = true;
-            purgeMaster = false;
+            purgePrimary = false;
         }
-        // if we need a new master, let's hold a master election!
+        // if we need a new primary, let's hold a primary election!
         // 2019/01/14 add support for cross-scaling groups election
-        // only instance comes from the masterScalingGroup can start an election
+        // only instance comes from the primaryScalingGroup can start an election
         // all other instances have to wait
         if (needElection) {
-            // if i am in the master group, i can hold a master election
-            if (this.scalingGroupName === this.masterScalingGroupName) {
-                // can I run the election? (diagram: anyone's holding master election?)
-                // try to put myself as the master candidate
-                electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);
+            // if i am in the primary group, i can hold a primary election
+            if (this.scalingGroupName === this.primaryScalingGroupName) {
+                // can I run the election? (diagram: anyone's holding primary election?)
+                // try to put myself as the primary candidate
+                electionLock = await this.putPrimaryElectionVote(this._selfInstance, purgePrimary);
                 if (electionLock) {
                     // yes, you run it!
                     this.logger.info(
@@ -1012,76 +1012,76 @@ module.exports = class AutoscaleHandler {
                             ' is running an election.'
                     );
                     try {
-                        // (diagram: elect new master from queue (existing instances))
-                        electionComplete = await this.electMaster();
+                        // (diagram: elect new primary from queue (existing instances))
+                        electionComplete = await this.electPrimary();
                         this.logger.info(`Election completed: ${electionComplete}`);
-                        // (diagram: master exists?)
-                        this._masterRecord = null;
-                        this._masterInfo = electionComplete && (await this.getMasterInfo());
+                        // (diagram: primary exists?)
+                        this._primaryRecord = null;
+                        this._primaryInfo = electionComplete && (await this.getPrimaryInfo());
                     } catch (error) {
-                        this.logger.error('Something went wrong in the master election.');
+                        this.logger.error('Something went wrong in the primary election.');
                     }
                 } else {
-                    // election returned false, delete the current master info. do the election
+                    // election returned false, delete the current primary info. do the election
                     // again
-                    this._masterRecord = null;
-                    this._masterInfo = null;
+                    this._primaryRecord = null;
+                    this._primaryInfo = null;
                 }
             } else {
-                // i am not in the master group, i am not allowed to hold a master election
+                // i am not in the primary group, i am not allowed to hold a primary election
                 this.logger.info(
                     `This instance (id: ${this._selfInstance.instanceId}) not in ` +
-                        'the master group, cannot hold election but wait for someone else to hold ' +
+                        'the primary group, cannot hold election but wait for someone else to hold ' +
                         'an election.'
                 );
             }
         }
-        return Promise.resolve(this._masterInfo); // return the new master
+        return Promise.resolve(this._primaryInfo); // return the new primary
     }
 
     /**
-     * get the elected master instance info from the platform
+     * get the elected primary instance info from the platform
      */
-    async getMasterInfo() {
-        this.logger.info('calling getMasterInfo');
+    async getPrimaryInfo() {
+        this.logger.info('calling getPrimaryInfo');
         try {
-            this._masterRecord = this._masterRecord || (await this.platform.getMasterRecord());
+            this._primaryRecord = this._primaryRecord || (await this.platform.getPrimaryRecord());
         } catch (ex) {
             this.logger.error(ex);
         }
         return (
-            this._masterRecord &&
+            this._primaryRecord &&
             (await this.platform.describeInstance({
-                instanceId: this._masterRecord.instanceId,
-                scalingGroupName: this._masterRecord.scalingGroupName
+                instanceId: this._primaryRecord.instanceId,
+                scalingGroupName: this._primaryRecord.scalingGroupName
             }))
         );
     }
 
     /**
-     * Submit an election vote for this ip address to become the master.
-     * @param {Object} candidateInstance instance of the FortiGate which wants to become the master
-     * @param {Object} purgeMasterRecord master record of the old master, if it's dead.
+     * Submit an election vote for this ip address to become the primary.
+     * @param {Object} candidateInstance instance of the FortiGate which wants to become the primary
+     * @param {Object} purgePrimaryRecord primary record of the old primary, if it's dead.
      */
-    async putMasterElectionVote(candidateInstance, purgeMasterRecord = null) {
+    async putPrimaryElectionVote(candidateInstance, purgePrimaryRecord = null) {
         try {
-            this.logger.log('masterElectionVote, purge master?', JSON.stringify(purgeMasterRecord));
-            if (purgeMasterRecord) {
+            this.logger.log('primaryElectionVote, purge primary?', JSON.stringify(purgePrimaryRecord));
+            if (purgePrimaryRecord) {
                 try {
-                    const purged = await this.purgeMaster();
+                    const purged = await this.purgePrimary();
                     this.logger.log('purged: ', purged);
                 } catch (error) {
-                    this.logger.log('no master purge');
+                    this.logger.log('no primary purge');
                 }
             } else {
-                this.logger.log('no master purge');
+                this.logger.log('no primary purge');
             }
-            return await this.platform.putMasterRecord(candidateInstance, 'pending', 'new');
+            return await this.platform.putPrimaryRecord(candidateInstance, 'pending', 'new');
         } catch (ex) {
             this.logger.warn(
-                'exception while putMasterElectionVote',
+                'exception while putPrimaryElectionVote',
                 JSON.stringify(candidateInstance),
-                JSON.stringify(purgeMasterRecord),
+                JSON.stringify(purgePrimaryRecord),
                 ex instanceof Error ? { message: ex.message, stack: ex.stack } : ex
             );
             return false;
@@ -1089,28 +1089,28 @@ module.exports = class AutoscaleHandler {
     }
 
     /**
-     * Do the master election
+     * Do the primary election
      * @returns {boolean} if election has been successfully completed
      */
-    async electMaster() {
-        // return the current master record
-        return !!(await this.platform.getMasterRecord());
+    async electPrimary() {
+        // return the current primary record
+        return !!(await this.platform.getPrimaryRecord());
     }
 
-    async completeMasterElection(ip) {
+    async completePrimaryElection(ip) {
         await this.throwNotImplementedException();
         return ip;
     }
 
-    async completeMasterInstance(instanceId) {
+    async completePrimaryInstance(instanceId) {
         await this.throwNotImplementedException();
         return instanceId;
     }
 
-    responseToHeartBeat(masterIp) {
+    responseToHeartBeat(primaryIp) {
         let response = {};
-        if (masterIp) {
-            response['master-ip'] = masterIp;
+        if (primaryIp) {
+            response['master-ip'] = primaryIp;
         }
         return JSON.stringify(response);
     }
@@ -1301,16 +1301,16 @@ module.exports = class AutoscaleHandler {
                     description = 'The FortiGate sync heartbeat interval in second.';
                     editable = true;
                     break;
-                case 'masterelectiontimeout':
-                    keyName = 'master-election-timeout';
-                    description = 'The FortiGate master election timtout time in second.';
+                case 'primaryelectiontimeout':
+                    keyName = 'primary-election-timeout';
+                    description = 'The FortiGate primary election timtout time in second.';
                     editable = true;
                     break;
-                case 'masterelectionnowait':
-                    keyName = 'master-election-no-wait';
+                case 'primaryelectionnowait':
+                    keyName = 'primary-election-no-wait';
                     description =
-                        'Do not wait for the new master to come up. This FortiGate ' +
-                        'can receive the new master ip in one of its following heartbeat sync.';
+                        'Do not wait for the new primary to come up. This FortiGate ' +
+                        'can receive the new primary ip in one of its following heartbeat sync.';
                     editable = true;
                     break;
                 case 'heartbeatlosscount':
@@ -1328,9 +1328,9 @@ module.exports = class AutoscaleHandler {
                     description = 'The FortiGate Autoscale handler URL.';
                     editable = false;
                     break;
-                case 'masterscalinggroupname':
-                    keyName = 'master-scaling-group-name';
-                    description = 'The name of the master auto scaling group.';
+                case 'primaryscalinggroupname':
+                    keyName = 'primary-scaling-group-name';
+                    description = 'The name of the primary auto scaling group.';
                     editable = false;
                     break;
                 case 'paygscalinggroupname':
@@ -1508,23 +1508,23 @@ module.exports = class AutoscaleHandler {
         await this.throwNotImplementedException();
     }
 
-    async resetMasterElection() {
-        this.logger.info('calling resetMasterElection');
+    async resetPrimaryElection() {
+        this.logger.info('calling resetPrimaryElection');
         try {
-            this.setScalingGroup(this._settings['master-scaling-group-name']);
-            await this.platform.removeMasterRecord();
-            this.logger.info('called resetMasterElection. done.');
+            this.setScalingGroup(this._settings['primary-scaling-group-name']);
+            await this.platform.removePrimaryRecord();
+            this.logger.info('called resetPrimaryElection. done.');
             return true;
         } catch (error) {
-            this.logger.info('called resetMasterElection. failed.', error);
+            this.logger.info('called resetPrimaryElection. failed.', error);
             return false;
         }
     }
 
-    async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
+    async addInstanceToMonitor(instance, heartBeatInterval, primaryIp = 'null') {
         return (
             (await this.throwNotImplementedException()) ||
-            (instance && heartBeatInterval && masterIp)
+            (instance && heartBeatInterval && primaryIp)
         );
     }
 
@@ -1533,64 +1533,64 @@ module.exports = class AutoscaleHandler {
         return await this.platform.deleteInstanceHealthCheck(instanceId);
     }
 
-    async retrieveMaster(filters = null, reload = false) {
+    async retrievePrimary(filters = null, reload = false) {
         if (reload) {
-            this._masterInfo = null;
-            this._masterHealthCheck = null;
-            this._masterRecord = null;
+            this._primaryInfo = null;
+            this._primaryHealthCheck = null;
+            this._primaryRecord = null;
         }
-        if (!this._masterInfo && (!filters || (filters && filters.masterInfo))) {
-            this._masterInfo = await this.getMasterInfo();
+        if (!this._primaryInfo && (!filters || (filters && filters.primaryInfo))) {
+            this._primaryInfo = await this.getPrimaryInfo();
         }
-        if (!this._masterHealthCheck && (!filters || (filters && filters.masterHealthCheck))) {
-            if (!this._masterInfo) {
-                this._masterInfo = await this.getMasterInfo();
+        if (!this._primaryHealthCheck && (!filters || (filters && filters.primaryHealthCheck))) {
+            if (!this._primaryInfo) {
+                this._primaryInfo = await this.getPrimaryInfo();
             }
-            if (this._masterInfo) {
-                // TODO: master health check should not depend on the current hb
-                this._masterHealthCheck = await this.platform.getInstanceHealthCheck({
-                    instanceId: this._masterInfo.instanceId,
-                    scalingGroupName: this._masterInfo.scalingGroupName
+            if (this._primaryInfo) {
+                // TODO: primary health check should not depend on the current hb
+                this._primaryHealthCheck = await this.platform.getInstanceHealthCheck({
+                    instanceId: this._primaryInfo.instanceId,
+                    scalingGroupName: this._primaryInfo.scalingGroupName
                 });
             }
         }
-        if (!this._masterRecord && (!filters || (filters && filters.masterRecord))) {
-            this._masterRecord = await this.platform.getMasterRecord();
+        if (!this._primaryRecord && (!filters || (filters && filters.primaryRecord))) {
+            this._primaryRecord = await this.platform.getPrimaryRecord();
         }
         return {
-            masterInfo: this._masterInfo,
-            masterHealthCheck: this._masterHealthCheck,
-            masterRecord: this._masterRecord
+            primaryInfo: this._primaryInfo,
+            primaryHealthCheck: this._primaryHealthCheck,
+            primaryRecord: this._primaryRecord
         };
     }
 
-    async purgeMaster() {
-        // TODO: double check that the work flow of terminating the master instance here
+    async purgePrimary() {
+        // TODO: double check that the work flow of terminating the primary instance here
         // is appropriate
         try {
             let asyncTasks = [];
-            await this.retrieveMaster();
-            // if has master health check record, make it out-of-sync
-            if (this._masterInfo && this._masterHealthCheck) {
+            await this.retrievePrimary();
+            // if has primary health check record, make it out-of-sync
+            if (this._primaryInfo && this._primaryHealthCheck) {
                 asyncTasks.push(
                     this.platform.updateInstanceHealthCheck(
-                        this._masterHealthCheck,
+                        this._primaryHealthCheck,
                         AutoscaleHandler.NO_HEART_BEAT_INTERVAL_SPECIFIED,
-                        this._masterInfo.primaryPrivateIpAddress,
+                        this._primaryInfo.primaryPrivateIpAddress,
                         Date.now(),
                         true
                     )
                 );
             }
             asyncTasks.push(
-                this.platform.removeMasterRecord(),
-                this.removeInstance(this._masterInfo)
+                this.platform.removePrimaryRecord(),
+                this.removeInstance(this._primaryInfo)
             );
             let result = await Promise.all(asyncTasks);
             return !!result;
         } catch (error) {
             this.logger.error(
-                'called purgeMaster > error: ',
+                'called purgePrimary > error: ',
                 JSON.stringify(
                     error instanceof Error ? { message: error.message, stack: error.stack } : error
                 )
@@ -1599,7 +1599,7 @@ module.exports = class AutoscaleHandler {
         }
     }
 
-    async deregisterMasterInstance(instance) {
+    async deregisterPrimaryInstance(instance) {
         return (await this.throwNotImplementedException()) || instance;
     }
 
@@ -1607,10 +1607,10 @@ module.exports = class AutoscaleHandler {
         return (await this.throwNotImplementedException()) || instance;
     }
 
-    setScalingGroup(master, self) {
-        if (master) {
-            this.masterScalingGroupName = master;
-            this.platform.setMasterScalingGroup(master);
+    setScalingGroup(primary, self) {
+        if (primary) {
+            this.primaryScalingGroupName = primary;
+            this.platform.setPrimaryScalingGroup(primary);
         }
         if (self) {
             this.scalingGroupName = self;

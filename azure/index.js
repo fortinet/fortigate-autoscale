@@ -14,7 +14,7 @@ const DATABASE_NAME = `FortiGateAutoscale${UNIQUE_ID}`;
 const DB = AutoScaleCore.dbDefinitions.getTables(RESOURCE_TAG_PREFIX);
 const MINIMUM_REQUIRED_DB_TABLE_KEYS = [
     'FORTIGATEAUTOSCALE',
-    'FORTIGATEMASTERELECTION',
+    'FORTIGATEPRIMARYELECTION',
     'SETTINGS'
 ];
 const moduleId = AutoScaleCore.Functions.uuidGenerator(
@@ -277,12 +277,12 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /** @override */
-    async putMasterRecord(candidateInstance, voteState, method = 'new') {
+    async putPrimaryRecord(candidateInstance, voteState, method = 'new') {
         try {
-            let electionTimeout = parseInt(this._settings['master-election-timeout']);
+            let electionTimeout = parseInt(this._settings['primary-election-timeout']);
             let document = {
-                id: this.masterScalingGroupName,
-                scalingGroupName: this.masterScalingGroupName,
+                id: this.primaryScalingGroupName,
+                scalingGroupName: this.primaryScalingGroupName,
                 ip: candidateInstance.primaryPrivateIpAddress,
                 instanceId: candidateInstance.instanceId,
                 vpcId: candidateInstance.virtualNetworkId,
@@ -290,7 +290,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 voteEndTime: Date.now() + (electionTimeout - 5) * 1000,
                 voteState: voteState
             };
-            const TABLE = DB.FORTIGATEMASTERELECTION;
+            const TABLE = DB.FORTIGATEPRIMARYELECTION;
             return !!(await dbClient.createDocument(
                 DATABASE_NAME,
                 TABLE.TableName,
@@ -300,7 +300,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             ));
         } catch (error) {
             logger.warn(
-                'error occurs in putMasterRecord:',
+                'error occurs in putPrimaryRecord:',
                 JSON.stringify(
                     error instanceof Error ? { message: error.message, stack: error.stack } : error
                 )
@@ -310,15 +310,15 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     }
 
     /**
-     * Get the master record from db
-     * @returns {Object} Master record of the FortiGate which should be the auto-sync master
+     * Get the primary record from db
+     * @returns {Object} Primary record of the FortiGate which should be the auto-sync primary
      */
-    async getMasterRecord() {
+    async getPrimaryRecord() {
         const keyExpression = {
             name: 'scalingGroupName',
-            value: this.masterScalingGroupName
+            value: this.primaryScalingGroupName
         };
-        const TABLE = DB.FORTIGATEMASTERELECTION;
+        const TABLE = DB.FORTIGATEPRIMARYELECTION;
         let items = await dbClient.simpleQueryDocument(
             DATABASE_NAME,
             TABLE.TableName,
@@ -329,21 +329,21 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
             }
         );
         if (!Array.isArray(items) || items.length === 0) {
-            logger.info('No elected master was found in the db!');
+            logger.info('No elected primary was found in the db!');
             return null;
         }
-        logger.info(`Elected master found: ${JSON.stringify(items[0])}`, JSON.stringify(items));
+        logger.info(`Elected primary found: ${JSON.stringify(items[0])}`, JSON.stringify(items));
         return items[0];
     }
 
     /** @override */
-    async removeMasterRecord() {
+    async removePrimaryRecord() {
         try {
-            const TABLE = DB.FORTIGATEMASTERELECTION;
+            const TABLE = DB.FORTIGATEPRIMARYELECTION;
             return await dbClient.deleteDocument(
                 DATABASE_NAME,
                 TABLE.TableName,
-                this.masterScalingGroupName,
+                this.primaryScalingGroupName,
                 true
             );
         } catch (error) {
@@ -353,22 +353,22 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
-    async finalizeMasterElection() {
+    async finalizePrimaryElection() {
         try {
-            logger.info('calling finalizeMasterElection');
-            let electedMaster = this._masterRecord || (await this.getMasterRecord());
-            electedMaster.voteState = 'done';
-            const TABLE = DB.FORTIGATEMASTERELECTION;
+            logger.info('calling finalizePrimaryElection');
+            let electedPrimary = this._primaryRecord || (await this.getPrimaryRecord());
+            electedPrimary.voteState = 'done';
+            const TABLE = DB.FORTIGATEPRIMARYELECTION;
             let result = await dbClient.replaceDocument(
                 DATABASE_NAME,
                 TABLE.TableName,
-                electedMaster,
+                electedPrimary,
                 TABLE.KeySchema[0].AttributeName
             );
-            logger.info(`called finalizeMasterElection, result: ${JSON.stringify(result)}`);
+            logger.info(`called finalizePrimaryElection, result: ${JSON.stringify(result)}`);
             return !!result;
         } catch (error) {
-            logger.warn('called finalizeMasterElection, error:', error);
+            logger.warn('called finalizePrimaryElection, error:', error);
             return false;
         }
     }
@@ -502,7 +502,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                 heartBeatLossCount: heartBeatLossCount,
                 heartBeatInterval: interval,
                 nextHeartBeatTime: Date.now() + interval * 1000,
-                masterIp: healthCheckRecord.masterIp,
+                primaryIp: healthCheckRecord.primaryIp,
                 syncState: healthCheckRecord.syncState,
                 inSync: healthCheckRecord.syncState === 'in-sync',
                 inevitableFailToSyncTime: inevitableFailToSyncTime,
@@ -525,7 +525,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
     async updateInstanceHealthCheck(
         healthCheckObject,
         heartBeatInterval,
-        masterIp,
+        primaryIp,
         checkPointTime,
         forceOutOfSync = false
     ) {
@@ -550,7 +550,7 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
                     heartBeatInterval: heartBeatInterval,
                     syncState:
                         healthCheckObject.healthy && !forceOutOfSync ? 'in-sync' : 'out-of-sync',
-                    masterIp: masterIp ? masterIp : 'null'
+                    primaryIp: primaryIp ? primaryIp : 'null'
                 };
             if (!forceOutOfSync && healthCheckObject.syncState === 'out-of-sync') {
                 logger.info(`instance already out of sync: healthcheck info: ${healthCheckObject}`);
@@ -1254,7 +1254,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
         this._electionLock = null;
         this._selfInstance = null;
         this.scalingGroupName = null;
-        this.masterScalingGroupName = null;
+        this.primaryScalingGroupName = null;
     }
 
     proxyResponse(statusCode, res, logOptions = null) {
@@ -1355,9 +1355,9 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     async handleGetConfig() {
         logger.info('calling handleGetConfig');
         let config,
-            masterInfo,
+            primaryInfo,
             params = {},
-            masterIp,
+            primaryIp,
             duplicatedGetConfigCall;
 
         // FortiGate actually returns its vmId instead of instanceid
@@ -1378,71 +1378,71 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
                     'Instance not found in scale set.'
             );
         }
-        // let result = await this.checkMasterElection();
-        let promiseEmitter = this.checkMasterElection.bind(this),
+        // let result = await this.checkPrimaryElection();
+        let promiseEmitter = this.checkPrimaryElection.bind(this),
             validator = result => {
                 // TODO: remove the workaround if mantis item: #0534971 is resolved
-                // if i am the master, don't wait, continue, if not, wait
+                // if i am the primary, don't wait, continue, if not, wait
                 // this if-condition is to work around the double GET config calls.
                 if (
-                    this._masterRecord &&
-                    this._masterRecord.voteState === 'pending' &&
+                    this._primaryRecord &&
+                    this._primaryRecord.voteState === 'pending' &&
                     this._selfInstance &&
-                    this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                    this._masterRecord.scalingGroupName === this.scalingGroupName
+                    this._primaryRecord.instanceId === this._selfInstance.instanceId &&
+                    this._primaryRecord.scalingGroupName === this.scalingGroupName
                 ) {
                     duplicatedGetConfigCall = true;
-                    masterIp = this._masterRecord.ip;
+                    primaryIp = this._primaryRecord.ip;
                     return true;
                 }
 
-                // if neither a pending master nor a master instance is found on the master
-                // scaling group. and if master-election-no-wait is enabled, allow this fgt
-                // to wake up without a master ip.
+                // if neither a pending primary nor a primary instance is found on the primary
+                // scaling group. and if primary-election-no-wait is enabled, allow this fgt
+                // to wake up without a primary ip.
                 // this also implies this instance cannot be elected as the next maste which
-                // means it should be a slave.
+                // means it should be a secondary.
 
-                // master info exists
+                // primary info exists
                 if (result) {
-                    // i am the elected master
+                    // i am the elected primary
                     if (
                         result.primaryPrivateIpAddress ===
                         this._selfInstance.primaryPrivateIpAddress
                     ) {
-                        masterIp = this._selfInstance.primaryPrivateIpAddress;
+                        primaryIp = this._selfInstance.primaryPrivateIpAddress;
                         return true;
-                    } else if (this._masterRecord) {
-                        // i am not the elected master, how is the master election going?
-                        if (this._masterRecord.voteState === 'done') {
-                            // master election done
+                    } else if (this._primaryRecord) {
+                        // i am not the elected primary, how is the primary election going?
+                        if (this._primaryRecord.voteState === 'done') {
+                            // primary election done
                             return true;
-                        } else if (this._masterRecord.voteState === 'pending') {
-                            // master is still pending
-                            // if not wait for the master election to complete,
-                            if (this._settings['master-election-no-wait'] === 'true') {
+                        } else if (this._primaryRecord.voteState === 'pending') {
+                            // primary is still pending
+                            // if not wait for the primary election to complete,
+                            if (this._settings['primary-election-no-wait'] === 'true') {
                                 return true;
                             } else {
-                                // master election not done, wait for a moment
-                                // clear the current master record cache and get a new one
+                                // primary election not done, wait for a moment
+                                // clear the current primary record cache and get a new one
                                 // in the next call
-                                this._masterRecord = null;
+                                this._primaryRecord = null;
                                 return false;
                             }
                         }
                     } else {
-                        // master info exists but no master record?
+                        // primary info exists but no primary record?
                         // this looks like a case that shouldn't happen. do the election again?
-                        logger.warn('master info found but master record not found. retry.');
+                        logger.warn('primary info found but primary record not found. retry.');
                         return false;
                     }
                 } else {
-                    // master cannot be elected but I cannot be the next elected master either
-                    // if not wait for the master election to complete, let me become headless
-                    return this._settings['master-election-no-wait'] === 'true';
+                    // primary cannot be elected but I cannot be the next elected primary either
+                    // if not wait for the primary election to complete, let me become headless
+                    return this._settings['primary-election-no-wait'] === 'true';
                 }
             },
             counter = currentCount => {
-                logger.info(`wait for master election (attempt: #${currentCount})`);
+                logger.info(`wait for primary election (attempt: #${currentCount})`);
                 if (Date.now() < process.env.SCRIPT_EXECUTION_EXPIRE_TIME) {
                     return false;
                 }
@@ -1450,7 +1450,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             };
 
         try {
-            masterInfo = await AutoScaleCore.Functions.waitFor(
+            primaryInfo = await AutoScaleCore.Functions.waitFor(
                 promiseEmitter,
                 validator,
                 5000,
@@ -1458,52 +1458,52 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             );
         } catch (error) {
             logger.warn(error);
-            // if error occurs, check who is holding a master election, if it is this instance,
-            // terminates this election. then tear down this instance whether it's master or not.
-            this._masterRecord = this._masterRecord || (await this.platform.getMasterRecord());
+            // if error occurs, check who is holding a primary election, if it is this instance,
+            // terminates this election. then tear down this instance whether it's primary or not.
+            this._primaryRecord = this._primaryRecord || (await this.platform.getPrimaryRecord());
             if (
-                this._masterRecord.instanceId === this._selfInstance.instanceId &&
-                this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName
+                this._primaryRecord.instanceId === this._selfInstance.instanceId &&
+                this._primaryRecord.scalingGroupName === this._selfInstance.scalingGroupName
             ) {
-                await this.platform.removeMasterRecord();
+                await this.platform.removePrimaryRecord();
             }
             // await this.removeInstance(this._selfInstance);
             throw new Error(
-                'Failed to determine the master instance within script timeout. ' +
+                'Failed to determine the primary instance within script timeout. ' +
                     'This instance is unable to bootstrap. Please report this to administrators.'
             );
         }
 
-        // the master ip same as mine? (diagram: master IP same as mine?)
+        // the primary ip same as mine? (diagram: primary IP same as mine?)
         // this checking for 'duplicatedGetConfigCall' is to work around
         // the double GET config calls.
         // TODO: remove the workaround if mantis item: #0534971 is resolved
-        if (duplicatedGetConfigCall || masterIp === this._selfInstance.primaryPrivateIpAddress) {
-            this._step = 'handler:getConfig:getMasterConfig';
+        if (duplicatedGetConfigCall || primaryIp === this._selfInstance.primaryPrivateIpAddress) {
+            this._step = 'handler:getConfig:getPrimaryConfig';
             // must pass the event to getCallbackEndpointUrl. this is different from the
             // implementation for AWS
             params.callbackUrl = await this.platform.getCallbackEndpointUrl();
-            config = await this.getMasterConfig(params);
+            config = await this.getPrimaryConfig(params);
             logger.info(
-                'called handleGetConfig: returning master config' +
-                    `(master-ip: ${masterIp}):\n ${config}`
+                'called handleGetConfig: returning primary config' +
+                    `(master-ip: ${primaryIp}):\n ${config}`
             );
             return config;
         } else {
-            this._step = 'handler:getConfig:getSlaveConfig';
-            let getPendingMasterIp = !(
-                this._settings['master-election-no-wait'] === 'true' &&
-                this._masterRecord &&
-                this._masterRecord.voteState === 'pending'
+            this._step = 'handler:getConfig:getSecondaryConfig';
+            let getPendingPrimaryIp = !(
+                this._settings['primary-election-no-wait'] === 'true' &&
+                this._primaryRecord &&
+                this._primaryRecord.voteState === 'pending'
             );
             params.callbackUrl = await this.platform.getCallbackEndpointUrl();
-            params.masterIp =
-                (getPendingMasterIp && masterInfo && masterInfo.primaryPrivateIpAddress) || null;
-            params.allowHeadless = this._settings['master-election-no-wait'] === 'true';
-            config = await this.getSlaveConfig(params);
+            params.primaryIp =
+                (getPendingPrimaryIp && primaryInfo && primaryInfo.primaryPrivateIpAddress) || null;
+            params.allowHeadless = this._settings['primary-election-no-wait'] === 'true';
+            config = await this.getSecondaryConfig(params);
             logger.info(
-                'called handleGetConfig: returning slave config' +
-                    `(master-ip: ${params.masterIp || 'undetermined'}):\n ${config}`
+                'called handleGetConfig: returning secondary config' +
+                    `(master-ip: ${params.primaryIp || 'undetermined'}):\n ${config}`
             );
             return config;
         }
@@ -1520,7 +1520,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     }
 
     /** @override */
-    async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
+    async addInstanceToMonitor(instance, heartBeatInterval, primaryIp = 'null') {
         logger.info('calling addInstanceToMonitor');
         let document = {
             id: `${this.scalingGroupName}-${instance.instanceId}`,
@@ -1531,7 +1531,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             heartBeatLossCount: 0,
             heartBeatInterval: heartBeatInterval,
             syncState: 'in-sync',
-            masterIp: masterIp
+            primaryIp: primaryIp
         };
 
         try {
@@ -1558,20 +1558,20 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
     /**
      * @override
      */
-    async getMasterInfo() {
-        logger.info('calling getMasterInfo');
+    async getPrimaryInfo() {
+        logger.info('calling getPrimaryInfo');
         let instanceId;
         try {
-            this._masterRecord = this._masterRecord || (await this.platform.getMasterRecord());
-            instanceId = this._masterRecord && this._masterRecord.instanceId;
+            this._primaryRecord = this._primaryRecord || (await this.platform.getPrimaryRecord());
+            instanceId = this._primaryRecord && this._primaryRecord.instanceId;
         } catch (ex) {
             logger.error(ex);
         }
         return (
-            this._masterRecord &&
+            this._primaryRecord &&
             (await this.platform.describeInstance({
                 instanceId: instanceId,
-                scalingGroupName: this._masterRecord.scalingGroupName
+                scalingGroupName: this._primaryRecord.scalingGroupName
             }))
         );
     }
@@ -1588,7 +1588,7 @@ class AzureAutoscaleHandler extends AutoScaleCore.AutoscaleHandler {
             // Azure won't run this operation right away. The instance remains running for a while
             // so it keeps sending hb periodically. If remove the health check monitor,
             // the instance would be accepted into monitor as a new one with a healthy state.
-            // The potential problem here is it becomes eligible for a master election again
+            // The potential problem here is it becomes eligible for a primary election again
             // where it should not be.
             // So a better solution is the health check monitor record will be intentionally kept
             // in the db with an 'out-of-sync' state as the result.

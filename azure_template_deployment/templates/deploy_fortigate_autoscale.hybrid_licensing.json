@@ -251,11 +251,11 @@
                 "description": "Percentage of CPU utilization at which scale-in should occur."
             }
         },
-        "MasterElectionTimeout": {
+        "PrimaryElectionTimeout": {
             "type": "int",
             "defaultValue": 90,
             "metadata": {
-                "description": "The maximum time (in seconds) to wait for a master election to complete."
+                "description": "The maximum time (in seconds) to wait for a primary election to complete."
             }
         },
         "GetLicenseGracePeriod": {
@@ -333,7 +333,7 @@
         "licenseAssetKeyPrefix": "fgt-asg-license",
         "enableHybridLicensing": true,
         "enableFortiAnalyzer": false,
-        "databaseTableNameList": "[concat('FortiGateAutoscale, FortiGateMasterElection, Settings, CustomLog, VmInfoCache', if(variables('enableHybridLicensing'), ', LicenseStock, LicenseUsage', ''), if(variables('enableFortiAnalyzer'), ', FortiAnalyzer', ''))]",
+        "databaseTableNameList": "[concat('FortiGateAutoscale, FortiGatePrimaryElection, Settings, CustomLog, VmInfoCache', if(variables('enableHybridLicensing'), ', LicenseStock, LicenseUsage', ''), if(variables('enableFortiAnalyzer'), ', FortiAnalyzer', ''))]",
         "databaseSharedThroughput": "[add(add(variables('databaseSharedThroughputBase'), if(variables('enableHybridLicensing'), 200, 0)), if(variables('enableFortiAnalyzer'), 100, 0))]",
         "accessRestrictionIPString": "[if(empty(parameters('AccessRestrictionIPRange')), '', concat(parameters('AccessRestrictionIPRange'), ','))]",
         "accessRestrictionIPArray": "[split(parameters('AccessRestrictionIPRange'), ',')]",
@@ -393,7 +393,7 @@
         "ifBYOLOnly": "[and(not(equals(parameters('MaxBYOLInstanceCount'), 0)), not(equals(parameters('MaxBYOLInstanceCount'), 0)), equals(parameters('MinPAYGInstanceCount'), 0), equals(parameters('MaxPAYGInstanceCount'), 0))]",
         "licensingModel": "[if(variables('ifPAYGOnly'), 'paygonly', if(variables('ifBYOLOnly'), 'byolonly', 'hybrid'))]",
         "licensingModelName": "[if(variables('ifPAYGOnly'), 'PAYG-Only', if(variables('ifBYOLOnly'), 'BYOL-Only', 'Hybrid'))]",
-        "vmssNameMaster": "[if(variables('ifPAYGOnly'), variables('vmssNamePAYG'), variables('vmssNameBYOL'))]",
+        "vmssNamePrimary": "[if(variables('ifPAYGOnly'), variables('vmssNamePAYG'), variables('vmssNameBYOL'))]",
         "ifCreateNewPublicIP": "[equals(parameters('FrontendIPDeploymentMethod'), 'create new public IP address')]",
         "publicIPAddressName": "[if(and(variables('ifCreateNewPublicIP'), empty(parameters('FrontendIPName'))), concat(variables('vNetName'), '-ext-lb-public-ip'), parameters('FrontendIPName'))]",
         "publicIPAddressId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', variables('vNetResourceGroupName'), '/providers/Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
@@ -1596,13 +1596,13 @@
         {
             "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
-            "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiGateMasterElection')]",
+            "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiGatePrimaryElection')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
             "properties": {
                 "resource": {
-                    "id": "FortiGateMasterElection",
+                    "id": "FortiGatePrimaryElection",
                     "partitionKey": {
                         "paths": ["/scalingGroupName"],
                         "kind": "Hash"
@@ -2138,16 +2138,16 @@
                             "value": "[parameters('HeartBeatLossCount')]"
                         },
                         {
-                            "name": "MASTER_ELECTION_TIMEOUT",
-                            "value": "[parameters('MasterElectionTimeout')]"
+                            "name": "PRIMARY_ELECTION_TIMEOUT",
+                            "value": "[parameters('PrimaryElectionTimeout')]"
                         },
                         {
-                            "name": "MASTER_ELECTION_NO_WAIT",
+                            "name": "PRIMARY_ELECTION_NO_WAIT",
                             "value": "true"
                         },
                         {
-                            "name": "MASTER_SCALING_GROUP_NAME",
-                            "value": "[variables('vmssNameMaster')]"
+                            "name": "PRIMARY_SCALING_GROUP_NAME",
+                            "value": "[variables('vmssNamePrimary')]"
                         },
                         {
                             "name": "PAYG_SCALING_GROUP_NAME",
