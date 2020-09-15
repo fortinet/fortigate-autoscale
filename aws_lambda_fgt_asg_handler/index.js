@@ -110,15 +110,15 @@ async function restart() {
 
     await Promise.all(tasks);
 
-    // delete master election result
-    await autoscaleHandler.resetMasterElection();
+    // delete primary election result
+    await autoscaleHandler.resetPrimaryElection();
     // set desired capacity & min size from saved setting to start auto scaling again
     await autoscaleHandler.loadAutoScalingSettings();
     // FIXME: if bug 0560197 is fixed, the delay added here needs to remove
     // and update the capacity to settings.desiredCapacity
 
-    // if the desired capacity is >= 1, bring up the 1st instance in the master scaling group
-    // where the master scaling group is the BYOL scaling group if hybrid-licensing enabled,
+    // if the desired capacity is >= 1, bring up the 1st instance in the primary scaling group
+    // where the primary scaling group is the BYOL scaling group if hybrid-licensing enabled,
     // or the PAYG scaling group if not.
     let desiredCapacityBYOL = 0,
         minSizeBYOL = 0,
@@ -140,17 +140,17 @@ async function restart() {
 
     // update only when the desired capacity > 0 and the size constraint:
     // desired min <= desired <= max is met
-    // bring up the 1st instance which will become the master
+    // bring up the 1st instance which will become the primary
     if (
         autoscaleHandler._settings['enable-hybrid-licensing'] === 'true' &&
         desiredCapacityBYOL > 0 &&
         desiredCapacityBYOL >= minSizeBYOL &&
         desiredCapacityBYOL <= maxSizeBYOL
     ) {
-        // if master-election-no-wait feature is diabled, bring up the master instance first,
+        // if primary-election-no-wait feature is diabled, bring up the primary instance first,
         // delay 1 minute to bring up the rest
-        if (autoscaleHandler._settings['master-election-no-wait'] !== 'true') {
-            // bring up the master
+        if (autoscaleHandler._settings['primary-election-no-wait'] !== 'true') {
+            // bring up the primary
             await autoscaleHandler.updateCapacity(
                 autoscaleHandler._settings['byol-scaling-group-name'],
                 1,
@@ -160,7 +160,7 @@ async function restart() {
             // delay 1 min
             await ftgtAutoscaleAws.AutoScaleCore.Functions.sleep(60000);
         }
-        // bring up the rest instances which will become the slave(s)
+        // bring up the rest instances which will become the secondary(s)
         await autoscaleHandler.updateCapacity(
             autoscaleHandler._settings['byol-scaling-group-name'],
             desiredCapacityBYOL,
@@ -200,8 +200,8 @@ async function stop() {
         0,
         null
     );
-    // delete master election result
-    await autoscaleHandler.resetMasterElection();
+    // delete primary election result
+    await autoscaleHandler.resetPrimaryElection();
 }
 
 async function updateCapacity(scalingGroupName, desiredCapacity, minSize, maxSize) {

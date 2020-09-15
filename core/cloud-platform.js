@@ -31,8 +31,8 @@ module.exports = class CloudPlatform {
         await this.throwNotImplementedException();
     }
 
-    setMasterScalingGroup(scalingGroupName) {
-        this.masterScalingGroupName = scalingGroupName;
+    setPrimaryScalingGroup(scalingGroupName) {
+        this.primaryScalingGroupName = scalingGroupName;
     }
 
     setScalingGroup(scalingGroupName) {
@@ -40,41 +40,41 @@ module.exports = class CloudPlatform {
     }
 
     /**
-     * Submit an election vote for this ip address to become the master.
+     * Submit an election vote for this ip address to become the primary.
      * Abstract class method.
-     * @param {String} ip Ip of the FortiGate which wants to become the master
-     * @param {String} purgeMasterIp Ip of the dead master we should purge before voting
+     * @param {String} ip Ip of the FortiGate which wants to become the primary
+     * @param {String} purgePrimaryIp Ip of the dead primary we should purge before voting
      */
-    async putMasterElectionVote(ip, purgeMasterIp) {
+    async putPrimaryElectionVote(ip, purgePrimaryIp) {
         await this.throwNotImplementedException();
     }
 
     /**
-     * Submit an master record for election with a vote state.
+     * Submit an primary record for election with a vote state.
      * Abstract class method.
-     * @param {String} candidateInstance the master candidate instance
+     * @param {String} candidateInstance the primary candidate instance
      * @param {String} voteState vote state of 'pending' or 'done'
      * @param {String} method 'new' for inserting when no record exists, 'replace' for replacing
      * the existing record or the same as 'new', otherwise.
      * @returns {boolean} result. true or false
      */
-    async putMasterRecord(candidateInstance, voteState, method = 'new') {
+    async putPrimaryRecord(candidateInstance, voteState, method = 'new') {
         return await this.throwNotImplementedException();
     }
     /**
-     * Get the master record from db.
+     * Get the primary record from db.
      * Abstract class method.
-     * @returns {String} Ip of the FortiGate which should be the auto-sync master
+     * @returns {String} Ip of the FortiGate which should be the auto-sync primary
      */
-    async getMasterRecord() {
+    async getPrimaryRecord() {
         await this.throwNotImplementedException();
     }
 
     /**
-     * Remove the current master record from db.
+     * Remove the current primary record from db.
      * Abstract class method.
      */
-    async removeMasterRecord() {
+    async removePrimaryRecord() {
         await this.throwNotImplementedException();
     }
     /**
@@ -193,7 +193,7 @@ module.exports = class CloudPlatform {
      * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
      * getInstanceHealthCheck
      * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
-     * @param {String} masterIp the current master ip in autoscaling group
+     * @param {String} primaryIp the current primary ip in autoscaling group
      * @param {Number} checkPointTime the check point time of when the health check is performed.
      * @param {bool} forceOutOfSync whether force to update this record as 'out-of-sync'
      * @returns {bool} resul: true or false
@@ -201,7 +201,7 @@ module.exports = class CloudPlatform {
     async updateInstanceHealthCheck(
         healthCheckObject,
         heartBeatInterval,
-        masterIp,
+        primaryIp,
         checkPointTime,
         forceOutOfSync = false
     ) {
@@ -440,9 +440,9 @@ module.exports = class CloudPlatform {
 
     /**
      * update tags for the HA A-P based role
-     * @param {String} masterInstanceId master instance Id
+     * @param {String} primaryInstanceId primary instance Id
      */
-    async updateHAAPRoleTag(masterInstanceId) {
+    async updateHAAPRoleTag(primaryInstanceId) {
         return (await this.throwNotImplementedException()) || true;
     }
     /* eslint-enable no-unused-vars */

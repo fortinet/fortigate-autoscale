@@ -101,7 +101,7 @@
         "ScaleInThreshold": {
             "value": 20
         },
-        "MasterElectionTimeout": {
+        "PrimaryElectionTimeout": {
             "value": 90
         },
         "GetLicenseGracePeriod": {
