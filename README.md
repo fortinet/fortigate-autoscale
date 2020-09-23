@@ -1,24 +1,24 @@
-# FortiGate Autoscale
-A collection of **Node.js** modules and cloud-specific templates which support autoscale functionality for groups of FortiGate-VM instances on various cloud platforms.
 
-This project contains the code and templates for the **Amazon AWS** and **Microsoft Azure** autoscale deployments. For autoscale on **AliCloud** see the [alicloud-autoscale](https://github.com/fortinet/alicloud-autoscale/) repository. For autoscale on **GCP** see the [fortigate-autoscale-gcp](https://github.com/fortinet/fortigate-autoscale-gcp) repository.
+# FortiGate Autoscale
+A collection of **Node.js** modules and cloud-specific templates which support auto scaling functionality for groups of FortiGate-VM instances on various cloud platforms.
+
+This project contains the code and templates for the **Microsoft Azure** deployment. For deployment on other cloud platforms, visit the relevant repository:
+* The **AliCloud** deployment is in the  [alicloud-autoscale](https://github.com/fortinet/alicloud-autoscale/) repository.
+* The **Amazon AWS** deployment is in the [fortigate-autoscale-aws](https://github.com/fortinet/fortigate-autoscale-aws) repository.
+* The **GCP** deployment is in the [fortigate-autoscale-gcp](https://github.com/fortinet/fortigate-autoscale-gcp) repository.
 
 This project is organized in separate node modules:
 
- * [fortigate-autoscale/core](core) contains the core logic and provides an interface which can be extended to deal with the differences in cloud platform APIs.
+ * [fortigate-autoscale/core](core) contains the core logic and provides an interface that can be extended to deal with the differences in cloud platform APIs.
  * [fortigate-autoscale/azure](azure) contains an implementation for the **Microsoft Azure** platform API and **Cosmos DB** storage backend.
- * [fortigate-autoscale/aws](aws) contains an implementation for the **AWS SDK** platform API with a **Dynamo DB** storage backend.
 
-The project also contains a deployment script which can generate packages for each cloud service's *serverless* implementation.
+The project also contains a deployment script that can generate packages for each cloud service's *serverless* implementation.
 
 ## Supported platforms
-This project supports autoscaling for the cloud platforms listed below:
-* Amazon AWS
-* Microsoft Azure
+This project supports auto scaling for the **Microsoft Azure** cloud platform.
 
 ## Deployment packages
-
-To generate local deployment packages:
+ To generate local deployment packages:
 
   1. From the [project release page](https://github.com/fortinet/fortigate-autoscale/releases), download the source code (.zip or .tar.gz) for the latest 2.0 version.
   2. Extract the source code.
@@ -26,26 +26,24 @@ To generate local deployment packages:
 
 Deployment packages as well as source code will be available in the **dist** directory.
 
-| Package Name | Description |
-| ------ | ------ |
-| fortigate-autoscale.zip | Source code for the entire project. |
-| fortigate-autoscale-aws-cloudformation.zip | Cloud Formation template. Use this to deploy the solution on the AWS platform.|
-| fortigate-autoscale-aws-lambda.zip | Source code for the FortiGate Autoscale handler - AWS Lambda function.|
-| fortigate-autoscale-azure-funcapp.zip | Source code for the FortiGate Autoscale handler - Azure function.|
-| fortigate-autoscale-azure-template-deployment.zip | Azure template. Use this to deploy the solution on the Azure platform.|
+| Package Name                                      | Description                                                            |
+| ------------------------------------------------- | ---------------------------------------------------------------------- |
+| fortigate-autoscale.zip                           | Source code for the entire project.                                    |
+| fortigate-autoscale-azure-funcapp.zip             | Source code for the FortiGate Autoscale handler - Azure function.      |
+| fortigate-autoscale-azure-template-deployment.zip | Azure template. Use this to deploy the solution on the Azure platform. |
 
-Deployment guides are available from the Fortinet Document Library:
+## Deployment guide
+A deployment guide for FortiGate Autoscale for Azure is available from the Fortinet Document Library:
 
-  + [ FortiGate / FortiOS 6.0 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.0/deploying-auto-scaling-on-azure/6.0.0)
-  + [ FortiGate / FortiOS 6.2 Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)
-  + [ FortiGate / FortiOS 6.0 Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.0/deploying-auto-scaling-on-aws/6.0.0)
-  + [ FortiGate / FortiOS 6.2 Deploying auto scaling on AWS](https://docs.fortinet.com/vm/aws/fortigate/6.2/aws-cookbook/6.2.0/543390/deploying-auto-scaling-on-aws-without-transit-gateway-integration)
+  + [ FortiGate / FortiOS 6.2 / Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)
 
-## Launch a demo
+## Project development history
+| Version        | Details                                                                                                                                                                                          | Documentation                                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.0.x (latest) | The AWS portion of this project has been moved to [fortigate-autoscale-aws](https://github.com/fortinet/fortigate-autoscale-aws). Going forward, this project will be maintained for Azure only. | [ FortiGate / FortiOS 6.2 / Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure) |
+| 2.0.x          | Added support for Hybrid Licensing (any combination of BYOL and/or PAYG).                                                                                                                        | A PDF for AWS is available in the 2.0.10 branch.                                                                                                                           |
+| 1.0.x          | Supports auto scaling for PAYG instances only.                                                                                                                                                   | PDFs for AWS and for Azure are available in the 1.0.6 branch.                                                                                                              |
 
-| AWS (new VPC) | AWS (existing VPC) | Azure |
-| ------ | ------ | ------|
-| <a href="https://console.aws.amazon.com/cloudformation/home?#/stacks/quickcreate?templateUrl=https%3A%2F%2Fs3-us-west-2.amazonaws.com%2Ffortinet-github-aws-release-artifacts%2Ffortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2Ftemplates%2Fautoscale-new-vpc.template&param_S3BucketName=fortinet-github-aws-release-artifacts&param_S3KeyPrefix=fortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2F&stackName=fortigate-autoscale-demo&param_ResourceTagPrefix=fortigate-autoscale-demo" target="_blank"> <img alt="Launch Stack" src="https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png"></a> | <a href="https://console.aws.amazon.com/cloudformation/home?#/stacks/quickcreate?templateUrl=https%3A%2F%2Fs3-us-west-2.amazonaws.com%2Ffortinet-github-aws-release-artifacts%2Ffortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2Ftemplates%2Fautoscale-existing-vpc.template&param_S3BucketName=fortinet-github-aws-release-artifacts&param_S3KeyPrefix=fortigate-autoscale%2Fmaster%2Ffortigate-autoscale-aws-cloudformation%2F&stackName=fortigate-autoscale-demo&param_ResourceTagPrefix=fortigate-autoscale-demo" target="_blank"> <img alt="Launch Stack" src="https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png"></a> | <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmaster%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a> |
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
@@ -53,4 +51,4 @@ For direct issues, please refer to the [Issues](https://github.com/fortinet/fort
 For other questions related to this project, contact [github@fortinet.com](mailto:github@fortinet.com).
 
 ## License
-[License](https://github.com/fortinet/fortigate-autoscale/blob/master/LICENSE) © Fortinet Technologies. All rights reserved.
+[License](./LICENSE) © Fortinet Technologies. All rights reserved.

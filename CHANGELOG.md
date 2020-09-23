@@ -4,11 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2020-09-10
+## [3.0.0] - 2020-09-23
 ### Changed
 - applied primary/secondary terminology update.
 - BREAKING CHANGE: some template parameter names, DB table, and record columns changed due to the terminology update
--
+
+### Deleted
+- BREAKING CHANGE: removed AWS portion. (moved to the new project: https://github.com/fortinet/fortigate-autoscale-aws)
+
 ## [2.0.9] - 2020-09-01
 ### Changed
 - fixed AWS improperly receiving initial auto scaling events
