@@ -800,11 +800,9 @@ async function makeDistAzureTemplateDeployment() {
 }
 
 async function makeDistAll() {
-    await makeDistAWSLambdaFgtAsgHandler();
     await makeDistAzureFuncApp();
     await makeDistAzureTemplateDeployment();
     await makeDistProject();
-    await makeDistAwsCloudFormation();
 }
 
 async function unzipAWSArtifacts() {
@@ -830,37 +828,11 @@ switch (scrptName.toLowerCase()) {
     case 'azure-funcapp':
         makeDistAzureFuncApp();
         break;
-    case 'aws-lambda-fgt-asg-handler':
-        makeDistAWSLambdaFgtAsgHandler();
-        break;
-    case 'aws-lambda-faz-handler':
-        makeDistAWSLambdaFazHandler();
-        break;
-    case 'aws-lambda-nic-attachment':
-        makeDistAWSLambdaNicAttachment();
-        break;
-    case 'aws-lambda-tgw-vpn-handler':
-        makeDistAWSLambdaTgwVpnHandler();
-        break;
-    case 'aws-cloudformation':
-        makeDistAwsCloudFormation({ quickstart: false, fazhandler: false });
-        break;
-    case 'aws-quickstart-special':
-        makeDistAwsCloudFormation({
-            nicAttachment: true,
-            fazSupport: true,
-            tgwIntegration: false,
-            quickstart: true
-        });
-        break;
     case 'project':
         makeDistProject();
         break;
     case 'all':
         makeDistAll();
-        break;
-    case 'unzip-aws-artifacts':
-        unzipAWSArtifacts();
         break;
     default:
         console.warn('( ͡° ͜ʖ ͡°) Usage: please use one of these commands:');
@@ -868,12 +840,6 @@ switch (scrptName.toLowerCase()) {
         console.warn('npm run build-project');
         console.warn('npm run build-azure-funcapp');
         console.warn('npm run build-azure-template-deployment');
-        console.warn('npm run build-aws-lambda-fgt-asg-handler');
-        console.warn('npm run build-aws-lambda-faz-handler');
-        console.warn('npm run build-aws-lambda-nic-attachment');
-        console.warn('npm run build-aws-lambda-tgw-vpn-handler');
-        console.warn('npm run build-aws-cloudformation');
-        console.warn('npm run build-aws-quickstart-special');
         break;
 }
 /* eslint-enable no-unused-vars */

@@ -3,10 +3,7 @@ node_js: 8.11.1
 script:
   - npm install
   - npm run build
-  - npm run unzip-aws-artifacts
   - git describe
-before_deploy:
-  - pip install --user --upgrade awscli
 deploy:
   - provider: releases
     api_key:
@@ -18,13 +15,3 @@ deploy:
       repo: fortinet/fortigate-autoscale
       tags: true
       branch: master
-  - provider: script
-    script: ~/.local/bin/aws s3 sync distAWS s3://fortinet-github-aws-release-artifacts/fortigate-autoscale/$TRAVIS_BRANCH --region=us-west-2 --delete --acl=public-read
-    skip_cleanup: true
-    on:
-      all_branches: true
-      condition: "$TRAVIS_BRANCH != dependabot"
-env:
-  global:
-  - secure: rQvbKkHJvtIFuJyyAD01AogEr6xWXRPysOpmQNydzfKoNfJ2CD9SnDGsZEB76FQPjtZednEh6LIBnMNoSVAhUfmiJTi3u5sEMSZTF2tekQjm/lhubHYGV/uPvDMXq36wreUjwWHL2PeBYAV7Ldu2UG/gyAtWo87hPzQlp8B9i7YGn4vTPmFgUnDKJ7S13d3AYNe+6CT/CoitPnCBQXANcGeXijbAhhM8inSsTI1laQtETTeo+l6vqVu8FspHpxoHKBzHIWq6BW+wCxgux9BZaqNN+d3OQxhcelSVabLA7VQSrYCEQ4lMy8fUMZ5pkDc9SjYhcOPIBxGHUQHXihubHqVTW8Cq0Cnc03zjPI/zt2dsoC9EfcuG+SoV/WUOePAxtXHN3vnEtoZZ2WVLephhLuF6ghqDIPcBZ9V7oEUYpjqqQs3rpE/gAWCThvJONSw4bXqZiqbzXmGSCKzUIPBykLQQaib8jfRUS/bjXbNTBNjejUKaPTCwGv1ZBSn87hw/rAxtUwyRldO76x+U6AhDYkHaCpjzolFPE+nIDEJl2segGVxUqqKiFEDxJrPm7oKKASrVsKrG4misnhnSMa/h9KnOGVgkELaq+yRy85lEItJW7MUN9l67DG4Nde/v1DrZ5AtM8XeIcqOV9cMhbr3j+kkcB9h2qwl2IV/ZTrm/oVM=
-  - secure: vEl9Fw0N9oIXUdeyYnyLxvVFgx3lRr5wt/Z7YncGesgLUTN1ElLzfM0R0Df0xpDcpuR7FjthPkBmHi1ng/hO6kNGfwDbbdhJNZ4MxybzkKCZAbT7tbs7hGracA7SfBSIEW9/dArdHlzekogzizFOwe0ZT2/cIiI+ICt9oa2iSPIG3ttEE7P7cgcxdsGqmDu8Jdo6dJD4pgzQ++OXbUjfipPhZR7y45joenkhkcDZBUFUNrJwP2lXJIYe7vHTHehF3i7aSkvBe9JAV6AvdDKjhGWTEC5kDDA2x3lPeqCOU9JD/ClGJWrLIz14FhFxioQxyGCf/xPsGjiobsYhCF1GZ92/WS959GoqLnOVd0hx58lLmt07EFk6oKlkcQDB4vS6TeBpm5Vu4ok/sPqnxD1uEGVps5WVVbxBNJwHugsBVMRifDxiiXiuZFRFcUPOxTchg02ZW3aqkAPMjh+tqMTKTTy47KuyDzNl98C+4d4gpGkSizvWFVcpnCyCn2PTW+A+B7ycRXlFB/VDVCGYGaBKVhemHu8SMqg+L6uIQeyb3DJtVbwaAc+0uFAp2aBA21bojpiUl29mUmHr1g/HrV0sMW/mb5kWOBLABV++a9w6OoFFimarsXEBu6sFOv7pcBZTPSR2iz42WAfelF/TTIw3PZeGvFS/5lijn0Py4HWA0Y4=
