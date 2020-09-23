@@ -1,6 +1,6 @@
 {
     "name": "fortigate-autoscale",
-    "version": "2.0.9",
+    "version": "3.0.0",
     "description": "FortiGate Autoscale Project",
     "main": "index.js",
     "directories": {
