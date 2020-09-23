@@ -1,6 +1,0 @@
-config sys interface
-    edit "port2"
-        set mode dhcp
-        set allowaccess ping https ssh http fgfm
-    next
-end

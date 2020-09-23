@@ -1,8 +1,0 @@
-config log fortianalyzer setting
-    set status enable
-    set server "{FAZ_PRIVATE_IP}"
-    set reliable enable
-end
-config report setting
-    set pdf-report disable
-end
