@@ -37,6 +37,9 @@ A deployment guide for FortiGate Autoscale for Azure is available from the Forti
 
   + [ FortiGate / FortiOS 6.2 / Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)
 
+## Launch a demo
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmaster%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a>
+
 ## Project development history
 | Version      | Details                                                                                                                                                                                          | Documentation                                                                                                                                                                                                                                                                                                                                                       |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
