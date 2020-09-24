@@ -14,4 +14,4 @@ deploy:
     on:
       repo: fortinet/fortigate-autoscale
       tags: true
-      branch: master
+      branch: main
