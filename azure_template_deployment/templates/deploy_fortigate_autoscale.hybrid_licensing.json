@@ -708,7 +708,8 @@
         },
         {
             "dependsOn": [
-                "[variables('storageAccountName')]"
+                "[variables('storageAccountName')]",
+                "[variables('functionAppName')]"
             ],
             "apiVersion": "2018-05-01",
             "name": "VNetRelatedResources",
@@ -1229,7 +1230,8 @@
                             "dependsOn": [
                                 "[variables('externalLoadBalancerName')]",
                                 "[variables('internalLoadBalancerName')]",
-                                "[variables('vNetName')]"
+                                "[variables('vNetName')]",
+                                "[variables('functionAppName')]"
                             ],
                             "plan": {
                                 "name": "[variables('fgtvmImageBYOL').sku]",
@@ -1384,7 +1386,8 @@
                             "dependsOn": [
                                 "[variables('externalLoadBalancerName')]",
                                 "[variables('internalLoadBalancerName')]",
-                                "[variables('vNetName')]"
+                                "[variables('vNetName')]",
+                                "[variables('functionAppName')]"
                             ],
                             "plan": {
                                 "name": "[variables('fgtvmImagePAYG').sku]",
