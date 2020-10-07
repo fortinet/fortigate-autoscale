@@ -383,10 +383,10 @@
             "westus2"
         ],
         "enableAzureAppInsights": "[contains(variables('functionAppInsightAvailableLocations'), variables('location'))]",
-        "databaseAccountName": "[concat(variables('uniqueResourceNamePrefix'),'dba001')]",
+        "databaseAccountName": "[concat(toLower(variables('uniqueResourceNamePrefix')),'dba001')]",
         "databaseName": "FortiGateAutoscale",
         "databaseSharedThroughputBase": 500,
-        "storageAccountName": "[concat(variables('uniqueResourceNamePrefix'),'sta001')]",
+        "storageAccountName": "[concat(toLower(variables('uniqueResourceNamePrefix')),'sta001')]",
         "storageAccountId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', variables('resourceGroupName'), '/providers/Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
         "configsetAssetKeyPrefix": "configset",
         "licenseAssetKeyPrefix": "fgt-asg-license",

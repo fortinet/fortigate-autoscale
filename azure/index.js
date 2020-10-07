@@ -878,6 +878,13 @@ class AzurePlatform extends AutoScaleCore.CloudPlatform {
         }
     }
 
+    /** @override */
+    updateHAAPRoleTag(masterInstanceId) {
+        logger.info('calling updateHAAPRoleTag. Noop required.');
+        logger.info('called updateHAAPRoleTag.');
+        return Promise.resolve(!!masterInstanceId || true);
+    }
+
     async saveLogToDb(log) {
         let timestamp = Date.now(),
             document = {
