@@ -1,5 +1,5 @@
+# FortiGate Autoscale for Azure
 
-# FortiGate Autoscale
 A collection of **Node.js** modules and cloud-specific templates which support auto scaling functionality for groups of FortiGate-VM instances on various cloud platforms.
 
 This project contains the code and templates for the **Microsoft Azure** deployment. For deployment on other cloud platforms, visit the relevant repository:
@@ -14,11 +14,8 @@ This project is organized in separate node modules:
 
 The project also contains a deployment script that can generate packages for each cloud service's *serverless* implementation.
 
-## Supported platforms
-This project supports auto scaling for the **Microsoft Azure** cloud platform.
-
 ## Deployment packages
- To generate local deployment packages:
+To generate local deployment packages:
 
   1. From the [project release page](https://github.com/fortinet/fortigate-autoscale/releases), download the source code (.zip or .tar.gz) for the latest 2.0 version.
   2. Extract the source code.
@@ -33,20 +30,20 @@ Deployment packages as well as source code will be available in the **dist** dir
 | fortigate-autoscale-azure-template-deployment.zip | Azure template. Use this to deploy the solution on the Azure platform. |
 
 ## Deployment guide
-A deployment guide for FortiGate Autoscale for Azure is available from the Fortinet Document Library:
+A deployment guide is available from the Fortinet Document Library:
 
   + [ FortiGate / FortiOS 6.2 / Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)
 
 ## Launch a demo
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmaster%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a>
 
-## Project development history
-| Version      | Details                                                                                                                                                                                          | Documentation                                                                                                                                                                                                                                                                                                                                                       |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.0 (latest) | The AWS portion of this project has been moved to [fortigate-autoscale-aws](https://github.com/fortinet/fortigate-autoscale-aws). Going forward, this project will be maintained for Azure only. | [ FortiGate / FortiOS 6.2 / Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure)                                                                                                                                                                                          |
-| 2.0          | Added support for Hybrid Licensing (any combination of BYOL and/or PAYG).                                                                                                                        | A PDF for AWS is available in the 2.0 branch.<br/>[deploying-auto-scaling-on-aws-2.0.9.pdf](https://github.com/fortinet/fortigate-autoscale/blob/2.0/docs/deploying-auto-scaling-on-aws-2.0.9.pdf)                                                                                                                                                                  |
-| 1.0          | Supports auto scaling for PAYG instances only.                                                                                                                                                   | PDFs for AWS and for Azure are available in the 1.0.6 branch.<br/>[deploying-auto-scaling-on-aws-1.0.pdf](https://github.com/fortinet/fortigate-autoscale/blob/1.0/docs/deploying-auto-scaling-on-aws-1.0.pdf)<br/>[deploying-auto-scaling-on-azure-1.0.pdf](https://github.com/fortinet/fortigate-autoscale/blob/1.0/docs/deploying-auto-scaling-on-azure-1.0.pdf) |
 
+## Project development history
+| Version | Details | Documentation |
+| ------- | ------- | ------------- |
+| 3.0 (latest) | The AWS portion of this project has been moved to [fortigate-autoscale-aws](https://github.com/fortinet/fortigate-autoscale-aws). Going forward, this project will be maintained for Azure only. | [ FortiGate / FortiOS 6.2 / Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.2/azure-cookbook/6.2.0/161167/deploying-auto-scaling-on-azure) |
+| 2.0 | Added support for Hybrid Licensing (any combination of BYOL and/or PAYG). | A PDF for AWS is available in the 2.0 branch.<br/>[deploying-auto-scaling-on-aws-2.0.9.pdf](https://github.com/fortinet/fortigate-autoscale/blob/2.0/docs/deploying-auto-scaling-on-aws-2.0.9.pdf) |
+| 1.0 | Supports auto scaling for PAYG instances only.  | PDFs for AWS and for Azure are available in the 1.0.6 branch.<br/>[deploying-auto-scaling-on-aws-1.0.pdf](https://github.com/fortinet/fortigate-autoscale/blob/1.0/docs/deploying-auto-scaling-on-aws-1.0.pdf)<br/>[deploying-auto-scaling-on-azure-1.0.pdf](https://github.com/fortinet/fortigate-autoscale/blob/1.0/docs/deploying-auto-scaling-on-azure-1.0.pdf) |
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
