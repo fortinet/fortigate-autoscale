@@ -1,332 +1,332 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.12",
     "parameters": {
         "ResourceNamePrefix": {
-            "type": "string",
             "maxLength": 10,
+            "type": "String",
             "metadata": {
                 "description": "The prefix for all applicable resource names. Can only contain uppercase letters, lowercase letters, and numbers. Maximum length is 10."
             }
         },
         "VnetDeploymentMethod": {
-            "type": "string",
             "defaultValue": "create a new VNet in the Autoscale resource group",
             "allowedValues": [
                 "create a new VNet in the Autoscale resource group",
                 "create a new VNet in the specified VNet resource group",
                 "use existing VNet in the specified VNet resource group"
             ],
+            "type": "String",
             "metadata": {
                 "description": "Options for Virtual Network (VNet) deployment. The Autoscale resource group is the one specified in the 'Resource group' parameter. The VNet resource group is the one specified in the 'VNet Resource Group Name' parameter. For requirements when using an existing resource group, refer to the documentation."
             }
         },
         "VnetResourceGroupName": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Name of the resource group that contains the VNet and related network components. Required if the VNet is not in the Autoscale resource group. For details refer to the description for the parameter VNet Deployment Method. This resource group must be in the same region as the Autoscale resource group."
             }
         },
         "VnetName": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Name of the Azure VNet to connect to FortiGate Autoscale. Required when using an existing VNet. When creating a new VNet, this parameter can be left empty and a name will be generated."
             }
         },
         "VnetAddressSpace": {
-            "type": "string",
             "defaultValue": "10.0.0.0/16",
+            "type": "String",
             "metadata": {
                 "description": "IP address space of the VNet in CIDR notation. E.g. 10.0.0.0/16. Required when using an existing VNet. The value should match the address space of the target VNet."
             }
         },
         "Subnet1Name": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Subnet 1 name. The subnet in which to deploy the FortiGate VMSS. Required when using an existing VNet. The value should match the subnet of the target VNet. When creating a new VNet, any input value will be ignored."
             }
         },
         "Subnet1AddressRange": {
-            "type": "string",
             "defaultValue": "10.0.0.0/24",
+            "type": "String",
             "metadata": {
                 "description": "When deploying to a new VNet, this defines the address range for subnet 1 in CIDR notation (e.g. 10.0.0.0/24). It must be contained by the address space of the virtual network. The address range of a subnet which is in use can't be edited. When using an existing VNet, the value should match the subnet of the target VNet."
             }
         },
         "Subnet2Name": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Subnet 2 name. One of the subnets to be protected by the FortiGate. Required when using an existing VNet. The value should match the subnet of the target VNet. When creating a new VNet, any input value will be ignored."
             }
         },
         "Subnet2AddressRange": {
-            "type": "string",
             "defaultValue": "10.0.1.0/24",
+            "type": "String",
             "metadata": {
                 "description": "When deploying to a new VNet, this defines the address range for subnet 2 in CIDR notation (e.g. 10.0.1.0/24). It must be contained by the address space of the virtual network. The address range of a subnet which is in use can't be edited. When using an existing VNet, the value should match the subnet of the target VNet."
             }
         },
         "Subnet3Name": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Subnet 3 name. One of the subnets to be protected by the FortiGate. Required when using an existing VNet. The value should match the subnet of the target VNet. When creating a new VNet, any input value will be ignored."
             }
         },
         "Subnet3AddressRange": {
-            "type": "string",
             "defaultValue": "10.0.2.0/24",
+            "type": "String",
             "metadata": {
                 "description": "When deploying to a new VNet, this defines the address range for subnet 3 in CIDR notation (e.g. 10.0.2.0/24). It must be contained by the address space of the virtual network. The address range of a subnet which is in use can't be edited. When using an existing VNet, the value should match the subnet of the target VNet."
             }
         },
         "Subnet4Name": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Subnet 4 name. One of the subnets to be protected by the FortiGate. Required when using an existing VNet. The value should match the subnet of the target VNet. When creating a new VNet, any input value will be ignored."
             }
         },
         "Subnet4AddressRange": {
-            "type": "string",
             "defaultValue": "10.0.3.0/24",
+            "type": "String",
             "metadata": {
                 "description": "When deploying to a new VNet, this defines the address range for subnet 4 in CIDR notation (e.g. 10.0.3.0/24). It must be contained by the address space of the virtual network. The address range of a subnet which is in use can't be edited. When using an existing VNet, the value should match the subnet of the target VNet."
             }
         },
         "NetworkSecurityGroupName": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "The name of the Network Security Group associated with the subnets in the VNet. Required when using an existing VNet. The value should match the name of the existing Network Security Group associated with the subnets in the VNet. When creating a new VNet, you may specify a name for the Network Security Group. If left empty a name will be generated."
             }
         },
         "FrontendIPDeploymentMethod": {
-            "type": "string",
             "defaultValue": "create new public IP address",
             "allowedValues": [
                 "create new public IP address",
                 "use existing public IP address"
             ],
+            "type": "String",
             "metadata": {
                 "description": "Deployment method for the Frontend Public IP address for the external load balancer. If set to 'create new public IP address', the IP address will be deployed to the resource group where the VNet is located. If set to 'use existing public IP address', the existing IP address must reside in the same resource group as the VNet and it must be of the 'standard' SKU in order to match the VMSS."
             }
         },
         "FrontendIPName": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Name of the Frontend Public IP address. When the 'Frontend IP Deployment Method' parameter is set to 'create new public IP address, this parameter can be left empty and a name will be generated."
             }
         },
         "LoadBalancerIP": {
-            "type": "string",
             "defaultValue": "10",
+            "type": "String",
             "metadata": {
                 "description": "The last octet of the Frontend Private IP address to be used by the Load Balancer. For example, if set to 10, the Private IP for the Load Balancer in the subnet with prefix 10.0.1.0/24 would be 10.0.1.10."
             }
         },
         "InstanceType": {
-            "type": "string",
             "defaultValue": "Standard_F4",
             "allowedValues": [
                 "Standard_F4s_v2",
                 "Standard_F4s",
                 "Standard_F4"
             ],
+            "type": "String",
             "metadata": {
                 "description": "Size of the VMs in the VMSS."
             }
         },
         "FOSVersion": {
             "defaultValue": "6.2.3",
-            "type": "string",
-            "metadata": {
-                "description": "FortiOS version supported by FortiGate Autoscale for Azure."
-            },
             "allowedValues": [
                 "6.2.3",
                 "6.0.9"
-            ]
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "FortiOS version supported by FortiGate Autoscale for Azure."
+            }
         },
         "FortiGatePSKSecret": {
-            "type": "securestring",
+            "type": "SecureString",
             "metadata": {
                 "description": "The secret key for the FortiGates instances to securely communicate with each other. Must contain numbers and letters and may contain special characters. Maximum length is 128."
             }
         },
         "AdminUsername": {
             "defaultValue": "azureadmin",
-            "type": "string",
+            "type": "String",
             "metadata": {
                 "description": "FortiGate administrator username on all VMs."
             }
         },
         "AdminPassword": {
-            "type": "securestring",
+            "type": "SecureString",
             "metadata": {
                 "description": "FortiGate administrator password on all VMs. This field must be between 11 and 26 characters and must include at least one uppercase letter, one lowercase letter, one digit, and one special character such as (! @ # $ %)."
             }
         },
         "AccessRestrictionIPRange": {
-            "type": "string",
             "defaultValue": "",
+            "type": "String",
             "metadata": {
                 "description": "Specify IP ranges (single IPv4 or CIDR range) to allow access from the Internet or from your on-premises network to the CosmosDB and Function App. Specify at least one entry for security purposes. For multiple entries, each entry must be separated by a comma and no trailing comma is allowed. **WARNING!** 0.0.0.0/0 accepts connections from any IP address. We recommend that you use a constrained CIDR range to reduce the potential of inbound attacks from unknown IP addresses."
             }
         },
         "StorageAccountType": {
-            "type": "string",
             "defaultValue": "Standard_LRS",
             "allowedValues": [
                 "Standard_LRS",
                 "Standard_GRS",
                 "Standard_RAGRS"
             ],
+            "type": "String",
             "metadata": {
                 "description": "Storage account type."
             }
         },
         "RestAppID": {
-            "type": "string",
+            "type": "String",
             "metadata": {
                 "description": "Application ID for the Registered app. This is under Azure Active Directory > App registrations > {your app}."
             }
         },
         "RestAppSecret": {
-            "type": "string",
+            "type": "String",
             "metadata": {
                 "description": "Password (Authentication key) for the Registered app."
             }
         },
         "BYOLInstanceCount": {
-            "type": "int",
+            "defaultValue": 2,
+            "minValue": 0,
+            "type": "Int",
             "metadata": {
                 "description": "The number of FortiGate instances the BYOL VMSS should have at any time. For High Availability in BYOL-only and Hybrid use cases, ensure at least 2 FortiGates are in the group. For specific use cases, set to 0 for PAYG-only, and >= 2 for BYOL-only or hybrid licensing."
-            },
-            "defaultValue": 2,
-            "minValue": 0
+            }
         },
         "MinBYOLInstanceCount": {
-            "type": "int",
+            "defaultValue": 2,
+            "minValue": 0,
+            "type": "Int",
             "metadata": {
                 "description": "Minimum number of FortiGate instances in the BYOL VMSS. For specific use cases, set to 0 for PAYG-only, and >= 2 for BYOL-only or hybrid licensing."
-            },
-            "defaultValue": 2,
-            "minValue": 0
+            }
         },
         "MaxBYOLInstanceCount": {
-            "type": "int",
+            "defaultValue": 2,
+            "minValue": 0,
+            "type": "Int",
             "metadata": {
                 "description": "Maximum number of FortiGate instances in the BYOL VMSS. For specific use cases, set to 0 for PAYG-only, and >= 2 for BYOL-only or hybrid licensing. This number must be greater than or equal to the 'Min BYOL Instance Count'."
-            },
-            "defaultValue": 2,
-            "minValue": 0
+            }
         },
         "PAYGInstanceCount": {
-            "type": "int",
+            "defaultValue": 0,
+            "minValue": 0,
+            "type": "Int",
             "metadata": {
                 "description": "The number of FortiGate instances the PAYG VMSS should have at any time. For High Availability in a PAYG-only use case, ensure at least 2 FortiGates are in the group. For specific use cases, set to 0 for BYOL-only, >= 2 for PAYG-only, and >= 0 for hybrid licensing."
-            },
-            "minValue": 0,
-            "defaultValue": 0
+            }
         },
         "MinPAYGInstanceCount": {
-            "type": "int",
+            "defaultValue": 0,
+            "minValue": 0,
+            "type": "Int",
             "metadata": {
                 "description": "Minimum number of FortiGate instances in the PAYG VMSS. For specific use cases, set to 0 for BYOL-only, >= 2 for PAYG-only, and >= 0 for hybrid licensing."
-            },
-            "defaultValue": 0,
-            "minValue": 0
+            }
         },
         "MaxPAYGInstanceCount": {
-            "type": "int",
+            "defaultValue": 6,
+            "minValue": 0,
+            "type": "Int",
             "metadata": {
                 "description": "Maximum number of FortiGate instances in the PAYG VMSS. For specific use cases, set to 0 for BYOL-only, >= 2 for PAYG-only, and >= 0 for hybrid licensing. This number must be greater than or equal to the 'Min PAYG Instance Count'."
-            },
-            "minValue": 0,
-            "defaultValue": 6
+            }
         },
         "ScaleOutThreshold": {
             "defaultValue": 80,
-            "type": "int",
+            "type": "Int",
             "metadata": {
                 "description": "Percentage of CPU utilization at which scale-out should occur."
             }
         },
         "ScaleInThreshold": {
             "defaultValue": 20,
-            "type": "int",
+            "type": "Int",
             "metadata": {
                 "description": "Percentage of CPU utilization at which scale-in should occur."
             }
         },
         "PrimaryElectionTimeout": {
-            "type": "int",
             "defaultValue": 90,
+            "type": "Int",
             "metadata": {
                 "description": "The maximum time (in seconds) to wait for a primary election to complete."
             }
         },
         "GetLicenseGracePeriod": {
-            "type": "int",
             "defaultValue": 600,
             "minValue": 300,
+            "type": "Int",
             "metadata": {
                 "description": "The minimum time (in seconds) permitted before a distributed license can be revoked from a non-responsive FortiGate and re-distributed. Minimum is 300."
             }
         },
         "HeartBeatInterval": {
-            "type": "int",
             "defaultValue": 60,
             "minValue": 30,
             "maxValue": 120,
+            "type": "Int",
             "metadata": {
                 "description": "The length of time (in seconds) that the FortiGate waits between sending heartbeat requests to the Autoscale handler function. Minimum is 30. Maximum is 120."
             }
         },
         "HeartBeatLossCount": {
-            "type": "int",
             "defaultValue": 3,
             "minValue": 3,
+            "type": "Int",
             "metadata": {
                 "description": "Number of consecutively lost heartbeats. When the Heart Beat Loss Count has been reached, the VM is deemed unhealthy and failover activities will commence."
             }
         },
         "HeartBeatDelayAllowance": {
-            "type": "int",
             "defaultValue": 30,
             "minValue": 30,
+            "type": "Int",
             "metadata": {
                 "description": "The maximum amount of time (in seconds) allowed for network latency of the FortiGate heartbeat arriving at the Autoscale handler function. Minimum is 30."
             }
         },
         "ScriptTimeout": {
-            "type": "int",
             "defaultValue": 230,
             "minValue": 30,
             "maxValue": 230,
+            "type": "Int",
             "metadata": {
                 "description": "Timeout value (in seconds) for the Azure function script. Minimum is 30. Maximum is 230."
             }
         },
         "ServicePlanTier": {
-            "type": "string",
+            "defaultValue": "Premium (P1V2)",
             "allowedValues": [
                 "Premium (P1V2)",
                 "Free (for demo only)"
             ],
-            "defaultValue": "Premium (P1V2)",
+            "type": "String",
             "metadata": {
                 "description": "The pricing tier for the function service plan. Note: the Free plan is for trial and demo only. Do not use it in production."
             }
         },
         "PackageResURL": {
-            "type": "string",
+            "type": "String",
             "metadata": {
                 "description": "The public URL of the function source file named 'fortigate-autoscale-azure-funcapp.zip', and can be found inside 'fortigate-autoscale-azure-template-deployment.zip'. The public URL of the deployment package zip file that contains the resource used to deploy the Function App. This URL must be accessible by Azure."
             }
@@ -505,8 +505,6 @@
         "funcappURL": "[concat('https://', variables('functionAppName'), '.azurewebsites.net')]",
         "LicenseEndPoints": "[concat(variables('funcappURL'), '/api/byol-license')]",
         "autoscaleEndPoints": "[concat(variables('funcappURL'), '/api/fgt-asg-handler')]",
-        "userdataPAYG": "[concat('{\"config-url\": \"', variables('autoscaleEndPoints'), '\"}\n')]",
-        "userdataBYOL": "[concat('{\"license-url\": \"', variables('LicenseEndPoints'), '\",\"config-url\": \"', variables('autoscaleEndPoints'), '\"}\n')]",
         "autoscaleSettingsNameBYOL": "[concat(parameters('ResourceNamePrefix'), '-autoscalesettings-byol')]",
         "autoscaleSettingsNamePAYG": "[concat(parameters('ResourceNamePrefix'), '-autoscalesettings-payg')]",
         "autoscaleSettingsPresets": {
@@ -695,47 +693,44 @@
     },
     "resources": [
         {
-            "apiVersion": "2019-04-01",
             "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
             "name": "[variables('storageAccountName')]",
             "location": "[variables('location')]",
-            "kind": "Storage",
             "sku": {
-                "name": "[parameters('StorageAccountType')]"
+                "name": "[parameters('StorageAccountType')]",
+                "tier": "Standard"
             },
-            "resources": [
-                {
-                    "name": "[concat('default/', variables('configsetAssetKeyPrefix'))]",
-                    "type": "blobServices/containers",
-                    "apiVersion": "2019-04-01",
-                    "dependsOn": [
-                        "[variables('storageAccountName')]"
-                    ]
-                },
-                {
-                    "name": "[concat('default/',variables('licenseAssetKeyPrefix'))]",
-                    "type": "blobServices/containers",
-                    "apiVersion": "2019-04-01",
-                    "dependsOn": [
-                        "[variables('storageAccountName')]"
-                    ]
-                }
+            "kind": "Storage"
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('storageAccountName'), '/default/', variables('configsetAssetKeyPrefix'))]",
+            "dependsOn": [
+                "[variables('storageAccountName')]"
             ]
         },
         {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('storageAccountName'), '/default/', variables('licenseAssetKeyPrefix'))]",
+            "dependsOn": [
+                "[variables('storageAccountName')]"
+            ]
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "name": "VNetRelatedResources",
             "dependsOn": [
                 "[variables('storageAccountName')]",
                 "[variables('functionAppName')]"
             ],
-            "apiVersion": "2018-05-01",
-            "name": "VNetRelatedResources",
-            "type": "Microsoft.Resources/deployments",
-            "resourceGroup": "[variables('vNetResourceGroupName')]",
-            "subscriptionId": "[subscription().subscriptionId]",
             "properties": {
                 "mode": "Incremental",
                 "template": {
-                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
                     "contentVersion": "1.0.0.0",
                     "parameters": {},
                     "variables": {},
@@ -1288,7 +1283,7 @@
                                     "osProfile": {
                                         "computerNamePrefix": "[variables('vmssNameBYOL')]",
                                         "adminUsername": "[parameters('adminUsername')]",
-                                        "customData": "[base64(concat('{\"license-url\": \"', variables('LicenseEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'byol-license'), '2016-08-01').key, '\",\"config-url\": \"', variables('autoscaleEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'fgt-asg-handler'), '2016-08-01').key, '\"}\n'))]",
+                                        "customData": "[base64(concat('{\"license-url\": \"', variables('LicenseEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'byol-license'), '2018-02-01').key, '\",\"config-url\": \"', variables('autoscaleEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'fgt-asg-handler'), '2018-02-01').key, '\"}\n'))]",
                                         "adminPassword": "[parameters('adminPassword')]"
                                     },
                                     "networkProfile": {
@@ -1327,7 +1322,7 @@
                                                 "name": "[concat(variables('vmssNameBYOL'),'-nic-subnet2')]",
                                                 "properties": {
                                                     "primary": false,
-                                                    "enableIPForwarding": "true",
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet2IPConfigName')]",
@@ -1349,7 +1344,7 @@
                                                 "name": "[concat(variables('vmssNameBYOL'),'-nic-subnet3')]",
                                                 "properties": {
                                                     "primary": false,
-                                                    "enableIPForwarding": "true",
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet3IPConfigName')]",
@@ -1371,7 +1366,7 @@
                                                 "name": "[concat(variables('vmssNameBYOL'),'-nic-subnet4')]",
                                                 "properties": {
                                                     "primary": false,
-                                                    "enableIPForwarding": "true",
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet4IPConfigName')]",
@@ -1445,7 +1440,7 @@
                                     "evictionPolicy": "delete",
                                     "osProfile": {
                                         "computerNamePrefix": "[variables('vmssNamePAYG')]",
-                                        "customData": "[base64(concat('{\"config-url\": \"', variables('autoscaleEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'fgt-asg-handler'), '2016-08-01').key, '\"}\n'))]",
+                                        "customData": "[base64(concat('{\"config-url\": \"', variables('autoscaleEndPoints'), '?code=', listSecrets(resourceId('Microsoft.Web/sites/functions', variables('functionAppName'), 'fgt-asg-handler'), '2018-02-01').key, '\"}\n'))]",
                                         "adminUsername": "[parameters('adminUsername')]",
                                         "adminPassword": "[parameters('adminPassword')]"
                                     },
@@ -1485,7 +1480,7 @@
                                                 "name": "[concat(variables('vmssNamePAYG'),'-nic-subnet2')]",
                                                 "properties": {
                                                     "primary": false,
-                                                    "enableIPForwarding": "true",
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet2IPConfigName')]",
@@ -1507,7 +1502,7 @@
                                                 "name": "[concat(variables('vmssNamePAYG'),'-nic-subnet3')]",
                                                 "properties": {
                                                     "primary": false,
-                                                    "enableIPForwarding": "true",
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet3IPConfigName')]",
@@ -1529,7 +1524,7 @@
                                                 "name": "[concat(variables('vmssNamePAYG'),'-nic-subnet4')]",
                                                 "properties": {
                                                     "primary": false,
-                                                    "enableIPForwarding": "true",
+                                                    "enableIPForwarding": true,
                                                     "ipConfigurations": [
                                                         {
                                                             "name": "[variables('subnet4IPConfigName')]",
@@ -1557,7 +1552,7 @@
                                 "[variables('vmssNameBYOL')]"
                             ],
                             "type": "Microsoft.Insights/autoscaleSettings",
-                            "apiVersion": "2015-04-01",
+                            "apiVersion": "2014-04-01",
                             "name": "[variables('autoscaleSettingsNameBYOL')]",
                             "location": "[variables('location')]",
                             "properties": {
@@ -1583,7 +1578,7 @@
                                 "[variables('autoscaleSettingsNameBYOL')]"
                             ],
                             "type": "Microsoft.Insights/autoscaleSettings",
-                            "apiVersion": "2015-04-01",
+                            "apiVersion": "2014-04-01",
                             "name": "[variables('autoscaleSettingsNamePAYG')]",
                             "location": "[variables('location')]",
                             "properties": {
@@ -1605,21 +1600,28 @@
                         }
                     ]
                 }
-            }
+            },
+            "subscriptionId": "[subscription().subscriptionId]",
+            "resourceGroup": "[variables('vNetResourceGroupName')]"
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts",
+            "apiVersion": "2016-03-31",
             "name": "[variables('databaseAccountName')]",
             "location": "[variables('location')]",
             "properties": {
                 "name": "[variables('databaseAccountName')]",
-                "databaseAccountOfferType": "Standard"
+                "databaseAccountOfferType": "Standard",
+                "locations": [
+                    {
+                        "locationName": "[variables('location')]"
+                    }
+                ]
             }
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDB/databaseAccounts/apis/databases",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'))]",
             "dependsOn": [
                 "[variables('databaseAccountName')]"
@@ -1634,8 +1636,8 @@
             }
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiGateAutoscale')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
@@ -1674,12 +1676,15 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
             }
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiGatePrimaryElection')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
@@ -1718,14 +1723,16 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
             }
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/FortiAnalyzer')]",
-            "condition": "[variables('enableFortiAnalyzer')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
@@ -1763,14 +1770,17 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
-            }
+            },
+            "condition": "[variables('enableFortiAnalyzer')]"
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/LicenseStock')]",
-            "condition": "[variables('enableHybridLicensing')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
@@ -1808,14 +1818,17 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
-            }
+            },
+            "condition": "[variables('enableHybridLicensing')]"
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/LicenseUsage')]",
-            "condition": "[bool(variables('enableHybridLicensing'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
@@ -1853,12 +1866,16 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
-            }
+            },
+            "condition": "[bool(variables('enableHybridLicensing'))]"
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/CustomLog')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
@@ -1897,12 +1914,15 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
             }
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/VmInfoCache')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
@@ -1941,12 +1961,15 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
             }
         },
         {
-            "apiVersion": "2016-03-31",
             "type": "Microsoft.DocumentDb/databaseAccounts/apis/databases/containers",
+            "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'), '/Settings')]",
             "dependsOn": [
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
@@ -1985,36 +2008,39 @@
                             }
                         ]
                     }
+                },
+                "options": {
+
                 }
             }
         },
         {
-            "apiVersion": "2015-04-01",
             "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2018-02-01",
             "name": "[variables('hostingPlanName')]",
             "location": "[variables('location')]",
             "properties": {
                 "name": "[variables('hostingPlanName')]",
-                "sku": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].sku]",
-                "skucode": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].skucode]",
                 "workerSize": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].workerSize]",
-                "workerSizeId": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].workerSizeId]",
                 "numberOfWorkers": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].numberOfWorkers]",
                 "reserved": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].reserved]"
+            },
+            "sku": {
+                "Name": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].skucode]"
             }
         },
         {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('functionAppName')]",
+            "location": "[variables('location')]",
             "dependsOn": [
                 "[variables('hostingPlanName')]",
                 "[variables('databaseAccountName')]",
                 "[variables('storageAccountName')]",
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('databaseAccountName'), 'sql', variables('databaseName'))]"
             ],
-            "apiVersion": "2018-11-01",
-            "type": "Microsoft.Web/sites",
-            "name": "[variables('functionAppName')]",
             "kind": "functionapp",
-            "location": "[variables('location')]",
             "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "siteConfig": {
@@ -2053,7 +2079,7 @@
                         },
                         {
                             "name": "WEBSITE_NODE_DEFAULT_VERSION",
-                            "value": "8.11.1"
+                            "value": "~10"
                         },
                         {
                             "name": "AZURE_STORAGE_ACCESS_KEY",
@@ -2292,32 +2318,30 @@
             }
         },
         {
-            "condition": "[variables('enableAzureAppInsights')]",
             "type": "Microsoft.Insights/components",
             "apiVersion": "2018-05-01-preview",
             "name": "[variables('functionAppInsightName')]",
-            "kind": "web",
             "location": "[variables('location')]",
+            "kind": "web",
             "properties": {
                 "Application_Type": "web",
                 "ApplicationId": "[variables('functionAppName')]"
-            }
+            },
+            "condition": "[variables('enableAzureAppInsights')]"
         },
         {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "name": "SetupFuncAppIpRestrictions",
             "dependsOn": [
                 "[variables('databaseAccountName')]",
                 "[variables('functionAppName')]",
                 "VNetRelatedResources"
             ],
-            "apiVersion": "2018-05-01",
-            "name": "SetupFuncAppIpRestrictions",
-            "type": "Microsoft.Resources/deployments",
-            "resourceGroup": "[variables('resourceGroupName')]",
-            "subscriptionId": "[subscription().subscriptionId]",
             "properties": {
                 "mode": "Incremental",
                 "template": {
-                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
                     "contentVersion": "1.0.0.0",
                     "parameters": {},
                     "variables": {},
@@ -2336,22 +2360,22 @@
                         }
                     ]
                 }
-            }
+            },
+            "subscriptionId": "[subscription().subscriptionId]",
+            "resourceGroup": "[variables('resourceGroupName')]"
         },
         {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "name": "SetupDBAccessRestrictions",
             "dependsOn": [
                 "[variables('databaseAccountName')]",
                 "VNetRelatedResources"
             ],
-            "apiVersion": "2018-05-01",
-            "name": "SetupDBAccessRestrictions",
-            "type": "Microsoft.Resources/deployments",
-            "resourceGroup": "[variables('resourceGroupName')]",
-            "subscriptionId": "[subscription().subscriptionId]",
             "properties": {
                 "mode": "Incremental",
                 "template": {
-                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
                     "contentVersion": "1.0.0.0",
                     "parameters": {},
                     "variables": {},
@@ -2370,89 +2394,96 @@
                                         "id": "[concat(variables('vNetId'), '/subnets/', variables('subnet1Name'))]",
                                         "ignoreMissingVNetServiceEndpoint": false
                                     }
+                                ],
+                                "locations": [
+                                    {
+                                        "locationName": "[variables('location')]"
+                                    }
                                 ]
                             }
                         }
                     ]
                 }
-            }
+            },
+            "subscriptionId": "[subscription().subscriptionId]",
+            "resourceGroup": "[variables('resourceGroupName')]"
         }
     ],
     "outputs": {
         "uniqueResourceNamePrefix": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('uniqueResourceNamePrefix')]"
         },
         "resourceGroupName": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('resourceGroupName')]"
         },
         "vNetResourceGroupName": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('vNetResourceGroupName')]"
         },
         "storageAccountName": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('storageAccountName')]"
         },
         "configsetAssetKeyPrefix": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('configsetAssetKeyPrefix')]"
         },
         "byolScaleSetName": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('vmssNameBYOL')]"
         },
         "byolAutoscaleSettingsName": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('autoscaleSettingsNameBYOL')]"
         },
         "paygAutoscaleSettingsName": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('autoscaleSettingsNamePAYG')]"
         },
         "paygScaleSetName": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('vmssNamePAYG')]"
         },
         "licenseAssetKeyPrefix": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('licenseAssetKeyPrefix')]"
         },
         "byolScaleSetDefaultSize": {
-            "type": "int",
+            "type": "Int",
             "value": "[parameters('BYOLInstanceCount')]"
         },
         "byolScaleSetMinSize": {
-            "type": "int",
+            "type": "Int",
             "value": "[parameters('MinBYOLInstanceCount')]"
         },
         "byolScaleSetMaxSize": {
-            "type": "int",
+            "type": "Int",
             "value": "[parameters('MaxBYOLInstanceCount')]"
         },
         "paygScaleSetDefaultSize": {
-            "type": "int",
+            "type": "Int",
             "value": "[parameters('PAYGInstanceCount')]"
         },
         "paygScaleSetMinSize": {
-            "type": "int",
+            "type": "Int",
             "value": "[parameters('MinPAYGInstanceCount')]"
         },
         "paygScaleSetMaxSize": {
-            "type": "int",
+            "type": "Int",
             "value": "[parameters('MaxPAYGInstanceCount')]"
         },
         "fgtLicensingModel": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('licensingModelName')]"
         },
         "cmdDeleteAutoscale": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('cmdDeleteAutoscaleAll')]"
         },
         "cmdVNetCleanUp": {
-            "type": "string",
+            "type": "String",
             "value": "[variables('cmdVNetCleanUp')]"
         }
     }
