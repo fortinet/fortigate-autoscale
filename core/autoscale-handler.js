@@ -707,7 +707,8 @@ module.exports = class AutoscaleHandler {
         }
 
         // check whether primary has changed or not
-        let currentPrimaryInstanceId = (this._primaryRecord && this._primaryRecord.instanceId) || null;
+        let currentPrimaryInstanceId =
+            (this._primaryRecord && this._primaryRecord.instanceId) || null;
         let currentPrimaryElectionVote =
             (this._primaryRecord && this._primaryRecord.voteState) || null;
 
@@ -825,7 +826,9 @@ module.exports = class AutoscaleHandler {
                     `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
                     `syncState: ${this._selfHealthCheck.syncState}, master-ip: ${primaryIp}).`
             );
-            return primaryIp && this._selfHealthCheck && this._selfHealthCheck.primaryIp !== primaryIp
+            return primaryIp &&
+                this._selfHealthCheck &&
+                this._selfHealthCheck.primaryIp !== primaryIp
                 ? {
                       'master-ip': this._primaryInfo.primaryPrivateIpAddress
                   }
@@ -1065,7 +1068,10 @@ module.exports = class AutoscaleHandler {
      */
     async putPrimaryElectionVote(candidateInstance, purgePrimaryRecord = null) {
         try {
-            this.logger.log('primaryElectionVote, purge primary?', JSON.stringify(purgePrimaryRecord));
+            this.logger.log(
+                'primaryElectionVote, purge primary?',
+                JSON.stringify(purgePrimaryRecord)
+            );
             if (purgePrimaryRecord) {
                 try {
                     const purged = await this.purgePrimary();
