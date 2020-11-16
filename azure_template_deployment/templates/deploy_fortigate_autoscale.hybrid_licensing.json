@@ -1586,14 +1586,14 @@
             "apiVersion": "2018-02-01",
             "name": "[variables('hostingPlanName')]",
             "location": "[variables('location')]",
+            "sku": {
+                "Name": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].skucode]"
+            },
             "properties": {
                 "name": "[variables('hostingPlanName')]",
                 "workerSize": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].workerSize]",
                 "numberOfWorkers": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].numberOfWorkers]",
                 "reserved": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].reserved]"
-            },
-            "sku": {
-                "Name": "[variables('servicePlanTierPresets')[parameters('ServicePlanTier')].skucode]"
             }
         },
         {
@@ -1687,10 +1687,6 @@
                         {
                             "name": "TENANT_ID",
                             "value": "[subscription().tenantId]"
-                        },
-                        {
-                            "name": "WEBSITE_RUN_FROM_PACKAGE",
-                            "value": "[parameters('PackageResURL')]"
                         },
                         {
                             "name": "DEBUG_SAVE_CUSTOM_LOG",
@@ -1882,7 +1878,20 @@
                         }
                     ]
                 }
-            }
+            },
+            "resources": [
+                {
+                    "type": "Extensions",
+                    "apiVersion": "2018-11-01",
+                    "name": "ZipDeploy",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', variables('functionAppName'))]"
+                    ],
+                    "properties": {
+                        "packageUri": "[parameters('PackageResURL')]"
+                    }
+                }
+            ]
         },
         {
             "type": "Microsoft.Insights/components",
@@ -1979,7 +1988,8 @@
             "dependsOn": [
                 "[variables('databaseAccountName')]",
                 "[variables('functionAppName')]",
-                "VNetRelatedResources"
+                "VNetRelatedResources",
+                "ZipDeploy"
             ],
             "properties": {
                 "mode": "Incremental",
@@ -1994,6 +2004,7 @@
                             "apiVersion": "2019-07-01",
                             "name": "[variables('vmssNameBYOL')]",
                             "location": "[variables('location')]",
+                            "dependsOn": ["ZipDeploy"],
                             "plan": {
                                 "name": "[variables('fgtvmImageBYOL').sku]",
                                 "publisher": "[variables('fgtvmImageBYOL').publisher]",
@@ -2144,6 +2155,7 @@
                             "name": "[variables('vmssNamePAYG')]",
                             "location": "[variables('location')]",
                             "apiVersion": "2019-07-01",
+                            "dependsOn": ["ZipDeploy"],
                             "plan": {
                                 "name": "[variables('fgtvmImagePAYG').sku]",
                                 "publisher": "[variables('fgtvmImagePAYG').publisher]",
