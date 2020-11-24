@@ -1,8 +1,6 @@
 on:
   # Run whenever a tag is pushed or created.
   push:
-    branches:
-      - 'main'
     # Sequence of patterns matched against refs/tags
     tags:
       - '*' # any tag
@@ -10,7 +8,9 @@ on:
 name: Create a release on GitHub and upload release artifacts
 
 jobs:
-  build:
+  publish:
+    name: Publish the release tagged on main branch
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
