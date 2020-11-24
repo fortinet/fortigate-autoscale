@@ -4,11 +4,6 @@ on:
     # Sequence of patterns matched against refs/tags
     tags:
       - '*' # any tag
-  # Run whenever a tag is pushed.
-  push:
-    # Sequence of patterns matched against refs/tags
-    tags:
-      - '*' # any tag
 
 name: Create Release
 
