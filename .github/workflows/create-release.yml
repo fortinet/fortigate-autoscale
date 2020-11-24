@@ -1,11 +1,11 @@
 on:
-  # Run whenever a tag is pushed.
+  # Run whenever a tag is pushed or created.
   push:
     # Sequence of patterns matched against refs/tags
     tags:
       - '*' # any tag
 
-name: Create Release
+name: Create a release on GitHub and upload release artifacts
 
 jobs:
   build:
@@ -33,3 +33,12 @@ jobs:
           release_name: Release ${{ github.ref }}
           draft: false
           prerelease: false
+      - name: Upload artifacts to the target release
+        id: upload_release_asset
+        uses: svenstaro/upload-release-action@2.2.0
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          file: ./dist/*
+          file_glob: true
+          overwrite: true
