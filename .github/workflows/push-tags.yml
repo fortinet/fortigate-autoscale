@@ -10,7 +10,6 @@ name: Create a release on GitHub and upload release artifacts
 jobs:
   publish_github:
     name: Publish the pushed tag
-    needs: check # need to complete job: check first
     # if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     strategy:
