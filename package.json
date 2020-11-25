@@ -15,12 +15,10 @@
         "build-project": "scripts/make-dist.js project",
         "build-azure-funcapp": "scripts/make-dist.js azure-funcapp",
         "build-azure-template-deployment": "scripts/make-dist.js azure-template-deployment",
-        "lint-check-template": "node node_modules/.bin/ftnt-devops-ci check -f \"**/*.template\" --parser \"json\"",
         "lint-check-code": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
-        "lint-check": "npm run lint-check-code && npm run lint-check-template",
-        "lint-fix-template": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -f \"**/*.template\" --parser \"json\"",
+        "lint-check": "npm run lint-check-code",
         "lint-fix-code": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\"",
-        "lint-fix": "npm run lint-fix-code && npm run lint-fix-template"
+        "lint-fix": "npm run lint-fix-code"
     },
     "repository": {
         "type": "git",
