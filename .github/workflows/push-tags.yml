@@ -8,12 +8,14 @@ on:
 name: Create a release on GitHub and upload release artifacts
 
 jobs:
-  check:
-    name: Check all requirements for accepting changes to a branch
+  publish_github:
+    name: Publish the pushed tag
+    needs: check # need to complete job: check first
+    # if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [10.x, 12.x, 14.x]
+        node-version: [12.x]
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -31,15 +33,6 @@ jobs:
         run: npm run build
       - name: Run tests
         run: npm test
-  publish_github:
-    name: Publish the pushed tag
-    needs: check # need to complete job: check first
-    # if: ${{ github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [12.x]
-    steps:
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
