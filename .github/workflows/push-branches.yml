@@ -3,14 +3,14 @@ on:
   push:
     branches:
       - 'main' # main branch
-      - 'feat_*' # feature branches
-      - 'patch_*' # patch branches
       - 'bugfix_*' # bugfix branches
+      - 'feat_*' # feature branches
+      - 'staging_*' # staging branches
   # Run whenever a pull request event occurs and the target branches defined as below.
   pull_request_target:
     branches:
       - 'main' # main branch
-      - 'patch_*' # patch branches
+      - 'staging_*' # staging branches
 
 name: Check all requirements for accepting changes to a branch
 
