@@ -8,6 +8,12 @@ on:
       - 'patch_*' # patch branches
       - 'bugfix_*' # bugfix branches
       - 'test_*' # test branches
+  # Run whenever a pull request event occurs and the target branch is defined as below.
+  pull_request_target:
+    branches:
+      - 'main' # main branch
+      - 'patch_*' # patch branches
+      - 'test_*' # test branches
 
 name: Check all requirements for accepting changes to a branch
 
