@@ -1,0 +1,53 @@
+on:
+  # Run whenever a tag is pushed or created.
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - '*' # any tag
+
+name: Create a release on GitHub and upload release artifacts
+
+jobs:
+  publish_github:
+    name: Publish the pushed tag
+    # if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [12.x]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Check - install
+        run: npm ci
+      - name: Check - audit (production)
+        run: npm audit --production
+      - name: Check - format
+        run: npm run lint-check
+      - name: Check - build
+        run: npm run build
+      - name: Run tests
+        run: npm test
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Upload artifacts to the target release
+        id: upload_release_asset
+        uses: svenstaro/upload-release-action@2.2.0
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          file: ./dist/*
+          file_glob: true
+          overwrite: true
