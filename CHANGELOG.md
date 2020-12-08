@@ -1,11 +1,26 @@
 # Changelog
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - 2020-09-23
+## [3.1.0] - 2020-12-07
+
+### Added
+
+- Added more supported Application Insight regions.
+- Added a template parameter for App Service plan selection (premium plan and consumption plan).
+
 ### Changed
+
+- Break the single deployment template into two stage-templates.
+- Critical bugfixes.
+
+## [3.0.0] - 2020-09-23
+
+### Changed
+
 - applied primary/secondary terminology update.
 - BREAKING CHANGE: some template parameter names, DB table, and record columns changed due to the terminology update
 
