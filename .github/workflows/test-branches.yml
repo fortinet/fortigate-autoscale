@@ -2,12 +2,11 @@ on:
   # Run whenever new commits are pushed to the target branches defined as gibelow.
   push:
     branches:
-      - 'main' # main branch
       - 'bugfix_*' # bugfix branches
       - 'feat_*' # feature branches
       - 'staging_*' # staging branches
   # Run whenever a pull request event occurs and the target branches defined as below.
-  pull_request_target:
+  pull_request:
     branches:
       - 'main' # main branch
       - 'staging_*' # staging branches
