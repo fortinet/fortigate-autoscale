@@ -77,7 +77,8 @@ module.exports = class Logger {
             arguments: []
         };
         item.arguments = Array.prototype.slice.call(args).map(arg => {
-            return arg && arg.toString ? arg.toString() : arg;
+            // return arg && arg.toString ? arg.toString() : arg;
+            return arg && typeof arg === 'object' ? JSON.stringify(arg) : arg;
         });
         this._queue.push(item);
         return this;
