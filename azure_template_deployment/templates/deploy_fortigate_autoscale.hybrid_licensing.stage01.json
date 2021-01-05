@@ -107,7 +107,7 @@
         },
         "FrontendIPDeploymentMethod": {
             "defaultValue": "create new public IP address",
-            "allowedValues": ["create new public IP address", "use existing public IP address"],
+            "allowedValues": [ "create new public IP address", "use existing public IP address" ],
             "type": "String",
             "metadata": {
                 "description": "Deployment method for the Frontend Public IP address for the external load balancer. If set to 'create new public IP address', the IP address will be deployed to the resource group where the VNet is located. If set to 'use existing public IP address', the existing IP address must reside in the same resource group as the VNet and it must be of the 'standard' SKU in order to match the VMSS."
@@ -129,15 +129,15 @@
         },
         "InstanceType": {
             "defaultValue": "Standard_F4",
-            "allowedValues": ["Standard_F4s_v2", "Standard_F4s", "Standard_F4"],
+            "allowedValues": [ "Standard_F4s_v2", "Standard_F4s", "Standard_F4" ],
             "type": "String",
             "metadata": {
                 "description": "Size of the VMs in the VMSS."
             }
         },
         "FOSVersion": {
-            "defaultValue": "6.2.3",
-            "allowedValues": ["6.2.3", "6.0.9"],
+            "defaultValue": "6.4.4",
+            "allowedValues": [ "6.4.4", "6.2.3", "6.0.9" ],
             "type": "String",
             "metadata": {
                 "description": "FortiOS version supported by FortiGate Autoscale for Azure."
@@ -171,7 +171,7 @@
         },
         "StorageAccountType": {
             "defaultValue": "Standard_LRS",
-            "allowedValues": ["Standard_LRS", "Standard_GRS", "Standard_RAGRS"],
+            "allowedValues": [ "Standard_LRS", "Standard_GRS", "Standard_RAGRS" ],
             "type": "String",
             "metadata": {
                 "description": "Storage account type."
@@ -302,7 +302,7 @@
         },
         "ServicePlanTier": {
             "defaultValue": "Premium (P1V2)",
-            "allowedValues": ["Premium (P1V2)", "Free (for demo only)"],
+            "allowedValues": [ "Premium (P1V2)", "Free (for demo only)" ],
             "type": "String",
             "metadata": {
                 "description": "The pricing tier for the function service plan. Note: the Free plan is for trial and demo only. Do not use it in production."
@@ -690,19 +690,19 @@
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
             "apiVersion": "2019-06-01",
             "name": "[concat(variables('storageAccountName'), '/default/', variables('configsetAssetKeyPrefix'))]",
-            "dependsOn": ["[variables('storageAccountName')]"]
+            "dependsOn": [ "[variables('storageAccountName')]" ]
         },
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
             "apiVersion": "2019-06-01",
             "name": "[concat(variables('storageAccountName'), '/default/', variables('licenseAssetKeyPrefix'))]",
-            "dependsOn": ["[variables('storageAccountName')]"]
+            "dependsOn": [ "[variables('storageAccountName')]" ]
         },
         {
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2018-05-01",
             "name": "VNetRelatedResources",
-            "dependsOn": ["[variables('storageAccountName')]", "[variables('functionAppName')]"],
+            "dependsOn": [ "[variables('storageAccountName')]", "[variables('functionAppName')]" ],
             "properties": {
                 "mode": "Incremental",
                 "template": {
@@ -869,7 +869,7 @@
                             "location": "[variables('location')]",
                             "properties": {
                                 "addressSpace": {
-                                    "addressPrefixes": ["[variables('vNetAddressPrefix')]"]
+                                    "addressPrefixes": [ "[variables('vNetAddressPrefix')]" ]
                                 },
                                 "Subnets": [
                                     {
@@ -882,11 +882,11 @@
                                             "serviceEndpoints": [
                                                 {
                                                     "service": "Microsoft.AzureCosmosDB",
-                                                    "locations": ["*"]
+                                                    "locations": [ "*" ]
                                                 },
                                                 {
                                                     "service": "Microsoft.Web",
-                                                    "locations": ["*"]
+                                                    "locations": [ "*" ]
                                                 }
                                             ]
                                         }
@@ -954,7 +954,7 @@
                             "sku": {
                                 "name": "Standard"
                             },
-                            "dependsOn": ["[variables('vNetName')]"],
+                            "dependsOn": [ "[variables('vNetName')]" ],
                             "properties": {
                                 "frontendIPConfigurations": [
                                     {
@@ -1079,7 +1079,7 @@
                             "sku": {
                                 "name": "Standard"
                             },
-                            "dependsOn": ["[variables('publicIPAddressId')]"],
+                            "dependsOn": [ "[variables('publicIPAddressId')]" ],
                             "properties": {
                                 "frontendIPConfigurations": [
                                     {
@@ -1224,7 +1224,7 @@
             "type": "Microsoft.DocumentDB/databaseAccounts/apis/databases",
             "apiVersion": "2016-03-31",
             "name": "[concat(variables('databaseAccountName'), '/sql/', variables('databaseName'))]",
-            "dependsOn": ["[variables('databaseAccountName')]"],
+            "dependsOn": [ "[variables('databaseAccountName')]" ],
             "properties": {
                 "resource": {
                     "id": "[variables('databaseName')]"
@@ -1245,7 +1245,7 @@
                 "resource": {
                     "id": "FortiGateAutoscale",
                     "partitionKey": {
-                        "paths": ["/instanceId"],
+                        "paths": [ "/instanceId" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1288,7 +1288,7 @@
                 "resource": {
                     "id": "FortiGatePrimaryElection",
                     "partitionKey": {
-                        "paths": ["/scalingGroupName"],
+                        "paths": [ "/scalingGroupName" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1331,7 +1331,7 @@
                 "resource": {
                     "id": "FortiAnalyzer",
                     "partitionKey": {
-                        "paths": ["/instanceId"],
+                        "paths": [ "/instanceId" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1375,7 +1375,7 @@
                 "resource": {
                     "id": "LicenseStock",
                     "partitionKey": {
-                        "paths": ["/checksum"],
+                        "paths": [ "/checksum" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1419,7 +1419,7 @@
                 "resource": {
                     "id": "LicenseUsage",
                     "partitionKey": {
-                        "paths": ["/id"],
+                        "paths": [ "/id" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1463,7 +1463,7 @@
                 "resource": {
                     "id": "CustomLog",
                     "partitionKey": {
-                        "paths": ["/id"],
+                        "paths": [ "/id" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1506,7 +1506,7 @@
                 "resource": {
                     "id": "VmInfoCache",
                     "partitionKey": {
-                        "paths": ["/id"],
+                        "paths": [ "/id" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1549,7 +1549,7 @@
                 "resource": {
                     "id": "Settings",
                     "partitionKey": {
-                        "paths": ["/settingKey"],
+                        "paths": [ "/settingKey" ],
                         "kind": "Hash"
                     },
                     "indexingPolicy": {
@@ -1944,7 +1944,7 @@
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2018-05-01",
             "name": "SetupDBAccessRestrictions",
-            "dependsOn": ["[variables('databaseAccountName')]", "VNetRelatedResources"],
+            "dependsOn": [ "[variables('databaseAccountName')]", "VNetRelatedResources" ],
             "properties": {
                 "mode": "Incremental",
                 "template": {
