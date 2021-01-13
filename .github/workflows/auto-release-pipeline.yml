@@ -110,8 +110,8 @@ jobs:
       # setup git users for npm to create a version bump commit
       - name: Setup git credential
         run: |
-          git config user.name Jayden Liang
-          git config user.email jaydenliang81@gmail.com
+          git config user.name Fortinet(GitHub Automation)
+          git config user.email github@fortinet.com
       # (required) install dependencies
       - name: Install
         run: npm ci
