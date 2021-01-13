@@ -137,7 +137,7 @@
         },
         "FOSVersion": {
             "defaultValue": "6.4.3",
-            "allowedValues": ["6.4.3", "6.2.5"],
+            "allowedValues": ["6.4.3"],
             "type": "String",
             "metadata": {
                 "description": "FortiOS version supported by FortiGate Autoscale for Azure."
