@@ -10,7 +10,7 @@ The design metaphor for `fortigate-autoscale/core` is an API sandwich with cloud
 
 There is also a container class `LifecycleItem` which is currently used only by AWS. This class serves as a common container for Lifecycle event data.
 
-For more information, please refer to the project [README](https://github.com/fortinet/fortigate-autoscale/blob/master/README.md).
+For more information, please refer to the project [README](https://github.com/fortinet/fortigate-autoscale/blob/main/README.md).
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
