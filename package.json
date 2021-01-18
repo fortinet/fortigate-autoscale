@@ -7,6 +7,7 @@
         "test": "tests"
     },
     "scripts": {
+        "version": "npm-run-all sync-version lint-fix post-sync-version",
         "pre-push": "npm-run-all lint-check audit-production test",
         "audit-production": "npm audit --production",
         "build": "scripts/make-dist.js all",
@@ -18,7 +19,9 @@
         "lint-check-code": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
         "lint-check": "npm run lint-check-code",
         "lint-fix-code": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\"",
-        "lint-fix": "npm run lint-fix-code"
+        "lint-fix": "npm run lint-fix-code",
+        "sync-version": "node scripts/sync-version.js",
+        "post-sync-version": "git add ."
     },
     "husky": {
         "hooks": {
@@ -32,7 +35,9 @@
     },
     "author": "fortinet",
     "license": "MIT",
-    "dependencies": {},
+    "dependencies": {
+        "semver": "^7.3.4"
+    },
     "devDependencies": {
         "eslint": "^6.8.0",
         "eslint-plugin-json": "^2.1.1",
