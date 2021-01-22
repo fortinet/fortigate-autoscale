@@ -1,4 +1,0 @@
-
-# FortiGate only responds to Azure LB health check on port1 through default gateway.
-# You may need 'config router static' to set dns and gateway for extra ports.
-# See the official deployment guide for more information.
