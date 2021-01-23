@@ -252,7 +252,7 @@
             }
         },
         "PrimaryElectionTimeout": {
-            "defaultValue": 90,
+            "defaultValue": 300,
             "type": "Int",
             "metadata": {
                 "description": "The maximum time (in seconds) to wait for a primary election to complete."
