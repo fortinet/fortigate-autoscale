@@ -136,8 +136,8 @@
             }
         },
         "FOSVersion": {
-            "defaultValue": "6.2.3",
-            "allowedValues": ["6.2.3", "6.0.9"],
+            "defaultValue": "6.4.3",
+            "allowedValues": ["6.4.3"],
             "type": "String",
             "metadata": {
                 "description": "FortiOS version supported by FortiGate Autoscale for Azure."
@@ -252,7 +252,7 @@
             }
         },
         "PrimaryElectionTimeout": {
-            "defaultValue": 90,
+            "defaultValue": 300,
             "type": "Int",
             "metadata": {
                 "description": "The maximum time (in seconds) to wait for a primary election to complete."

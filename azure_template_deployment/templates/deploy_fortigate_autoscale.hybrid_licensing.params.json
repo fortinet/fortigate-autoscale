@@ -57,7 +57,7 @@
             "value": "Standard_F4"
         },
         "FOSVersion": {
-            "value": "6.2.3"
+            "value": "6.4.3"
         },
         "FortiGatePSKSecret": {
             "value": ""
@@ -102,7 +102,7 @@
             "value": 20
         },
         "PrimaryElectionTimeout": {
-            "value": 90
+            "value": 300
         },
         "GetLicenseGracePeriod": {
             "value": 600
