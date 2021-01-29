@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2021-01-29
+
+### Added
+
+- Added support for FOS 6.4.3
+- Enhanced build script on version bump to update template content version and Azure function package version to match the version of the project
+
+### Changed
+
+- Removed FOS 6.2.5 from support list
+- Fixed inconsistent static route configuration if deployed notusing default vnet IP address values.
+- Changed the default value of the template parameter 'primary election timeout' from 90 to 300.
+
+
 ## [3.1.0] - 2020-12-07
 
 ### Added
