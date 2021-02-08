@@ -1,4 +1,3 @@
-
 # FortiGate Autoscale for Azure
 
 A collection of **Node.js** modules and cloud-specific templates which support auto scaling functionality for groups of FortiGate-VM instances on various cloud platforms.
@@ -36,7 +35,7 @@ A deployment guide is available from the Fortinet Document Library:
   + [ FortiGate / FortiOS 6.4 / Deploying auto scaling on Azure](https://docs.fortinet.com/vm/azure/fortigate/6.4/azure-cookbook/6.4.0/161167/deploying-auto-scaling-on-azure)
 
 ## Launch a demo
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmaster%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmain%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.stage01.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a>
 
 
 ## Project development history
