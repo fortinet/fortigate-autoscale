@@ -41,6 +41,7 @@ FortiGate Autoscale for Azure requires the deployment of two templates in sequen
 | 1 | Deploy the stage 1 template using the [deployment parameters file](https://github.com/fortinet/fortigate-autoscale/blob/main/azure_template_deployment/templates/deploy_fortigate_autoscale.hybrid_licensing.params.json).<br><a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmaster%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a> |
 | 2 | Wait for the stage 1 deployment to complete. |
 | 3 | Deploy the stage 2 template using the same [deployment parameters file](https://github.com/fortinet/fortigate-autoscale/blob/main/azure_template_deployment/templates/deploy_fortigate_autoscale.hybrid_licensing.params.json) with the same parameter values used in step 1.<br><a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffortinet%2Ffortigate-autoscale%2Fmaster%2Fazure_template_deployment%2Ftemplates%2Fdeploy_fortigate_autoscale.hybrid_licensing.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a> |
+
 Refer to the [documentation](https://docs.fortinet.com/vm/azure/fortigate/6.4/azure-cookbook/6.4.0/161167/deploying-auto-scaling-on-azure) for descriptions of the deployment parameters file.
 
 ## Project development history
