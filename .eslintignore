@@ -1,8 +1,0 @@
-**/dist
-**/node_modules
-**/local
-**/.nyc_output
-**/local.*
-
-package.json
-package-lock.json
